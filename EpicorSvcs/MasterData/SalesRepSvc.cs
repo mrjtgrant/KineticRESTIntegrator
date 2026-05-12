@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 
@@ -13,28 +15,27 @@ namespace EpicorSvcs
     {
         public SalesRepSvc(string env = null) : base(env) { }
         public SalesRepSvc(RESTSessionKey env) : base(env) { }
-        public JObject GetByID(string salesRepCode)
+
+        public async Task<JObject> GetByIDAsync(string salesRepCode, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesRepSvc/GetByID";
-            svc += "?salesRepCode=" + salesRepCode; 
-            return HandleResponse(RESTCall(svc));
+            svc += "?salesRepCode=" + salesRepCode;
+            return HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
         }
 
-        public JObject SalesReps(List<string> selectList = null)
+        public async Task<JObject> SalesRepsAsync(List<string> selectList = null, CancellationToken ct = default)
         {
-            //List<string> selectList = new List<string> { "SalesRepCode", "Name", "InActive" }; 
-            List<string> filterList = new List<string> { 
+            List<string> filterList = new List<string> {
                 "InActive eq false"
             };
 
             string svc = "Erp.BO.SalesRepSvc/SalesReps";
             svc += "?$filter=" + UrlEncode(string.Join(" and ", filterList));
-            
-            if(selectList!=null)
+
+            if (selectList != null)
                 svc += "&$select=" + UrlEncode(string.Join(",", selectList));
 
-
-            return HandleResponse(RESTCall(svc));
+            return HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
         }
     }
 }

@@ -55,6 +55,10 @@ namespace FileHandling
                 if (!String.IsNullOrEmpty(mailMeta.BCC))
                     EmailSpecs.EmailBCCRecipients = new List<string> { mailMeta.BCC };
 
+                if (!String.IsNullOrEmpty(mailMeta.SMTPHost))
+                    EmailSpecs.smtpspecs.host = mailMeta.SMTPHost;
+
+
                 var emailresult = JObject.FromObject(Emailer.DotNetEmail(EmailSpecs)).ToString();
 
                 steplist.Add(emailresult);

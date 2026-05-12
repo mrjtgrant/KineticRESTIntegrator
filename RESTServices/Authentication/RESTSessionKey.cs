@@ -3,7 +3,7 @@ using System;
 namespace RESTServices
 {
     /// <summary>
-    /// Per-session connection state: environment URL, company, and authentication.
+    /// Per-session connection state: environment URL, company, authentication, and timeout.
     /// One of these is constructed per service instance (either from app.config defaults
     /// or programmatically by the caller).
     /// </summary>
@@ -65,5 +65,15 @@ namespace RESTServices
 
         /// <summary>Authentication info for this session (Basic or API-key).</summary>
         public RESTAuthenticationObject AuthObject { get; set; } = new RESTAuthenticationObject();
+
+        /// <summary>
+        /// HTTP request timeout. Default is 60 seconds. Callers can extend this for
+        /// long-running BAQs or large dataset operations. Setting too low may cause
+        /// transient failures on slow servers; setting too high (or
+        /// <see cref="System.Threading.Timeout.InfiniteTimeSpan"/>) means a hung server
+        /// hangs the caller. The previous transport used an infinite timeout — the new
+        /// default is intentionally finite.
+        /// </summary>
+        public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(60);
     }
 }

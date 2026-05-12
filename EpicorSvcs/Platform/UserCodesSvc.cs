@@ -1,6 +1,8 @@
-﻿using RESTServices;
-using Newtonsoft.Json.Linq;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -15,30 +17,35 @@ namespace EpicorSvcs
     public class UserCodesSvc : EpicorSvc
     {
         JObject CurUserCode = new JObject();
+
         public UserCodesSvc(string env = null) : base(env) { }
+        public UserCodesSvc(RESTSessionKey env) : base(env) { }
 
         //Ice.BO.UserCodesSvc/GetByID
-        public JObject GetByID(string codeTypeID)
+        public async Task<JObject> GetByIDAsync(string codeTypeID, CancellationToken ct = default)
         {
-            CurUserCode = NewDS; 
+            CurUserCode = NewDS;
             string svc = "Ice.BO.UserCodesSvc/GetByID";
-            CurUserCode = HandleResponse(RESTCall(svc, new JObject { 
+            CurUserCode = HandleResponse(await RESTCallAsync(svc, new JObject {
                 new JProperty("codeTypeID", codeTypeID)
-            }));
+            }, ct).ConfigureAwait(false));
             return CurUserCode;
         }
 
-        public string _UDCodeLookUp(string codeTypeID, string codeID, string LookupCol = "CodeDesc") //LongDesc
+        public async Task<string> _UDCodeLookUpAsync(
+            string codeTypeID,
+            string codeID,
+            string LookupCol = "CodeDesc",
+            CancellationToken ct = default) //LongDesc
         {
             if (codeID.IndexOf("long") > -1)
-                LookupCol = "LongDesc"; 
+                LookupCol = "LongDesc";
 
-            GetByID(codeTypeID);
-            
+            await GetByIDAsync(codeTypeID, ct).ConfigureAwait(false);
+
             JArray UDCodes = JArray.FromObject(CurUserCode["ds"]["UDCodes"]);
-            string result = (from row in UDCodes where row["CodeID"].ToString() == codeID select row[LookupCol].ToString()).FirstOrDefault(); 
-            return result;    
+            string result = (from row in UDCodes where row["CodeID"].ToString() == codeID select row[LookupCol].ToString()).FirstOrDefault();
+            return result;
         }
-
     }
 }

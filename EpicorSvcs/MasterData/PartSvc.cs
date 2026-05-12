@@ -1,12 +1,9 @@
-﻿using RESTServices;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -16,63 +13,72 @@ namespace EpicorSvcs
         public PartSvc(RESTSessionKey env) : base(env) { }
 
         //Erp.BO.partSvc/Parts?%24select=PartNum&%24top=5
-
-        public JObject Parts(List<string> filters = null, List<string> select = null, int top= 500)
+        public async Task<JObject> PartsAsync(
+            List<string> filters = null,
+            List<string> select = null,
+            int top = 500,
+            CancellationToken ct = default)
         {
             if (select == null)
-                select = new List<string> { "PartNum" }; 
+                select = new List<string> { "PartNum" };
 
             string svc = "Erp.BO.partSvc/Parts";
             svc += "?$select=" + String.Join(",", select);
             svc += "&$top=" + top.ToString();
-            if(filters!= null)
+            if (filters != null)
                 svc += "&" + RESTFilterBuilder(filters);
 
-            return RESTCall(svc);
-
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
 
         //whereClause=InActive%3Dtrue&pageSize=500&absolutePage=8
-        public JObject GetList(string whereclause, int rowcount = 500, int page = 1)
+        public async Task<JObject> GetListAsync(
+            string whereclause,
+            int rowcount = 500,
+            int page = 1,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.partSvc/GetList";
             svc += "?whereClause=" + whereclause;
             svc += "&pageSize=" + rowcount.ToString();
             svc += "&absolutePage=" + page.ToString();
-            return HandleResponse(RESTCall(svc));
+            return HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
         }
 
 
-        public JObject _BySearchWord(string searchword)
+        public async Task<JObject> _BySearchWordAsync(string searchword, CancellationToken ct = default)
         {
             string svc = "Erp.BO.partSvc/Parts";
             svc += "?$select=PartNum,PartDescription";
             svc += "&" + RESTFilterBuilder(new List<string> {
-                    String.Format("SearchWord eq '{0}'",searchword)
+                    String.Format("SearchWord eq '{0}'", searchword)
                 });
 
-            return RESTCall(svc);
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
 
         //Erp.BO.PartSvc/GetNewPart
-        internal JObject GetNewPart()
+        public async Task<JObject> GetNewPartAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.partSvc/GetNewPart";
-            return RESTCall(svc, NewDS);
-
+            return await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
         }
 
 
         //Erp.BO.PartSvc/GetByID?partNum=ZZBC15
-        public JObject GetByID(string PartNum)
+        public async Task<JObject> GetByIDAsync(string PartNum, CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/GetByID";
             svc += String.Format("?partNum={0}", UrlEncode(PartNum));
 
-            return HandleResponse( RESTCall(svc));
+            return HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
         }
 
-        internal JObject DuplicatePart(string sourcepart, string targetpart, string targetpartdesc) 
+        public async Task<JObject> DuplicatePartAsync(
+            string sourcepart,
+            string targetpart,
+            string targetpartdesc,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/DuplicatePart";
             JObject payload = new JObject {
@@ -84,22 +90,25 @@ namespace EpicorSvcs
                 new JProperty("configDescription", ""),
                 new JProperty("configType", "PC")
             };
-            return HandleResponse(RESTCall(svc, payload));
+            return HandleResponse(await RESTCallAsync(svc, payload, ct).ConfigureAwait(false));
         }
 
-        internal JObject ChangePartUnitPrice(JObject ds) {
-
+        public async Task<JObject> ChangePartUnitPriceAsync(JObject ds, CancellationToken ct = default)
+        {
             string svc = "Erp.BO.PartSvc/ChangePartUnitPrice";
-            ds = RESTCall(svc, ds);
+            ds = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             ds = JObject.FromObject(ds["parameters"]);
 
-            CheckPartChanges(ds);
-            return UpdateExt(ds);
-            //return RESTCall(svc, payload);
+            await CheckPartChangesAsync(ds, ct).ConfigureAwait(false);
+            return await UpdateExtAsync(ds, false, true, ct).ConfigureAwait(false);
         }
 
         //Erp.BO.PartSvc/GetNewPartRev
-        internal JObject GetNewPartRev(string partNum, string revisionNum, string altMethod = "")
+        public async Task<JObject> GetNewPartRevAsync(
+            string partNum,
+            string revisionNum,
+            string altMethod = "",
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/GetNewPartRev";
 
@@ -108,7 +117,7 @@ namespace EpicorSvcs
             newpartrev.Add(new JProperty("revisionNum", ""));
             newpartrev.Add(new JProperty("altMethod", ""));
 
-            var ds = HandleResponse( RESTCall(svc, newpartrev));
+            var ds = HandleResponse(await RESTCallAsync(svc, newpartrev, ct).ConfigureAwait(false));
 
             int? activeRowIndex = GetActiveRowIndex(JArray.FromObject(ds["ds"]["PartRev"]));
 
@@ -119,35 +128,40 @@ namespace EpicorSvcs
                 ds["ds"]["PartRev"][activeRowIndex]["AltMethod"] = altMethod;
             }
 
-            return Update(ds);
+            return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }
 
 
-        private JObject CheckPartChanges(JObject payload)
+        private async Task<JObject> CheckPartChangesAsync(JObject payload, CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/CheckPartChanges";
-            return RESTCall(svc, payload);
+            return await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
         }
 
-        private JObject UpdateExt(JObject payload, bool continueonerr = false, bool rollbackonerr = true)
+        private async Task<JObject> UpdateExtAsync(
+            JObject payload,
+            bool continueonerr = false,
+            bool rollbackonerr = true,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/UpdateExt";
             payload.Add(new JProperty("continueProcessingOnError", continueonerr));
             payload.Add(new JProperty("rollbackParentOnChildError", rollbackonerr));
 
-            return RESTCall(svc, payload);
-        }
-        public JObject Update(JObject payload)
-        {
-            string svc = "Erp.BO.PartSvc/Update";
-            return RESTCall(svc, payload);
+            return await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
         }
 
-        internal JObject PartAttches(FileAttachment attch)
+        public async Task<JObject> UpdateAsync(JObject payload, CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/Update";
+            return await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
+        }
+
+        public async Task<JObject> PartAttchesAsync(FileAttachment attch, CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/PartAttches";
             JObject payload = new JObject {
-                new JProperty("Company",sesh.Company),
+                new JProperty("Company", sesh.Company),
                 new JProperty("PartNum", attch.GenericItemNum),
                 new JProperty("DrawDesc", attch.FileDesc),
                 new JProperty("FileName", attch.FileName),
@@ -155,7 +169,7 @@ namespace EpicorSvcs
                 new JProperty("XFileRefNum", "0"),
                 new JProperty("RowMod", "A")
             };
-            return RESTCall(svc, payload);
+            return await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
         }
     }
 }

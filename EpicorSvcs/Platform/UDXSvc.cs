@@ -1,10 +1,9 @@
-﻿using Newtonsoft.Json.Linq;
-using RESTServices;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -13,18 +12,42 @@ namespace EpicorSvcs
         public UDXSvc(string env = null) : base(env) { }
         public UDXSvc(RESTSessionKey env) : base(env) { }
 
-        //all ud columns
-        List<String> udcols = new List<String> { "Character01", "Character02", "Character03", "Character04", "Character05", "Character06", "Character07", "Character08", "Character09", "Character10", "Number01", "Number02", "Number03", "Number04", "Number05", "Number06", "Number07", "Number08", "Number09", "Number10", "Number11", "Number12", "Number13", "Number14", "Number15", "Number16", "Number17", "Number18", "Number19", "Number20", "Date01", "Date02", "Date03", "Date04", "Date05", "Date06", "Date07", "Date08", "Date09", "Date10", "Date11", "Date12", "Date13", "Date14", "Date15", "Date16", "Date17", "Date18", "Date19", "Date20", "CheckBox01", "CheckBox02", "CheckBox03", "CheckBox04", "CheckBox05", "CheckBox06", "CheckBox07", "CheckBox08", "CheckBox09", "CheckBox10", "CheckBox11", "CheckBox12", "CheckBox13", "CheckBox14", "CheckBox15", "CheckBox16", "CheckBox17", "CheckBox18", "CheckBox19", "CheckBox20", "ShortChar01", "ShortChar02", "ShortChar03", "ShortChar04", "ShortChar05", "ShortChar06", "ShortChar07", "ShortChar08", "ShortChar09", "ShortChar10", "ShortChar11", "ShortChar12", "ShortChar13", "ShortChar14", "ShortChar15", "ShortChar16", "ShortChar17", "ShortChar18", "ShortChar19", "ShortChar20"  };
-    
-        
+        // All UD columns supported by the generic upsert / select logic below.
+        private static readonly List<string> udcols = new List<string>
+        {
+            "Character01", "Character02", "Character03", "Character04", "Character05",
+            "Character06", "Character07", "Character08", "Character09", "Character10",
+            "Number01", "Number02", "Number03", "Number04", "Number05",
+            "Number06", "Number07", "Number08", "Number09", "Number10",
+            "Number11", "Number12", "Number13", "Number14", "Number15",
+            "Number16", "Number17", "Number18", "Number19", "Number20",
+            "Date01", "Date02", "Date03", "Date04", "Date05",
+            "Date06", "Date07", "Date08", "Date09", "Date10",
+            "Date11", "Date12", "Date13", "Date14", "Date15",
+            "Date16", "Date17", "Date18", "Date19", "Date20",
+            "CheckBox01", "CheckBox02", "CheckBox03", "CheckBox04", "CheckBox05",
+            "CheckBox06", "CheckBox07", "CheckBox08", "CheckBox09", "CheckBox10",
+            "CheckBox11", "CheckBox12", "CheckBox13", "CheckBox14", "CheckBox15",
+            "CheckBox16", "CheckBox17", "CheckBox18", "CheckBox19", "CheckBox20",
+            "ShortChar01", "ShortChar02", "ShortChar03", "ShortChar04", "ShortChar05",
+            "ShortChar06", "ShortChar07", "ShortChar08", "ShortChar09", "ShortChar10",
+            "ShortChar11", "ShortChar12", "ShortChar13", "ShortChar14", "ShortChar15",
+            "ShortChar16", "ShortChar17", "ShortChar18", "ShortChar19", "ShortChar20"
+        };
+
+
         /***************************************************
         ****       UD Logs                     
         ****************************************************/
-        internal JObject Update(UDLine udline, string UDTable = "UD22", bool delete = false)
+        public async Task<JObject> UpdateAsync(
+            UDLine udline,
+            string UDTable = "UD22",
+            bool delete = false,
+            CancellationToken ct = default)
         {
-            if(delete)
-                return DeleteByID(udline, UDTable); 
-            
+            if (delete)
+                return await DeleteByIDAsync(udline, UDTable, ct).ConfigureAwait(false);
+
             string svc = String.Format("Ice.BO.{0}Svc/{0}s", UDTable);
             JObject lineObject = JObject.FromObject(udline);
             JObject ds = new JObject
@@ -40,22 +63,25 @@ namespace EpicorSvcs
 
             foreach (string col in udcols)
             {
-                if(lineObject.ContainsKey(col)) 
-                    ds.Add(new JProperty(col, lineObject[col].ToString()));    
+                if (lineObject.ContainsKey(col))
+                    ds.Add(new JProperty(col, lineObject[col].ToString()));
             }
-            
+
             return new JObject {
-                //new JProperty("payload", ds),
-                new JProperty("result", RESTCall(svc, ds))
+                new JProperty("result", await RESTCallAsync(svc, ds, ct).ConfigureAwait(false))
             };
         }
 
-        internal JObject GetAll(UDLine udline = null, string UDTable = "UD22", string top = "5000")
+        public async Task<JObject> GetAllAsync(
+            UDLine udline = null,
+            string UDTable = "UD22",
+            string top = "5000",
+            CancellationToken ct = default)
         {
             string svc = String.Format("Ice.BO.{0}Svc/{0}s", UDTable);
             svc += "?$top=" + top;
 
-            if (udline != null) 
+            if (udline != null)
             {
                 JObject lineObject = JObject.FromObject(udline);
                 List<string> selectedcols = new List<string>();
@@ -67,20 +93,24 @@ namespace EpicorSvcs
                 svc += "&$select=" + string.Join(",", selectedcols);
             }
 
-            return RESTCall(svc);
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
 
-        internal void DeleteAll(string UDTable = "UD22") 
+        public async Task DeleteAllAsync(string UDTable = "UD22", CancellationToken ct = default)
         {
-            JObject alluds = GetAll(null, UDTable);
+            JObject alluds = await GetAllAsync(null, UDTable, "5000", ct).ConfigureAwait(false);
             JArray uds = JArray.FromObject(alluds["value"]);
 
-            foreach (var ud in uds) { 
-                DeleteByID(ud.ToObject<UDLine>(), UDTable);
+            foreach (var ud in uds)
+            {
+                await DeleteByIDAsync(ud.ToObject<UDLine>(), UDTable, ct).ConfigureAwait(false);
             }
         }
 
-        internal JObject GetByID(UDLine udline, string UDTable = "UD22")
+        public async Task<JObject> GetByIDAsync(
+            UDLine udline,
+            string UDTable = "UD22",
+            CancellationToken ct = default)
         {
             string svc = String.Format("Ice.BO.{0}Svc/{0}s", UDTable);
             JObject lineObject = JObject.FromObject(udline);
@@ -105,31 +135,28 @@ namespace EpicorSvcs
 
             svc += "&$select=" + string.Join(",", selectedcols);
 
-            return RESTCall(svc);
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
-        internal JObject DeleteByID(UDLine udline, string UDTable = "UD22")
+
+        public async Task<JObject> DeleteByIDAsync(
+            UDLine udline,
+            string UDTable = "UD22",
+            CancellationToken ct = default)
         {
             string svc = String.Format("Ice.BO.{0}Svc/DeleteByID", UDTable);
-            return RESTCall(svc, new JObject {
+            return await RESTCallAsync(svc, new JObject {
                 new JProperty("key1", udline.Key1),
                 new JProperty("key2", udline.Key2),
                 new JProperty("key3", udline.Key3),
                 new JProperty("key4", udline.Key4),
                 new JProperty("key5", udline.Key5)
-            });
+            }, ct).ConfigureAwait(false);
         }
 
-        internal JObject GetaNewUD22(string UDTable = "UD22") {
-            string svc = String.Format("Ice.BO.{0}Svc/GetaNew{0}", UDTable);
-            return RESTCall(svc, NewDS);   
-        }
-
-
-        private bool RecordExists(UDLine udline, string UDTable = "UD22") 
+        public async Task<JObject> GetaNewUD22Async(string UDTable = "UD22", CancellationToken ct = default)
         {
-            JObject getexisting = GetByID(udline, UDTable);
-            JArray existing = JArray.FromObject(getexisting["value"]);
-            return existing.Count > 0;  
+            string svc = String.Format("Ice.BO.{0}Svc/GetaNew{0}", UDTable);
+            return await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
         }
     }
 

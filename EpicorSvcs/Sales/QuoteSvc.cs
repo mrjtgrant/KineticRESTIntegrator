@@ -1,11 +1,8 @@
-﻿using Newtonsoft.Json.Linq;
-using RESTServices;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -17,11 +14,11 @@ namespace EpicorSvcs
         /************ NEW QuoteHed ******************
          * Constructs New QuoteHed Details via Erp.BO.QuoteSvc calls
          */
-        internal JObject _NewQuoteHed(QuoteHed quoteHed)
+        public async Task<JObject> _NewQuoteHedAsync(QuoteHed quoteHed, CancellationToken ct = default)
         {
-            JObject ds = GetNewQuoteHed();
-                    ds = QuoteHedCustomerCustIDAfterChange(ds, quoteHed.CustomerCustID);
-                    ds = ValidateShippingDateBeforeUpdate(ds /*, ShipByDate, NeedByDate */);//will validate either if passed. default is null for new Quotes. 
+            JObject ds = await GetNewQuoteHedAsync(ct).ConfigureAwait(false);
+            ds = await QuoteHedCustomerCustIDAfterChangeAsync(ds, quoteHed.CustomerCustID, ct).ConfigureAwait(false);
+            ds = await ValidateShippingDateBeforeUpdateAsync(ds /*, ShipByDate, NeedByDate */, null, null, ct).ConfigureAwait(false); //will validate either if passed. default is null for new Quotes.
 
 
             ds["ds"]["QuoteHed"][0]["PONum"] = quoteHed.PONum;
@@ -30,33 +27,37 @@ namespace EpicorSvcs
             ds["ds"]["QuoteHed"][0]["OTSState"] = quoteHed.OTSState;
             ds["ds"]["QuoteHed"][0]["OTSZIP"] = quoteHed.OTSZIP;
             ds["ds"]["QuoteHed"][0]["OTSCountryNum"] = quoteHed.OTSCountryNum;
-            ds = Update(ds);
-            return new JObject { 
-                new JProperty("QuoteNum", ds["ds"]["QuoteHed"][0]["QuoteNum"].ToString()), 
+            ds = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            return new JObject {
+                new JProperty("QuoteNum", ds["ds"]["QuoteHed"][0]["QuoteNum"].ToString()),
                 new JProperty("QuoteObj", ds)
             };
         }
 
         //Erp.BO.QuoteSvc/GetNewQuoteHed
-        private JObject GetNewQuoteHed()
+        private async Task<JObject> GetNewQuoteHedAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.QuoteSvc/GetNewQuoteHed";
-            return HandleResponse(RESTCall(svc, NewDS));
+            return HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
         }
 
 
         //Erp.BO.QuoteSvc/QuoteHedCustomerCustIDAfterChange
-        private JObject QuoteHedCustomerCustIDAfterChange(JObject ds, string CustomerCustID)
+        private async Task<JObject> QuoteHedCustomerCustIDAfterChangeAsync(JObject ds, string CustomerCustID, CancellationToken ct = default)
         {
             string svc = "Erp.BO.QuoteSvc/QuoteHedCustomerCustIDAfterChange";
             //CustomerCustID
             ds["ds"]["QuoteHed"][0]["CustomerCustID"] = CustomerCustID;
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
 
         //Erp.BO.QuoteSvc/ValidateShippingDateBeforeUpdate
-        private JObject ValidateShippingDateBeforeUpdate(JObject ds, DateTime? ShipByDate = null, DateTime? NeedByDate = null)
+        private async Task<JObject> ValidateShippingDateBeforeUpdateAsync(
+            JObject ds,
+            DateTime? ShipByDate = null,
+            DateTime? NeedByDate = null,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.QuoteSvc/ValidateShippingDateBeforeUpdate";
 
@@ -69,20 +70,19 @@ namespace EpicorSvcs
 
             ds.Add(new JProperty("dateColumnTable", "QuoteHed"));
 
-            //           
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
         //Erp.BO.QuoteSvc/Update
-        private JObject Update(JObject ds)
+        private async Task<JObject> UpdateAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.QuoteSvc/Update";
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
     }
 
 
-    internal class QuoteHed
+    public class QuoteHed
     {
         public string PONum { get; set; }
         public string CustomerCustID { get; set; }

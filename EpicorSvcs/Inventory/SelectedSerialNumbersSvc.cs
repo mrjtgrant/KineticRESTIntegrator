@@ -1,10 +1,10 @@
-﻿using RESTServices;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -29,7 +29,11 @@ namespace EpicorSvcs
         /**
          * Erp.BO.SelectedSerialNumbersSvc/RetrieveSerialNumbers
          */
-        public JObject RetrieveSerialNumbers(string whereClause, string sourceRowID, string transType)
+        public async Task<JObject> RetrieveSerialNumbersAsync(
+            string whereClause,
+            string sourceRowID,
+            string transType,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.SelectedSerialNumbersSvc/RetrieveSerialNumbers";
             JObject ds = (JObject)NewDS.DeepClone();
@@ -39,7 +43,7 @@ namespace EpicorSvcs
             ds.Add(new JProperty("forSelected", false));
             ds.Add(new JProperty("sourceRowID", sourceRowID));
             ds.Add(new JProperty("transType", transType));
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
         //SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers
@@ -61,10 +65,12 @@ namespace EpicorSvcs
         Erp.BO.SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers
 
          */
-
-        public JObject ProcessSelectedSerialNumbers(JObject ds, List<string> SelectedSerialNumbers)
+        public async Task<JObject> ProcessSelectedSerialNumbersAsync(
+            JObject ds,
+            List<string> SelectedSerialNumbers,
+            CancellationToken ct = default)
         {
-            List<string> FoundSerialNumbers = new List<string>(); 
+            List<string> FoundSerialNumbers = new List<string>();
             string svc = "Erp.BO.SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers";
 
             //all available serial numbers.  
@@ -79,23 +85,22 @@ namespace EpicorSvcs
                 {
                     ds["ds"]["SerialNumberSelection"][i]["RowSelected"] = true;
                     ds["ds"]["SerialNumberSelection"][i]["RowMod"] = "U";
-                    FoundSerialNumbers.Add(SerialNumber); 
+                    FoundSerialNumbers.Add(SerialNumber);
                 }
             }
 
             //captures added materials items after the fact
-            ds.Add(new JProperty("ds1", new JObject { 
-                new JProperty("SelectedSerialNumbers", new JArray()), 
+            ds.Add(new JProperty("ds1", new JObject {
+                new JProperty("SelectedSerialNumbers", new JArray()),
                 new JProperty("SNFormat", new JArray())
-            })); 
-            JObject response = HandleResponse(RESTCall(svc, ds));
+            }));
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
 
             //MissingSerialNumbers is everything in your list that wasn't present in SelectedSerialNumbers
             response.Add(new JProperty("MissingSerialNumbers", String.Join("~", SelectedSerialNumbers.Except(FoundSerialNumbers))));
-            response.Add(new JProperty("SerialNumberFound", FoundSerialNumbers.Count>0));
+            response.Add(new JProperty("SerialNumberFound", FoundSerialNumbers.Count > 0));
 
             return response;
         }
-
     }
 }

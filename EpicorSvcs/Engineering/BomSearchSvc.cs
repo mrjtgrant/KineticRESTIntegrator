@@ -1,11 +1,8 @@
-﻿using RESTServices;
-using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using EpicorSvcs;
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -13,7 +10,8 @@ namespace EpicorSvcs
     {
         public BomSearchSvc(string env = null) : base(env) { }
         public BomSearchSvc(RESTSessionKey env) : base(env) { }
-        internal JObject GetDatasetForTreeWithPartValidation(string sourcepart)
+
+        public async Task<JObject> GetDatasetForTreeWithPartValidationAsync(string sourcepart, CancellationToken ct = default)
         {
             string svc = "Erp.BO.BomSearchSvc/GetDatasetForTreeWithPartValidation";
             JObject payload = new JObject {
@@ -23,9 +21,7 @@ namespace EpicorSvcs
                     new JProperty("altMethod", ""),
                     new JProperty("isRootNode", true)
                 };
-            return HandleResponse(RESTCall(svc, payload));
+            return HandleResponse(await RESTCallAsync(svc, payload, ct).ConfigureAwait(false));
         }
-
-
     }
 }

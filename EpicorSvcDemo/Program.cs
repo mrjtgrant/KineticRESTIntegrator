@@ -1,37 +1,53 @@
 ﻿using System.Collections.Generic;
+using System.Security.Policy;
+using System.Threading.Tasks;
+using DocumentFormat.OpenXml.ExtendedProperties;
 using EpicorSvcs;
 using FileHandling;
 using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcDemo
 {
     internal class Program
     {
-        static BAQSvc BAQSvc = new BAQSvc();   
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-
-            JObject BAQResult = BAQSvc.BAQResults("EXAMPLE_BAQID");
-
-            string error = BAQResult["ErrorMessage"]?.ToString();
-            JArray reportData = BAQResult["value"]?.ToObject<JArray>() ?? new JArray();
-
-            FileProcessing.EmailDataReport(new EMailMeta
+            // BAQSvc owns an HttpClient and must be disposed.
+            using (var baq = new BAQSvc(new RESTSessionKey
+                {
+                Company = "EPIC06",
+                Environment = "https://example-live.epicorsaas.com/server",
+                AuthObject = new RESTServices.RESTAuthenticationObject
+                {
+                    ApiKey = "", //leave blank for Basic(v1) Authentication
+                    Userkey = "manager",
+                    Username = "manger"
+                }
+            }))
             {
-                From = "YOUR_FROM_EMAIL@example.com",
-                To = "YOUR_TO_EMAIL@example.com", //, 
-                CC = "",
-                BCC = "",
-                RecipientName = "John Doe",
-                ExcelSheetName = "",
-                AttachmentName = "EXAMPLE_REPORT",
-                AttachmentType = "xlsx",
-                AttachmentDateFormat = "none", //Examples: "none", "u", "s", "yyyy-MM-dd HH.mm.ss"
-                AttachmentHeaderMap = AttachmentColHeaderMap,
-                AttachmentData = reportData,
-                Error = error
-            });
+                JObject BAQResult = await baq.BAQResultsAsync("EXAMPLE_BAQ").ConfigureAwait(false);
 
+                string error = BAQResult["ErrorMessage"]?.ToString();
+                JArray reportData = BAQResult["value"]?.ToObject<JArray>() ?? new JArray();
+
+                FileProcessing.EmailDataReport(new EMailMeta
+                {
+                    From = "noreply@company.com",
+                    To = "user@company.com",
+                    CC = "",
+                    BCC = "",
+                    //SMTPHost = "10.10.10.10", 
+                    RecipientName = "John Doe",
+                    ExcelSheetName = "EXAMPLE_REPORT",
+                    AttachmentName = "EXAMPLE_REPORT",
+                    AttachmentType = "xlsx",
+                    AttachmentDateFormat = "none", // Examples: "none", "u", "s", "yyyy-MM-dd HH.mm.ss"
+                    AttachmentHeaderMap = AttachmentColHeaderMap,
+                    AttachmentData = reportData,
+                    Error = error
+                });
+            }
         }
 
 

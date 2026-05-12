@@ -1,6 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using RESTServices;
-
 
 namespace EpicorSvcs
 {
@@ -10,14 +11,14 @@ namespace EpicorSvcs
         public SerialNoSvc(RESTSessionKey env) : base(env) { }
 
         //Erp.BO.SerialNoSvc/GetByID
-        public JObject GetByID(InvTransfer invTransfer)
+        public async Task<JObject> GetByIDAsync(InvTransfer invTransfer, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SerialNoSvc/GetByID";
 
-            return HandleResponse( RESTCall(svc, new JObject{
-                new JProperty("partNum", UrlEncode(invTransfer.PartNum)) ,
+            return HandleResponse(await RESTCallAsync(svc, new JObject {
+                new JProperty("partNum", UrlEncode(invTransfer.PartNum)),
                 new JProperty("serialNumber", UrlEncode(invTransfer.SerialNumber))
-            }));
+            }, ct).ConfigureAwait(false));
         }
     }
 }

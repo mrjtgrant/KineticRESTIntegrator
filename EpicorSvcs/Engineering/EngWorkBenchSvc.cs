@@ -1,8 +1,10 @@
-﻿using RESTServices;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -11,24 +13,36 @@ namespace EpicorSvcs
         public EngWorkBenchSvc(string env = null) : base(env) { }
         public EngWorkBenchSvc(RESTSessionKey env) : base(env) { }
 
-        BomSearchSvc bomSearchSvc = new BomSearchSvc();
+        // Inner service for BOM lookups. Constructed lazily so it shares this
+        // service's session — important for callers that pass a programmatic
+        // RESTSessionKey rather than relying on app.config. Disposed below.
+        private BomSearchSvc _bomSearchSvc;
+        private BomSearchSvc BomSearchSvc =>
+            _bomSearchSvc ?? (_bomSearchSvc = new BomSearchSvc(sesh));
 
-        internal JObject _AddOprs(List<ECOMtl> mtls)
+        // Properties to skip when copying operations from a source BOM into a new ECO.
+        // Static readonly because the list never changes per-instance.
+        private static readonly List<string> propstoignore = new List<string>
+        {
+            "PartNum", "RevisionNum", "SysRevID", "SysRowID", "RowMod",
+            "PartNumPartDescription", "PrimaryProdOpDtl", "PrimarySetupOpDtl"
+        };
+
+        public async Task<JObject> _AddOprsAsync(List<ECOMtl> mtls, CancellationToken ct = default)
         {
             var FirstMtl = mtls.First();
-            string[] srcparse = FirstMtl.PartNum.Split(' ');    
-            string sourcepart = srcparse[0];    
- 
-            var bom = bomSearchSvc.GetDatasetForTreeWithPartValidation(sourcepart);
-            var ds = GetNewECOOpr(FirstMtl.GroupID, FirstMtl.PartNum, FirstMtl.RevisionNum);
+            string[] srcparse = FirstMtl.PartNum.Split(' ');
+            string sourcepart = srcparse[0];
+
+            var bom = await BomSearchSvc.GetDatasetForTreeWithPartValidationAsync(sourcepart, ct).ConfigureAwait(false);
+            var ds = await GetNewECOOprAsync(FirstMtl.GroupID, FirstMtl.PartNum, FirstMtl.RevisionNum, ct).ConfigureAwait(false);
 
             JArray newOprs = new JArray();
             JArray srcBomOprs = JArray.FromObject(bom["ds"]["PartOpr"]);
             JObject newEcoOpr = JObject.FromObject(ds["ds"]["ECOOpr"][0]);
 
-            List<string> propstoignore = new List<string> { "PartNum", "RevisionNum", "SysRevID", "SysRowID", "RowMod", "PartNumPartDescription", "PrimaryProdOpDtl", "PrimarySetupOpDtl" };
-            foreach (JObject opr in srcBomOprs) 
-            { 
+            foreach (JObject opr in srcBomOprs)
+            {
                 JObject newopr = new JObject(newEcoOpr);
                 foreach (var prop in newEcoOpr)
                 {
@@ -36,7 +50,7 @@ namespace EpicorSvcs
                     {
                         decimal decval = 0;
                         string strval = opr[prop.Key].ToString();
-                        bool decparsed = Decimal.TryParse(strval, out decval);  
+                        bool decparsed = Decimal.TryParse(strval, out decval);
 
                         if (!propstoignore.Contains(prop.Key) && !(String.IsNullOrEmpty(strval) || decparsed && decval == 0))
                         {
@@ -49,37 +63,37 @@ namespace EpicorSvcs
 
             ds["ds"]["ECOOpr"] = newOprs;
 
-            //return ds; 
-            return Update(ds); 
+            return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }
 
 
-        internal JObject _GetECOTree(List<ECOMtl> mtls)
+        public async Task<JObject> _GetECOTreeAsync(List<ECOMtl> mtls, CancellationToken ct = default)
         {
             var FirstMtl = mtls.First();
-            JObject tree = HandleResponse(GetDatasetForTreeByRef(FirstMtl.GroupID, FirstMtl.PartNum, FirstMtl.RevisionNum));
-            return tree;    
+            JObject tree = HandleResponse(
+                await GetDatasetForTreeByRefAsync(FirstMtl.GroupID, FirstMtl.PartNum, FirstMtl.RevisionNum, ct).ConfigureAwait(false));
+            return tree;
         }
 
 
 
-        internal JObject _AddMtls(List<ECOMtl> mtls)
+        public async Task<JObject> _AddMtlsAsync(List<ECOMtl> mtls, CancellationToken ct = default)
         {
             var FirstMtl = mtls.First();
 
-            var ds = GetByID(FirstMtl.GroupID); 
-            if (ds["ErrorMessage"] != null) 
+            var ds = await GetByIDAsync(FirstMtl.GroupID, ct).ConfigureAwait(false);
+            if (ds["ErrorMessage"] != null)
             {
-                ds = _GenerateGroup(FirstMtl.GroupID); 
+                ds = await _GenerateGroupAsync(FirstMtl.GroupID, ct).ConfigureAwait(false);
             }
 
             //CHECK OUT Parent part to the group: 
-            var test =  CheckOut(FirstMtl.GroupID, FirstMtl.PartNum, FirstMtl.RevisionNum);
+            var test = await CheckOutAsync(FirstMtl.GroupID, FirstMtl.PartNum, FirstMtl.RevisionNum, ct).ConfigureAwait(false);
 
-            ds = GetECOGroupAndECORev(FirstMtl.GroupID);
+            ds = await GetECOGroupAndECORevAsync(FirstMtl.GroupID, ct).ConfigureAwait(false);
 
             bool isError = false;
-            int mtlseq = 0; 
+            int mtlseq = 0;
             foreach (ECOMtl mtl in mtls)
             {
                 if (ds["groupID"] == null)
@@ -98,12 +112,11 @@ namespace EpicorSvcs
                     ds["altMethod"] = mtl.AltMethod;
                     ds["processMfgID"] = mtl.ProcessMfgID;
                 }
-                ds = GetNewECOMtl(ds);
+                ds = await GetNewECOMtlAsync(ds, ct).ConfigureAwait(false);
 
 
                 try
                 {
-
                     int? activeMtlIndex = GetActiveRowIndex(JArray.FromObject(ds["ds"]["ECOMtl"]));
                     if (activeMtlIndex != null)
                     {
@@ -137,54 +150,54 @@ namespace EpicorSvcs
                         mtlseq += 10;
                     }
                 }
-                catch { 
-                    isError = true; 
+                catch
+                {
+                    isError = true;
                 }
             }
 
 
             //****  Unlock Group for other users after adding materials..****
-            GroupUnLock(JObject.FromObject(new GroupUnlock { 
+            await GroupUnLockAsync(JObject.FromObject(new GroupUnlock
+            {
                 ipGroupID = FirstMtl.GroupID,
                 ipPartNum = FirstMtl.PartNum,
                 ipRevisionNum = FirstMtl.RevisionNum,
-                ipAltMethod = FirstMtl.AltMethod, 
+                ipAltMethod = FirstMtl.AltMethod,
                 ipProcessMfgID = FirstMtl.ProcessMfgID
-            }));
+            }), ct).ConfigureAwait(false);
             //*/
             //lock the group again here maybe?
-            if(!isError)
-                ds = Update(ds);
+            if (!isError)
+                ds = await UpdateAsync(ds, ct).ConfigureAwait(false);
 
-            return ds; 
+            return ds;
         }
 
-        private JObject _GenerateGroup(string groupid) 
+        private async Task<JObject> _GenerateGroupAsync(string groupid, CancellationToken ct = default)
         {
-            
-            var ds = GetNewECOGroup();
+            var ds = await GetNewECOGroupAsync(ct).ConfigureAwait(false);
 
             ds["ds"]["ECOGroup"][0]["GroupID"] = groupid;
-            ds["ds"]["ECOGroup"][0]["Description"] = String.Format("Auto generateed from *");
+            ds["ds"]["ECOGroup"][0]["Description"] = "Auto generated from *";
 
-            return HandleResponse(Update(ds)); 
-        
+            return HandleResponse(await UpdateAsync(ds, ct).ConfigureAwait(false));
         }
         //Erp.BO.EngWorkBenchSvc/GetByID?groupID=IS%20TEST
-        internal JObject GetByID(string groupID)
+        public async Task<JObject> GetByIDAsync(string groupID, CancellationToken ct = default)
         {
             string svc = "Erp.BO.EngWorkBenchSvc/GetByID";
             svc += String.Format("?groupID={0}", UrlEncode(groupID));
 
-            return HandleResponse(RESTCall(svc));
+            return HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
         }
         //Erp.BO.EngWorkBenchSvc/GetNewECOMtl
-        internal JObject GetNewECOMtl(JObject ds)
+        public async Task<JObject> GetNewECOMtlAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.EngWorkBenchSvc/GetNewECOMtl";
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
-        internal JObject CheckOut(String GroupID, string PartNum, string RevNum)
+        public async Task<JObject> CheckOutAsync(string GroupID, string PartNum, string RevNum, CancellationToken ct = default)
         {
             string svc = "Erp.BO.EngWorkBenchSvc/CheckOut";
             JObject ds = new JObject {
@@ -199,54 +212,54 @@ namespace EpicorSvcs
                 new JProperty("ipReturn", false),
                 new JProperty("ipGetDatasetForTree", true),
                 new JProperty("ipUseMethodForParts", false)
-            }; 
+            };
 
-            return RESTCall(svc, ds);
+            return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
         }
-        internal JObject ApproveAndCheckInAll(String GroupID)
+        public async Task<JObject> ApproveAndCheckInAllAsync(string GroupID, CancellationToken ct = default)
         {
             string svc = "Erp.BO.EngWorkBenchSvc/ApproveAndCheckInAll";
             JObject ds = new JObject {
                 new JProperty("ipGroupID", GroupID),
-			    new JProperty("ipPartNum", ""),
-			    new JProperty("ipRevisionNum", ""),
-			    new JProperty("ipAltMethod", ""),
-			    new JProperty("ipProcessMfgID", ""),
-			    new JProperty("ipAsOfDate", DateTime.Now.ToString("yyyy-MM-dd")),
-			    new JProperty("ipCompleteTree", false),
-			    new JProperty("ipReturn", false),
-			    new JProperty("ipGetDatasetForTree", false),
-			    new JProperty("ipUseMethodForParts", false),
-			    new JProperty("ipValidPassword", false),
-			    new JProperty("ipAuditText", "ECO Group * * Import")
+                new JProperty("ipPartNum", ""),
+                new JProperty("ipRevisionNum", ""),
+                new JProperty("ipAltMethod", ""),
+                new JProperty("ipProcessMfgID", ""),
+                new JProperty("ipAsOfDate", DateTime.Now.ToString("yyyy-MM-dd")),
+                new JProperty("ipCompleteTree", false),
+                new JProperty("ipReturn", false),
+                new JProperty("ipGetDatasetForTree", false),
+                new JProperty("ipUseMethodForParts", false),
+                new JProperty("ipValidPassword", false),
+                new JProperty("ipAuditText", "ECO Group * * Import")
             };
-            return RESTCall(svc, ds);
+            return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
         }
-        internal JObject Update(JObject ds)
+        public async Task<JObject> UpdateAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.EngWorkBenchSvc/Update";
-            return RESTCall(svc, ds);
+            return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
         }
-        internal JObject ECOMtls(JObject ds)
+        public async Task<JObject> ECOMtlsAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.EngWorkBenchSvc/ECOMtls";
-            return RESTCall(svc, ds);
+            return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
         }
-        internal JObject GroupUnLock(JObject ds)
+        public async Task<JObject> GroupUnLockAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.EngWorkBenchSvc/GroupUnLock";
-            return RESTCall(svc, ds);
+            return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
         }
 
 
-        private JObject GetNewECOGroup()
+        private async Task<JObject> GetNewECOGroupAsync(CancellationToken ct = default)
         {
             JObject ds = new JObject(NewDS);
             string svc = "Erp.BO.EngWorkBenchSvc/GetNewECOGroup";
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        private JObject GetNewECOOpr(String GroupID, string PartNum, string RevNum) 
+        private async Task<JObject> GetNewECOOprAsync(string GroupID, string PartNum, string RevNum, CancellationToken ct = default)
         {
             JObject ds = new JObject(NewDS);
             string svc = "Erp.BO.EngWorkBenchSvc/GetNewECOOpr";
@@ -255,13 +268,12 @@ namespace EpicorSvcs
             ds.Add(new JProperty("partNum", PartNum));
             ds.Add(new JProperty("processMfgID", ""));
             ds.Add(new JProperty("revisionNum", RevNum));
-            ds.Add(new JProperty("altMethod", "")); 
-            return HandleResponse(RESTCall(svc, ds));
-
+            ds.Add(new JProperty("altMethod", ""));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
 
-        private JObject GetDatasetForTreeByRef(String GroupID, string PartNum, string RevNum)
+        private async Task<JObject> GetDatasetForTreeByRefAsync(string GroupID, string PartNum, string RevNum, CancellationToken ct = default)
         {
             JObject ds = new JObject(NewDS);
             string svc = "Erp.BO.EngWorkBenchSvc/GetDatasetForTreeByRef";
@@ -274,22 +286,31 @@ namespace EpicorSvcs
             ds.Add(new JProperty("ipProcessMfgID", ""));
             ds.Add(new JProperty("ipRevisionNum", RevNum));
             ds.Add(new JProperty("ipUseMethodForParts", false));
-            return HandleResponse(RESTCall(svc, ds));
-
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
 
-        private JObject GetECOGroupAndECORev(string groupid)
+        private async Task<JObject> GetECOGroupAndECORevAsync(string groupid, CancellationToken ct = default)
         {
-            JObject ds = new JObject(NewDS);
             string svc = "Erp.BO.EngWorkBenchSvc/GetECOGroupAndECORev";
-            return HandleResponse(RESTCall(svc, new JObject {
+            return HandleResponse(await RESTCallAsync(svc, new JObject {
                 new JProperty("ipGroupID", groupid),
                 new JProperty("ipCheckOutStatus", true),
                 new JProperty("CheckUpdateLock", true)
-            }));
+            }, ct).ConfigureAwait(false));
         }
 
+        // Dispose the inner BomSearchSvc when this service is disposed,
+        // then chain to the base which disposes the HttpClient.
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _bomSearchSvc?.Dispose();
+                _bomSearchSvc = null;
+            }
+            base.Dispose(disposing);
+        }
 
 
         public class ECOMtl
@@ -309,8 +330,8 @@ namespace EpicorSvcs
             public string SI_Program1_c { get; set; } = "";
             public string SI_Program2_c { get; set; } = "";
             public string UOMCode { get; set; } = "EA";
-
         }
+
         public class GroupUnlock
         {
             public string ipGroupID { get; set; } = "IS TEST";
@@ -318,7 +339,11 @@ namespace EpicorSvcs
             public string ipRevisionNum { get; set; } = "";
             public string ipAltMethod { get; set; } = "";
             public string ipProcessMfgID { get; set; } = "";
-            public string ipAsOfDate { get; set; } = DateTime.Today.ToString();
+
+            // Evaluated per-instance so each request gets today's date,
+            // not the date the type was first loaded.
+            public string ipAsOfDate { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
+
             public bool ipCompleteTree { get; set; } = false;
             public bool ipReturn { get; set; } = false;
             public bool ipGetDatasetForTree { get; set; } = false;

@@ -55,10 +55,16 @@ namespace FileHandling
                         mailMessage.To.Add(emailto);
 
                     foreach (string emailbcc in report.EmailRecipientDefault)
-                        if(emailbcc.Length>10)
-                            mailMessage.Bcc.Add(emailbcc);
+                    {
+                        if (string.IsNullOrWhiteSpace(emailbcc)) continue;
+                        if (!emailbcc.Contains("@")) continue;
+                        // Skip obvious template placeholders
+                        if (emailbcc.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase)) continue;
 
-                    if(report.EmailCCRecipients != null)
+                        mailMessage.Bcc.Add(emailbcc);
+                    }
+
+                    if (report.EmailCCRecipients != null)
                     foreach (string emailcc in report.EmailCCRecipients)
                         mailMessage.CC.Add(emailcc);
 
@@ -156,7 +162,8 @@ namespace FileHandling
     public class EMailMeta
     {
         private static string AttchPrefix = "";
-        private static string SheetName = ""; 
+        private static string SheetName = "";
+        public string SMTPHost { get; set; } = null;
         public string Subject { get; set; } = "Generic Subjest";
         public string From { get; set; } = "";
         public string RecipientName { get; set; } = "Sales Team";

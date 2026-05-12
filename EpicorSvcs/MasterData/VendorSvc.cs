@@ -1,9 +1,9 @@
-﻿using Newtonsoft.Json.Linq;
-using RESTServices;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -12,18 +12,21 @@ namespace EpicorSvcs
         public VendorSvc(string env = null) : base(env) { }
         public VendorSvc(RESTSessionKey env) : base(env) { }
 
-        public JObject VendCnts(int vendorNum, List<string> colselect = null)
+        public async Task<JObject> VendCntsAsync(
+            int vendorNum,
+            List<string> colselect = null,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.VendorSvc/VendCnts";
 
-            svc += String.Format("?$top={0} &$filter=VendorNum eq {0}", vendorNum);
+            svc += String.Format("?$top={0}&$filter=VendorNum eq {0}", vendorNum);
 
             if (colselect != null)
             {
-                svc += "&$select=" + String.Join(",", colselect); 
+                svc += "&$select=" + String.Join(",", colselect);
             }
 
-            return RESTCall(svc);
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
     }
 }

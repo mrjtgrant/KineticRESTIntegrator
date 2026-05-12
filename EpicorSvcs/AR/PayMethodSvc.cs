@@ -1,11 +1,7 @@
-﻿using System;
-using RESTServices;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -16,17 +12,18 @@ namespace EpicorSvcs
 
         //{: "ACH-AP", : 0}
         //Erp.BO.PayMethodSvc/GetByNamePMSource
-
-        internal JObject GetByNamePMSource(string name, int pmSource = 0)
+        public async Task<JObject> GetByNamePMSourceAsync(
+            string name,
+            int pmSource = 0,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.PayMethodSvc/GetByNamePMSource";
-            JObject payload = new JObject { 
-                new JProperty("name", name), 
+            JObject payload = new JObject {
+                new JProperty("name", name),
                 new JProperty("pmSource", pmSource)
-            };    
+            };
 
-            return RESTCall(svc, payload);
+            return await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
         }
-
     }
 }

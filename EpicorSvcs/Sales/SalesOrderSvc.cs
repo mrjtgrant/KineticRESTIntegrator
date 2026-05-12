@@ -1,11 +1,9 @@
-﻿using Newtonsoft.Json.Linq;
-using RESTServices;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using RESTServices;
 
 namespace EpicorSvcs
 {
@@ -16,7 +14,7 @@ namespace EpicorSvcs
 
 
         //RESTFilterBuilder
-        internal JObject _FindOrderByPONum(String PONum = "4504976765")
+        public async Task<JObject> _FindOrderByPONumAsync(string PONum, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/SalesOrders";
             svc += "?$select=OrderNum";
@@ -26,33 +24,37 @@ namespace EpicorSvcs
                         String.Format("PONum eq '{0}'", PONum)
                     });
 
-            return RESTCall(svc);
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
 
-        internal JObject GetByID(int OrderNum)
+        public async Task<JObject> GetByIDAsync(int OrderNum, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/GetByID";
             svc += String.Format("?orderNum={0}", OrderNum);
 
-            return RESTCall(svc);
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
 
-        internal JObject _NewOrderLine(int OrderNum, string PartNum, JObject CustomerItem = null)
+        public async Task<JObject> _NewOrderLineAsync(
+            int OrderNum,
+            string PartNum,
+            JObject CustomerItem = null,
+            CancellationToken ct = default)
         {
-            JObject ds = GetNewOrderDtl(OrderNum);
-            ds = ChangePartNumMaster(ds, PartNum);
+            JObject ds = await GetNewOrderDtlAsync(OrderNum, ct).ConfigureAwait(false);
+            ds = await ChangePartNumMasterAsync(ds, PartNum, ct).ConfigureAwait(false);
 
-            string CustNum = ds["ds"]["OrderDtl"][0]["CustNum"].ToString(); 
+            string CustNum = ds["ds"]["OrderDtl"][0]["CustNum"].ToString();
 
-            //Haworth details
-            if (CustomerItem!=null)
+            // Customer-supplied per-item details (e.g. EDI feed, customer-specific mapping)
+            if (CustomerItem != null)
             {
                 //Mapped Customer Item Keys
                 string DockDateKey = CustomerItem["DockDateKey"].ToString();
                 string RequiredQuantityKey = CustomerItem["RequiredQuantityKey"].ToString();
                 string LineNumberKey = CustomerItem["LineNumberKey"].ToString();
 
-                //string DocUnitPrice = HWItem["UnitPrice"].ToString(); //NOTE: Already set on Part record..
+                //string DocUnitPrice = CustomerItem["UnitPrice"].ToString(); //NOTE: Already set on Part record..
                 DateTime NeedByDate = DateTime.Parse(CustomerItem[DockDateKey].ToString());//??????  Are NeedBy and Request Date backwards. 
                 DateTime ShipByDate = NeedByDate;
                 int OrderQty = Convert.ToInt32(CustomerItem[RequiredQuantityKey]);
@@ -63,7 +65,7 @@ namespace EpicorSvcs
                 ds["ds"]["OrderDtl"][0]["SI_Group_c"] = SI_Group_c;
                 ds["ds"]["OrderDtl"][0]["LineDesc"] = String.Format("{0}.{1}", PartNum, SI_Group_c);
                 ds["ds"]["OrderDtl"][0]["RevisionNum"] = OrderNum;
-                ds = ChangeSellingQtyMaster(ds, PartNum, OrderQty);
+                ds = await ChangeSellingQtyMasterAsync(ds, PartNum, OrderQty, ct).ConfigureAwait(false);
                 ds = JObject.FromObject(ds["parameters"]);
             }
 
@@ -72,8 +74,8 @@ namespace EpicorSvcs
                 ds["ds"]["OrderDtl"][0]["LineDesc"] = PartNum;
 
 
-            //seperate line to debug payload easily by commenting out.. 
-            return MasterUpdate(ds, CustNum, OrderNum, "OrderDtl"); 
+            //separate line to debug payload easily by commenting out.. 
+            return await MasterUpdateAsync(ds, CustNum, OrderNum, "OrderDtl", ct).ConfigureAwait(false);
         }
 
 
@@ -90,32 +92,37 @@ namespace EpicorSvcs
          * ChangeSoldToContact
          * MasterUpdate
          */
-        internal JObject _NewOrder(string CustID, DateTime NeedByDate, string PONum = null) 
+        public async Task<JObject> _NewOrderAsync(
+            string CustID,
+            DateTime NeedByDate,
+            string PONum = null,
+            CancellationToken ct = default)
         {
-            JObject ds = GetNewOrderHed();
-                    ds = ChangeOrderHedCustomerCustID(ds, CustID);
-                    ds = ChangeSoldToContact(ds);
+            JObject ds = await GetNewOrderHedAsync(ct).ConfigureAwait(false);
+            ds = await ChangeOrderHedCustomerCustIDAsync(ds, CustID, 0, ct).ConfigureAwait(false);
+            ds = await ChangeSoldToContactAsync(ds, ct).ConfigureAwait(false);
 
             //RequestDate
             ds["ds"]["OrderHed"][0]["PONum"] = PONum ?? "";
             ds["ds"]["OrderHed"][0]["RequestDate"] = NeedByDate;
             ds["ds"]["OrderHed"][0]["NeedByDate"] = NeedByDate;
 
-            return MasterUpdate(ds, ds["ds"]["OrderHed"][0]["CustNum"].ToString());
+            return await MasterUpdateAsync(ds, ds["ds"]["OrderHed"][0]["CustNum"].ToString(), 0, "OrderHed", ct).ConfigureAwait(false);
         }
 
         //DIRECT EPICOR STEPS
-        private JObject GetNewOrderDtl(int ordernum) {
+        private async Task<JObject> GetNewOrderDtlAsync(int ordernum, CancellationToken ct = default)
+        {
             string svc = "Erp.BO.SalesOrderSvc/GetNewOrderDtl";
 
             JObject newOrderDtl = new JObject(NewDS);
             newOrderDtl.Add(new JProperty("orderNum", ordernum));
 
-            return HandleResponse(RESTCall(svc, newOrderDtl));
+            return HandleResponse(await RESTCallAsync(svc, newOrderDtl, ct).ConfigureAwait(false));
         }
 
 
-        private JObject ChangePartNumMaster(JObject ds, string partNum)
+        private async Task<JObject> ChangePartNumMasterAsync(JObject ds, string partNum, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/ChangePartNumMaster";
 
@@ -133,14 +140,17 @@ namespace EpicorSvcs
             ds.Add(new JProperty("checkChangeKitParent", true));
             ds.Add(new JProperty("checkPartSaleable", true));
 
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
 
 
-        private JObject ChangeSellingQtyMaster(JObject ds, string PartNum, Decimal OrderQty) 
+        private async Task<JObject> ChangeSellingQtyMasterAsync(
+            JObject ds,
+            string PartNum,
+            decimal OrderQty,
+            CancellationToken ct = default)
         {
-
             string svc = "Erp.BO.SalesOrderSvc/ChangeSellingQtyMaster";
 
             ds.Add(new JProperty("ipSellingQuantity", OrderQty));
@@ -158,30 +168,40 @@ namespace EpicorSvcs
             ds.Add(new JProperty("pcDimCode", "EA"));
             ds.Add(new JProperty("pdDimConvFactor", "1"));
 
-
-            return RESTCall(svc, ds);
-
+            return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
         }
 
 
-        private JObject GetNewOrderHed()
+        private async Task<JObject> GetNewOrderHedAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/GetNewOrderHed";
-            return HandleResponse( RESTCall(svc, NewDS));
+            return HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
         }
-        private JObject ChangeOrderHedCustomerCustID(JObject ds, string CustID, int ordernum = 0)
+
+        private async Task<JObject> ChangeOrderHedCustomerCustIDAsync(
+            JObject ds,
+            string CustID,
+            int ordernum = 0,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/ChangeOrderHedCustomerCustID";
             ds.Add(new JProperty("orderNum", ordernum));
             ds.Add(new JProperty("proposedCustomerCustID", CustID));
-            return HandleResponse( RESTCall(svc, ds) );
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
-        private JObject ChangeSoldToContact(JObject ds)
+
+        private async Task<JObject> ChangeSoldToContactAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/ChangeSoldToContact";
-            return HandleResponse( RESTCall(svc, ds) );
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
-        private JObject MasterUpdate(JObject ds, string custnum, int ordernum=0, string table = "OrderHed")
+
+        private async Task<JObject> MasterUpdateAsync(
+            JObject ds,
+            string custnum,
+            int ordernum = 0,
+            string table = "OrderHed",
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/MasterUpdate";
 
@@ -192,7 +212,7 @@ namespace EpicorSvcs
             ds.Add(new JProperty("iOrderNum", ordernum));
             ds.Add(new JProperty("lweLicensed", true));
 
-            return HandleResponse(RESTCall(svc, ds));
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
     }
 }

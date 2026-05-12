@@ -1,14 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 
 namespace EpicorSvcs
 {
-    public class EpicorSvc:RESTConnect
+    public class EpicorSvc : RESTConnect
     {
         public JObject NewDS = new JObject { new JProperty("ds", new JObject()) };
 
@@ -57,7 +56,7 @@ namespace EpicorSvcs
 
             return Added.index;
         }
-        
+
         public JObject HandleResponse(JObject response)
         {
             JObject dataset = new JObject();
@@ -120,7 +119,7 @@ namespace EpicorSvcs
         /// template placeholder values. Throws a clear, actionable exception
         /// if anything's missing.
         /// </summary>
-        private static bool ValidateSettings()
+        private static void ValidateSettings()
         {
             var problems = new List<string>();
 
@@ -163,14 +162,14 @@ namespace EpicorSvcs
             {
                 case "prod":
                 case "live":
-                    Check("EnvLive", envProd, "https://erp.example.com/ERP_Prod");
+                    Check("EnvLive", envProd, "https://erp-live.example.com/server");
                     break;
                 case "pilot":
-                    Check("EnvPilot", envPilo, "https://pilot.example.com/ERP_Pilot");
+                    Check("EnvPilot", envPilo, "https://erp-pilot.example.com/server");
                     break;
                 case "test":
                 case "third":
-                    Check("EnvTest", envTest, "https://dev.example.com/ERP_Dev");
+                    Check("EnvTest", envTest, "https://erp-test.example.com/server");
                     break;
             }
 
@@ -192,8 +191,6 @@ namespace EpicorSvcs
 
                 throw new InvalidOperationException(msg.ToString());
             }
-
-            return true;
         }
     }
 

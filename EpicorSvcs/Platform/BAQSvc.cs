@@ -1,5 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 
@@ -29,27 +32,34 @@ namespace EpicorSvcs
      */
     public class BAQSvc : EpicorSvc
     {
-        public BAQSvc(string env=null) : base(env) { }
+        public BAQSvc(string env = null) : base(env) { }
         public BAQSvc(RESTSessionKey env) : base(env) { }
 
-        public JObject BAQResults(string BAQName, Dictionary<string, dynamic> parameters = null)
+        public async Task<JObject> BAQResultsAsync(
+            string BAQName,
+            Dictionary<string, dynamic> parameters = null,
+            CancellationToken ct = default)
         {
-            string svc = "BaqSvc/"+BAQName;
+            string svc = "BaqSvc/" + BAQName;
 
             if (parameters != null)
             {
                 svc += "?";
-                List<string> phrases = new List<string>(); 
-                foreach(var parameter in parameters)
+                List<string> phrases = new List<string>();
+                foreach (var parameter in parameters)
                 {
                     bool isStr = parameter.Value.GetType() == typeof(string);
-                    string phrase = isStr ? "{0}='{1}'" : "{0}={1}";
-                    phrases.Add(String.Format(phrase, parameter.Key, parameter.Value));
+                    // URL-encode both the key and the value to avoid breaking the query
+                    // if a value contains '&', '?', '=', or other reserved characters.
+                    string key = WebUtility.UrlEncode(parameter.Key);
+                    string val = WebUtility.UrlEncode(parameter.Value.ToString());
+                    string phrase = isStr ? $"{key}='{val}'" : $"{key}={val}";
+                    phrases.Add(phrase);
                 }
                 svc += String.Join("&", phrases);
             }
 
-            return RESTCall(svc);
+            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
         }
     }
 }

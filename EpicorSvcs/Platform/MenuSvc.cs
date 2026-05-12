@@ -1,29 +1,26 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 
 namespace EpicorSvcs
 {
-    public class MenuSvc: EpicorSvc
+    public class MenuSvc : EpicorSvc
     {
-        public MenuSvc(string env) : base(env) { }
+        public MenuSvc(string env = null) : base(env) { }
         public MenuSvc(RESTSessionKey env) : base(env) { }
 
 
         //Ice.BO.MenuSvc/GetList?whereClause=MenuType%20%3D%20%27MAINMENU%27&pageSize=100&absolutePage=1
-        public JObject GetList(List<string> selectList = null)
+        public async Task<JObject> GetListAsync(List<string> selectList = null, CancellationToken ct = default)
         {
-            List<string> filterList = new List<string> {
-                "MenuType = 'MAINMENU'"
-            };
-
             string svc = "Ice.BO.MenuSvc/GetList";
-            svc += "?whereClause=";// + UrlEncode(string.Join(" and ", filterList));
+            svc += "?whereClause=";
             svc += "&pageSize=0&absolutePage=1";
 
-
-            JObject result = HandleResponse(RESTCall(svc));
+            JObject result = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
             if (selectList != null && result["ds"] != null)
             {
                 JArray MenuList = new JArray(
@@ -43,13 +40,13 @@ namespace EpicorSvcs
         }
 
         //Ice.BO.MenuSvc/GetList?whereClause=MenuType%20%3D%20%27MAINMENU%27&pageSize=100&absolutePage=1
-        public JObject GetRows(List<string> selectList = null)
+        public async Task<JObject> GetRowsAsync(List<string> selectList = null, CancellationToken ct = default)
         {
             string svc = "Ice.BO.MenuSvc/GetRows";
             svc += "?whereClauseMenu=";
             svc += "&pageSize=0&absolutePage=1";
-            
-            JObject result = HandleResponse(RESTCall(svc));
+
+            JObject result = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
 
             if (selectList != null && result["ds"] != null)
             {
@@ -68,7 +65,5 @@ namespace EpicorSvcs
 
             return result;
         }
-
-
     }
 }
