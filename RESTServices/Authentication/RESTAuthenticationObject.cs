@@ -1,0 +1,35 @@
+namespace RESTServices
+{
+    /// <summary>
+    /// Carries authentication information for a REST session. Auto-detects
+    /// Basic auth (when <see cref="ApiKey"/> is empty) versus API-key auth
+    /// (when set), and exposes the appropriate URL modifier accordingly.
+    /// </summary>
+    public class RESTAuthenticationObject
+    {
+        /// <summary>"basic" if no API key is set, otherwise "apikey".</summary>
+        internal string KeyType => string.IsNullOrEmpty(ApiKey) ? "basic" : "apikey";
+
+        /// <summary>
+        /// The dynamic portion of the URL appended after the environment base —
+        /// e.g. "api/v1/" for Basic auth, "api/v2/odata/{Company}/" for API-key.
+        /// Selected automatically based on <see cref="KeyType"/>.
+        /// </summary>
+        internal string DynamicURLModifier => KeyType == "basic" ? DynamicURLModifier_Basic : DynamicURLModifier_OAuth;
+
+        /// <summary>Username for Basic authentication.</summary>
+        public string Username { get; set; }
+
+        /// <summary>Password (or token) for Basic authentication.</summary>
+        public string Userkey { get; set; }
+
+        /// <summary>API key for v2 OData / X-API-Key authentication. Leave empty to use Basic.</summary>
+        public string ApiKey { get; set; } = "";
+
+        /// <summary>URL modifier used when <see cref="KeyType"/> is "basic". Typically "api/v1/".</summary>
+        public string DynamicURLModifier_Basic { get; set; } = "";
+
+        /// <summary>URL modifier used when <see cref="KeyType"/> is "apikey". Typically "api/v2/odata/{Company}/".</summary>
+        public string DynamicURLModifier_OAuth { get; set; } = "";
+    }
+}
