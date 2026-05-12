@@ -1,0 +1,139 @@
+# ============================================================
+# Kinetic REST Integrator — .gitattributes
+# Place this file at the solution root.
+#
+# Purpose:
+#   - Normalize line endings so the repo works the same on every
+#     developer's machine, regardless of their local git config.
+#   - Mark binary files so git doesn't try to diff or merge them.
+#   - Improve diffs for specific file types.
+# ============================================================
+
+# ----- Default: auto-detect text vs binary, normalize line endings -----
+* text=auto
+
+# ----- Source files: explicit Windows line endings (CRLF) -----
+# .NET tooling generates and expects CRLF for these. Forcing it
+# avoids "LF will be replaced by CRLF" warnings on every commit.
+*.cs        text eol=crlf
+*.csproj    text eol=crlf
+*.sln       text eol=crlf
+*.vbproj    text eol=crlf
+*.vcxproj   text eol=crlf
+*.vcxproj.filters text eol=crlf
+*.props     text eol=crlf
+*.targets   text eol=crlf
+*.config    text eol=crlf
+*.template  text eol=crlf
+*.manifest  text eol=crlf
+*.settings  text eol=crlf
+*.resx      text eol=crlf
+*.xaml      text eol=crlf
+*.xml       text eol=crlf
+*.xsd       text eol=crlf
+*.xslt      text eol=crlf
+*.ruleset   text eol=crlf
+
+# ----- Windows scripts: CRLF -----
+*.ps1       text eol=crlf
+*.psm1      text eol=crlf
+*.psd1      text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+
+# ----- Documentation and data: prefer LF (renders fine on Windows) -----
+*.md        text eol=lf
+*.txt       text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+*.ini       text eol=lf
+*.editorconfig text eol=lf
+LICENSE     text eol=lf
+README*     text eol=lf
+
+# ----- Unix shell scripts: always LF (CRLF breaks them on Linux/macOS) -----
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# ----- Web assets: prefer LF -----
+*.html      text eol=lf
+*.htm       text eol=lf
+*.css       text eol=lf
+*.scss      text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.ts        text eol=lf
+*.jsx       text eol=lf
+*.tsx       text eol=lf
+
+# ----- Binary files: never diff, never line-ending-convert -----
+*.dll       binary
+*.exe       binary
+*.pdb       binary
+*.so        binary
+*.dylib     binary
+*.nupkg     binary
+*.snupkg    binary
+*.zip       binary
+*.7z        binary
+*.gz        binary
+*.tar       binary
+*.rar       binary
+*.bin       binary
+*.dat       binary
+*.cache     binary
+*.lib       binary
+*.obj       binary
+*.iobj      binary
+*.ipdb      binary
+
+# ----- Images: binary -----
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.bmp       binary
+*.tif       binary
+*.tiff      binary
+*.svg       text eol=lf
+*.webp      binary
+
+# ----- Office and document formats: binary -----
+*.pdf       binary
+*.docx      binary
+*.doc       binary
+*.xlsx      binary
+*.xls       binary
+*.pptx      binary
+*.ppt       binary
+*.vsd       binary
+*.vsdx      binary
+
+# ----- Crypto / signing -----
+*.snk       binary
+*.pfx       binary
+*.cer       binary
+*.p12       binary
+
+# ----- Database -----
+*.bak       binary
+*.mdf       binary
+*.ldf       binary
+*.bacpac    binary
+*.dacpac    binary
+
+# ----- Better diffs for specific file types -----
+*.cs        diff=csharp
+*.md        diff=markdown
+*.json      diff=json
+
+# ----- Files that should not be exported from archives -----
+# When someone runs `git archive`, these are excluded from the tarball.
+# Useful for keeping developer-only files out of release downloads.
+.gitignore          export-ignore
+.gitattributes      export-ignore
+.editorconfig       export-ignore
+CLEANUP_RECOMMENDATIONS.md  export-ignore

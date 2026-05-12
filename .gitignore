@@ -1,0 +1,153 @@
+# ============================================================
+# Kinetic REST Integrator — .gitignore
+# Place this file at the solution root (next to KineticRESTIntegrator.sln)
+# ============================================================
+
+# ----- Visual Studio cache and user-specific files -----
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# ----- Build output -----
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+# ----- NuGet -----
+packages/
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ----- Local developer secrets — keep templates, exclude real configs -----
+**/App.config
+!**/App.config.template
+**/appsettings.*.json
+!**/appsettings.template.json
+**/secrets.json
+**/*.local.config
+**/*.env
+.env
+.env.*
+
+# ----- ReSharper / Rider -----
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+*.sln.iml
+
+# ----- Test results -----
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+*.opencover.xml
+
+# ----- Backups and "old" files (anything renamed during cleanup) -----
+*.old
+*.bak
+*.backup
+*.orig
+*.rej
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+
+# ----- OS-generated files -----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ----- Editor / IDE misc -----
+*.code-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# ----- Logs and crash dumps -----
+*.log
+*.tlog
+*.tmp_proj
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+*.dmp
+*.mdmp
+*.hdmp
+
+# ----- ASP.NET / NCrunch / other build tooling artifacts -----
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.vspx
+*.sap
+
+# ----- Files that look like they don't belong -----
+*.bin
+*.cache
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+*.pfx
+*.publishsettings
+node_modules/
+
+# ----- Misc developer scratch -----
+scratch/
+tmp/
+temp/
+TODO.local.md
+NOTES.local.md

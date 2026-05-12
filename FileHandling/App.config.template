@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+	<configSections>
+		<sectionGroup name="userSettings" type="System.Configuration.UserSettingsGroup, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+			<section name="FileHandling.Properties.Settings" type="System.Configuration.ClientSettingsSection, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" allowExeDefinition="MachineToLocalUser" requirePermission="false" />
+		</sectionGroup>
+	</configSections>
+	<startup>
+		<supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.8" />
+	</startup>
+	<runtime>
+		<assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
+			<dependentAssembly>
+				<assemblyIdentity name="System.Runtime.CompilerServices.Unsafe" publicKeyToken="b03f5f7f11d50a3a" culture="neutral" />
+				<bindingRedirect oldVersion="0.0.0.0-6.0.3.0" newVersion="6.0.3.0" />
+			</dependentAssembly>
+			<dependentAssembly>
+				<assemblyIdentity name="System.Numerics.Vectors" publicKeyToken="b03f5f7f11d50a3a" culture="neutral" />
+				<bindingRedirect oldVersion="0.0.0.0-4.1.6.0" newVersion="4.1.6.0" />
+			</dependentAssembly>
+			<dependentAssembly>
+				<assemblyIdentity name="System.Buffers" publicKeyToken="cc7b13ffcd2ddd51" culture="neutral" />
+				<bindingRedirect oldVersion="0.0.0.0-4.0.5.0" newVersion="4.0.5.0" />
+			</dependentAssembly>
+			<dependentAssembly>
+				<assemblyIdentity name="System.Memory" publicKeyToken="cc7b13ffcd2ddd51" culture="neutral" />
+				<bindingRedirect oldVersion="0.0.0.0-4.0.5.0" newVersion="4.0.5.0" />
+			</dependentAssembly>
+		</assemblyBinding>
+	</runtime>
+	<userSettings>
+		<FileHandling.Properties.Settings>
+			<!-- ============================================================
+			     FileHandling settings — email / SMTP
+
+			     SETUP:
+			       1. Copy this file to App.config (same folder).
+			       2. Replace the YOUR_* values below.
+			       3. App.config is gitignored — your values stay local.
+
+			     OVERRIDE AT RUNTIME (optional):
+			       Any setting can be overridden by an environment variable
+			       of the same name with a SMTP_ or EMAIL_ prefix. Useful
+			       for CI and production deployment.
+			     ============================================================ -->
+
+			<!-- Email address used as the default "From:" on outbound mail.
+			     Often a no-reply or service mailbox. -->
+			<setting name="FromEmail" serializeAs="String">
+				<value>YOUR_FROM_EMAIL@example.com</value>
+			</setting>
+
+			<!-- Single developer email address used in two cases:
+			       1. As the default BCC on every outbound email (audit trail).
+			       2. As the ONLY recipient when EmailSpecs.IsDebug = true.
+			     Set this to your own address so test runs don't email customers. -->
+			<setting name="DeveloperEmail" serializeAs="String">
+				<value>YOUR_DEVELOPER_EMAIL@example.com</value>
+			</setting>
+
+			<!-- Optional broader distribution list (e.g. a team alias).
+			     Currently unreferenced in code; reserved for future use.
+			     Safe to leave as the placeholder. -->
+			<setting name="GroupEmail" serializeAs="String">
+				<value>YOUR_GROUP_EMAIL@example.com</value>
+			</setting>
+
+			<!-- SMTP relay host or IP address.
+			     The current Emailer implementation connects on PORT 25
+			     with NO SSL and NO authentication, so this must be an
+			     internal/anonymous relay reachable from where the code
+			     runs. Examples:
+			       smtp.example.com
+			       mail.internal.example.com
+			       10.0.0.25
+			     If your relay requires TLS or auth, see Emailer.cs —
+			     the current code does not support either. -->
+			<setting name="SMTPHost" serializeAs="String">
+				<value>YOUR_SMTP_HOST</value>
+			</setting>
+		</FileHandling.Properties.Settings>
+	</userSettings>
+</configuration>

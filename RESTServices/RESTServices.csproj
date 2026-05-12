@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <RootNamespace>RESTServices</RootNamespace>
+    <AssemblyName>RESTServices</AssemblyName>
+
+    <!-- Assembly metadata (replaces AssemblyInfo.cs) -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>RESTServices</Product>
+    <AssemblyTitle>RESTServices</AssemblyTitle>
+    <Description>Generic REST client library. Provides session, authentication (Basic auth or API key), environment selection, and JSON error handling. Vendor-agnostic.</Description>
+    <Company></Company>
+    <Copyright>Copyright © 2024</Copyright>
+    <Version>1.0.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+
+    <!-- Keep the original ProjectGuid so the .sln reference still resolves -->
+    <ProjectGuid>{FDE58B4C-D608-4412-AB9B-07E91748C174}</ProjectGuid>
+
+    <!-- COM visibility -->
+    <ComVisible>false</ComVisible>
+
+    <!-- Misc -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="RestSharp" Version="106.15.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Configuration" />
+  </ItemGroup>
+
+</Project>

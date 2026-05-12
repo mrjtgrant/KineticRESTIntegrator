@@ -1,0 +1,70 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <RootNamespace>FileHandling</RootNamespace>
+    <AssemblyName>FileHandling</AssemblyName>
+
+    <!-- Assembly metadata (replaces AssemblyInfo.cs) -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>FileHandling</Product>
+    <AssemblyTitle>FileHandling</AssemblyTitle>
+    <Description>Excel generation (ClosedXML), CSV writer, and SMTP email helpers for the Kinetic REST Integrator.</Description>
+    <Company></Company>
+    <Copyright>Copyright © 2025</Copyright>
+    <Version>1.0.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+
+    <!-- Keep the original ProjectGuid so the .sln reference still resolves -->
+    <ProjectGuid>{FB7502DF-C1CE-4F76-8B28-B68035F8A7FE}</ProjectGuid>
+
+    <!-- COM visibility -->
+    <ComVisible>false</ComVisible>
+
+    <!-- Misc -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Configuration" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
+    <ProjectReference Include="..\RESTServices\RESTServices.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <!-- Auto-create App.config from App.config.template on first build.
+       Build will fail once with a clear message telling the developer to
+       fill in their settings, then succeed on subsequent builds. -->
+  <Target Name="CreateAppConfigFromTemplate" BeforeTargets="PrepareForBuild" Condition="!Exists('App.config') And Exists('App.config.template')">
+    <Copy SourceFiles="App.config.template" DestinationFiles="App.config" />
+    <Message Importance="high" Text="*** Created App.config from App.config.template. Edit it with your settings, then rebuild. ***" />
+    <Error Text="App.config was just created from template. Edit it with your settings before continuing." />
+  </Target>
+
+</Project>
