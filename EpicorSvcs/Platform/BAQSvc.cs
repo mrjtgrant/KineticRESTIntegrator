@@ -8,58 +8,131 @@ using RESTServices;
 
 namespace EpicorSvcs
 {
-    /**
-     * BAQSvc
-     *  This Epicor BO Service class is likely to be used frequently and far more than any other
-     *  When Retrieving significant Data, with complex Joins, ETC, Creating and referencing a BAQ for REST
-     *  is always the best option. 
-     * 
-     * Known Dependencies: 
-     *  FileHandling.Emailer //Automatically retrieves EmailData
-     *  
-     * BAQ WARNINGS!!:
-     *      A BAQ can be used to retrieve any data.  It's important to note the following :
-     *      1. A BAQ Designed specifically for rest service loses context within Epicor.
-     *          - There won't be any "Where used" reference so it may be very hard to tell what the BAQ is for
-     *          - It's definitely important to add notes about the REST service in the BAQ description
-     *          - There is far more potential for rogue baqs, or someone removing or changing a BAQ without understanding the consequence
-     *      2. Creating a BAQ for REST also removes a sense of context from the code.  
-     *          - I can do a search all on the solution and see where BAQSvc is running and what IDs, but still
-     *          - if I can quickly write code that will hit the BO directly,  I have everything in one place and reduce Solution Sharding
-     *      3. KEEP EVERYTIHNG IN ONE PLACE! 
-     *          - As much as possible, minimizing your solution footprint to as few places as possible makes it much easier to manage and sustain
-     * 
-     */
+    /// <summary>
+    /// Runs Epicor Business Activity Queries (BAQs) via the REST API.
+    /// Calls <c>BaqSvc/{BAQName}</c> in Epicor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// BAQs are the recommended way to fetch reporting-shaped data from
+    /// Epicor — anything involving joins, aggregations, or fields scattered
+    /// across multiple tables.
+    /// </para>
+    /// <para>
+    /// Two flavors of <c>BAQResultsAsync</c> are provided:
+    /// <list type="bullet">
+    /// <item><see cref="BAQResultsAsync{TRow}(string, Dictionary{string, object}, CancellationToken)"/>
+    /// — generic, recommended for production. Each row is materialized as an
+    /// instance of <typeparamref name="TRow"/>, giving compile-time safety on
+    /// column access.</item>
+    /// <item><see cref="BAQResultsAsync(string, Dictionary{string, object}, CancellationToken)"/>
+    /// — untyped, returns rows as <see cref="JObject"/>s. Useful for one-off
+    /// scripts and exploration where defining a row type per BAQ isn't worth
+    /// the ceremony.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// <b>BAQ design tradeoffs:</b> a BAQ written specifically for REST loses
+    /// some context inside Epicor (no "Where used" reference, easier for
+    /// someone to rename or delete without realizing). It's good practice to
+    /// document REST consumers in the BAQ description, and to keep as much
+    /// data access as possible inline with the calling code via direct BO
+    /// methods rather than scattering logic across BAQ definitions.
+    /// </para>
+    /// </remarks>
     public class BAQSvc : EpicorSvc
     {
+        /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
+        /// <param name="env">
+        /// Optional environment selector that overrides
+        /// <c>DefaultEnvironment</c> from config. Typical values:
+        /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
+        /// </param>
         public BAQSvc(string env = null) : base(env) { }
+
+        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <param name="env">A fully-configured session.</param>
         public BAQSvc(RESTSessionKey env) : base(env) { }
 
-        public async Task<JObject> BAQResultsAsync(
+        /// <summary>
+        /// Run a BAQ and return its result rows as strongly-typed objects.
+        /// Calls <c>BaqSvc/{BAQName}</c> in Epicor.
+        /// </summary>
+        /// <typeparam name="TRow">
+        /// The row type to materialize. Should be a plain C# class with public
+        /// settable properties matching the BAQ's output column names exactly
+        /// (e.g. <c>Customer_CustID</c>, <c>Calculated_TotalValue</c>). Use
+        /// <c>[JsonProperty("...")]</c> attributes if you want C#-style names
+        /// on the DTO while keeping the BAQ column names on the wire.
+        /// </typeparam>
+        /// <param name="BAQName">The BAQ ID as registered in Epicor.</param>
+        /// <param name="parameters">
+        /// Optional parameters to pass to the BAQ. Keys are parameter names;
+        /// values can be any primitive type. Strings are automatically quoted
+        /// and URL-encoded.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of rows. On
+        /// failure, <c>ErrorMessage</c> describes what went wrong.
+        /// </returns>
+        public async Task<OperationResult<List<TRow>>> BAQResultsAsync<TRow>(
             string BAQName,
-            Dictionary<string, dynamic> parameters = null,
+            Dictionary<string, object> parameters = null,
             CancellationToken ct = default)
+        {
+            string svc = BuildBAQPath(BAQName, parameters);
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+
+            return response.ToOperationResult(r => r.ExtractValueList<TRow>());
+        }
+
+        /// <summary>
+        /// Run a BAQ and return its result rows as untyped <see cref="JObject"/>s.
+        /// Calls <c>BaqSvc/{BAQName}</c> in Epicor.
+        /// </summary>
+        /// <param name="BAQName">The BAQ ID as registered in Epicor.</param>
+        /// <param name="parameters">Optional parameters to pass to the BAQ.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of rows as
+        /// <see cref="JObject"/>s. Prefer the generic overload when you know
+        /// the row shape at compile time.
+        /// </returns>
+        public async Task<OperationResult<List<JObject>>> BAQResultsAsync(
+            string BAQName,
+            Dictionary<string, object> parameters = null,
+            CancellationToken ct = default)
+        {
+            string svc = BuildBAQPath(BAQName, parameters);
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+
+            return response.ToOperationResult(r => r.ExtractValueList<JObject>());
+        }
+
+        /// <summary>
+        /// Builds the BAQ service path with URL-encoded parameters appended
+        /// as an OData-style query string.
+        /// </summary>
+        private static string BuildBAQPath(string BAQName, Dictionary<string, object> parameters)
         {
             string svc = "BaqSvc/" + BAQName;
 
-            if (parameters != null)
+            if (parameters == null || parameters.Count == 0)
+                return svc;
+
+            var phrases = new List<string>();
+            foreach (var p in parameters)
             {
-                svc += "?";
-                List<string> phrases = new List<string>();
-                foreach (var parameter in parameters)
-                {
-                    bool isStr = parameter.Value.GetType() == typeof(string);
-                    // URL-encode both the key and the value to avoid breaking the query
-                    // if a value contains '&', '?', '=', or other reserved characters.
-                    string key = WebUtility.UrlEncode(parameter.Key);
-                    string val = WebUtility.UrlEncode(parameter.Value.ToString());
-                    string phrase = isStr ? $"{key}='{val}'" : $"{key}={val}";
-                    phrases.Add(phrase);
-                }
-                svc += String.Join("&", phrases);
+                bool isStr = p.Value is string;
+                // URL-encode both key and value so reserved characters in
+                // values (&, ?, =, etc.) don't break the query string.
+                string key = WebUtility.UrlEncode(p.Key);
+                string val = WebUtility.UrlEncode(p.Value?.ToString() ?? "");
+                phrases.Add(isStr ? $"{key}='{val}'" : $"{key}={val}");
             }
 
-            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return svc + "?" + string.Join("&", phrases);
         }
     }
 }

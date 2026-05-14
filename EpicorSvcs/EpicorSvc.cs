@@ -14,10 +14,18 @@ namespace EpicorSvcs
         public EpicorSvc(string env = null) : base(BuildSessionFromSettings(env))
         { }
 
-        public EpicorSvc(RESTSessionKey env) : base(env)
+        public EpicorSvc(RESTSessionKey env) : base(PrepareSession(env))
+        { }
+
+
+        private static RESTSessionKey PrepareSession(RESTSessionKey env)
         {
-            env.AuthObject.DynamicURLModifier_Basic = "api/v1/";
-            env.AuthObject.DynamicURLModifier_OAuth = string.Format("api/v2/odata/{0}/", env.Company);
+            if (env?.AuthObject != null)
+            {
+                env.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
+                env.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", env.Company);
+            }
+            return env;
         }
 
 

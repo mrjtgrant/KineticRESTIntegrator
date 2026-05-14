@@ -11,6 +11,13 @@
 *.sln.docstates
 *.userprefs
 
+# ----- Binary artifacts — usually caught by bin/obj exclusions, but belt-and-suspenders -----
+*.exe
+*.dll
+*.pdb
+*.exe.config
+*.cache
+
 # ----- Build output -----
 [Bb]in/
 [Oo]bj/

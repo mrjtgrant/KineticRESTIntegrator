@@ -36,17 +36,22 @@ namespace RESTServices
                 Timeout = sesh.Timeout
             };
 
-            if (sesh.AuthObject.KeyType == "basic")
+            // Always set Basic auth when credentials are present
+            if (!string.IsNullOrEmpty(sesh.AuthObject.Username) &&
+                !string.IsNullOrEmpty(sesh.AuthObject.Userkey))
             {
                 var raw = $"{sesh.AuthObject.Username}:{sesh.AuthObject.Userkey}";
                 var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
                 _client.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Basic", creds);
             }
-            else
+
+            // Always set API key when present
+            if (!string.IsNullOrEmpty(sesh.AuthObject.ApiKey))
             {
                 _client.DefaultRequestHeaders.Add("X-API-Key", sesh.AuthObject.ApiKey);
             }
+
         }
 
         /// <summary>
@@ -75,6 +80,8 @@ namespace RESTServices
                 try
                 {
                     response = await _client.SendAsync(request, ct).ConfigureAwait(false);
+                    // Diagnostic - inspect what actually went out:
+                    //foreach (var h in response.RequestMessage.Headers)  Console.WriteLine($"[DIAG] Sent header: {h.Key}: {string.Join(", ", h.Value)}");
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -145,7 +152,7 @@ namespace RESTServices
         {
             // HttpClient.BaseAddress already includes the environment, so the resource
             // is just the dynamic modifier + svc. Relative URI.
-            string resource = $"{sesh.AuthObject.DynamicURLModifier}{svc}";
+            string resource = $"{sesh.Environment}{sesh.AuthObject.DynamicURLModifier}{svc}";
 
             JObject result = await RESTTransactionAsync(resource, payload, ct).ConfigureAwait(false);
 

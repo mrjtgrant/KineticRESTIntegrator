@@ -14,8 +14,13 @@ namespace EpicorSvcDemo
         static async Task Main(string[] args)
         {
             // BAQSvc owns an HttpClient and must be disposed.
-            using (var baq = new BAQSvc(new RESTSessionKey
+            using (var baq = new BAQSvc(/*new RESTSessionKey
                 {
+                //these details can be set and referenced here, through Environment variables, Windows Credentials manager, or App.config.  
+                //whichver option suits the need of the application being built.  
+                //this option would allow the user to pass credentials on the fly, such as through a web interface for example. 
+                //If you have an executable script that runs in a local, closed network, it might make more sense to set it up with App.Config 
+
                 Company = "EPIC06",
                 Environment = "https://example-live.epicorsaas.com/server",
                 AuthObject = new RESTServices.RESTAuthenticationObject
@@ -24,7 +29,7 @@ namespace EpicorSvcDemo
                     Userkey = "manager",
                     Username = "manger"
                 }
-            }))
+            }*/))
             {
                 JObject BAQResult = await baq.BAQResultsAsync("EXAMPLE_BAQ").ConfigureAwait(false);
 
@@ -37,7 +42,7 @@ namespace EpicorSvcDemo
                     To = "user@company.com",
                     CC = "",
                     BCC = "",
-                    //SMTPHost = "10.10.10.10", 
+                    //SMTPHost = "10.10.10.10", //Can be set here or in App.Config
                     RecipientName = "John Doe",
                     ExcelSheetName = "EXAMPLE_REPORT",
                     AttachmentName = "EXAMPLE_REPORT",
@@ -54,7 +59,7 @@ namespace EpicorSvcDemo
         /**
          *  Column Mapping Key/Value pair
          *  Translate Key (Assumed to be the Column ID coming from the BAQ), and setting the ColumnName in the DataTable for the Excel Worksheet
-         *  "BAQ_COLUMN", "Formatted Display for Excel"
+         *  "BAQ_COLUMN", "Formatted Display for Excel Column"
          */
         private static Dictionary<string, string> AttachmentColHeaderMap = new Dictionary<string, string> {
             {"OrderRel_Company","Company"},
