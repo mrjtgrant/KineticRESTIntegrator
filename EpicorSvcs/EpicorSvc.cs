@@ -7,25 +7,47 @@ using RESTServices;
 
 namespace EpicorSvcs
 {
+    /// <summary>
+    /// Base class for all Epicor service wrappers. Extends
+    /// <see cref="RESTConnect"/> with Epicor-specific helpers: dataset
+    /// response normalization, configuration loading, and the
+    /// <c>{"ds":{}}</c> skeleton used by Epicor's <c>GetNew*</c> calls.
+    /// </summary>
+    /// <remarks>
+    /// Concrete service classes (<see cref="CustomerSvc"/>,
+    /// <see cref="PartSvc"/>, and so on) inherit from this. It is not used
+    /// directly.
+    /// </remarks>
     public class EpicorSvc : RESTConnect
     {
+        /// <summary>
+        /// The empty Epicor dataset skeleton: <c>{"ds":{}}</c>. Epicor's
+        /// <c>GetNew*</c> action methods expect this shape as their input.
+        /// </summary>
         public JObject NewDS = new JObject { new JProperty("ds", new JObject()) };
 
+        /// <summary>
+        /// Construct using settings from <c>App.config</c> / environment
+        /// variables, optionally overriding the selected environment.
+        /// </summary>
+        /// <param name="env">
+        /// Optional environment selector (<c>"prod"</c>, <c>"pilot"</c>,
+        /// <c>"test"</c>, or a literal URL). When null, the configured
+        /// default environment is used.
+        /// </param>
         public EpicorSvc(string env = null) : base(BuildSessionFromSettings(env))
         { }
 
-        public EpicorSvc(RESTSessionKey env) : base(PrepareSession(env))
-        { }
-
-
-        private static RESTSessionKey PrepareSession(RESTSessionKey env)
+        /// <summary>
+        /// Construct with a programmatic session — bypasses config-file
+        /// lookup. Sets the v1 / v2 URL modifiers on the session's auth
+        /// object before use.
+        /// </summary>
+        /// <param name="env">A fully-configured session.</param>
+        public EpicorSvc(RESTSessionKey env) : base(env)
         {
-            if (env?.AuthObject != null)
-            {
-                env.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
-                env.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", env.Company);
-            }
-            return env;
+            env.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
+            env.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", env.Company);
         }
 
 
@@ -42,7 +64,7 @@ namespace EpicorSvcs
                     Username = Setting("EPICOR_USER", Properties.Settings.Default.DefaultUser),
                     Userkey = Setting("EPICOR_PASS", Properties.Settings.Default.DefaultPasskey),
                     ApiKey = Setting("EPICOR_APIKEY", ""),
-                    DynamicURLModifier_Basic = "api/v1/"
+                    DynamicURLModifier_Basic = "/api/v1/"
                 },
                 EnvironmentOptions = new RESTEnvironments
                 {
@@ -55,6 +77,13 @@ namespace EpicorSvcs
         }
 
 
+        /// <summary>
+        /// Finds the index of the last row in a dataset table whose
+        /// <c>RowMod</c> marks it as added (<c>"A"</c>) or updated
+        /// (<c>"U"</c>).
+        /// </summary>
+        /// <param name="items">The dataset table array to scan.</param>
+        /// <returns>The index of the active row, or null if none is marked.</returns>
         public int? GetActiveRowIndex(JArray items)
         {
             var Added = items.Select((element, index) => new { element, index })
@@ -65,6 +94,14 @@ namespace EpicorSvcs
             return Added.index;
         }
 
+        /// <summary>
+        /// Normalizes the three response shapes Epicor returns into a
+        /// consistent <c>{"ds": ...}</c> envelope: <c>returnObj</c>-wrapped
+        /// responses and <c>parameters</c>-wrapped responses are unwrapped;
+        /// anything else is returned unchanged.
+        /// </summary>
+        /// <param name="response">The raw Epicor response.</param>
+        /// <returns>The normalized dataset.</returns>
         public JObject HandleResponse(JObject response)
         {
             JObject dataset = new JObject();
@@ -78,6 +115,12 @@ namespace EpicorSvcs
             return dataset;
         }
 
+        /// <summary>
+        /// Debug helper — formats a flat JObject's top-level properties as a
+        /// readable name/value string.
+        /// </summary>
+        /// <param name="obj">The object to format.</param>
+        /// <returns>A formatted string, or empty if <paramref name="obj"/> is null.</returns>
         public static string FormatJObjectResults(JObject obj)
         {
             if (obj == null)
@@ -94,6 +137,11 @@ namespace EpicorSvcs
         }
 
 
+        // NOTE: RESTFilterBuilder is retained until PartSvc and SalesOrderSvc
+        // are converted off it (the last Stage C service batch). Once those
+        // call sites are gone, this method should be deleted — callers build
+        // OData filters with a List<string> joined by " and " and passed
+        // through UrlEncode instead.
         public string RESTFilterBuilder(List<String> filter = null, List<string> inList = null)
         {
             StringBuilder filterStr = new StringBuilder("$filter=");
@@ -199,19 +247,6 @@ namespace EpicorSvcs
 
                 throw new InvalidOperationException(msg.ToString());
             }
-        }
-    }
-
-    public class FileAttachment : ICloneable
-    {
-        public string DocType { get; set; } = "";
-        public string FileParentTable { get; set; } = "Part";
-        public string FileDesc { get; set; }
-        public string FileName { get; set; }
-        public string GenericItemNum { get; set; }
-        public object Clone()
-        {
-            return MemberwiseClone();
         }
     }
 }

@@ -30,6 +30,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Platform\UserCodeSvc.Workflows.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Platform\UserCodeSvc.Workflows.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="RestSharp" Version="106.15.0" />
   </ItemGroup>

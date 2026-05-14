@@ -1,51 +1,65 @@
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
+using EpicorSvcs.Dtos;
 
 namespace EpicorSvcs
 {
-    /**
-     * NOTE UTILIZED YET:
-     * 
-     * I kept this here because it will definitely be used in short order.  
-     * When someone wants to use UserCodes for any settings for any feature
-     * This class will be used .
-     * 
-     */
-    public class UserCodesSvc : EpicorSvc
+    /// <summary>
+    /// Reads Epicor user-defined codes (<c>UDCodes</c>) via the REST API.
+    /// Calls <c>Ice.BO.UserCodesSvc</c> in Epicor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// UD codes are Epicor's generic lookup-table mechanism — small sets of
+    /// coded values (each belonging to a code type) that customizations and
+    /// configuration features use instead of hardcoding string constants.
+    /// </para>
+    /// <para>
+    /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
+    /// here in <c>UserCodesSvc.cs</c>; multi-call orchestrators live in
+    /// <c>UserCodesSvc.Workflows.cs</c>.
+    /// </para>
+    /// </remarks>
+    public partial class UserCodesSvc : EpicorSvc
     {
-        JObject CurUserCode = new JObject();
-
+        /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
+        /// <param name="env">
+        /// Optional environment selector that overrides
+        /// <c>DefaultEnvironment</c> from config. Typical values:
+        /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
+        /// </param>
         public UserCodesSvc(string env = null) : base(env) { }
+
+        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <param name="env">A fully-configured session.</param>
         public UserCodesSvc(RESTSessionKey env) : base(env) { }
 
-        //Ice.BO.UserCodesSvc/GetByID
-        public async Task<JObject> GetByIDAsync(string codeTypeID, CancellationToken ct = default)
-        {
-            CurUserCode = NewDS;
-            string svc = "Ice.BO.UserCodesSvc/GetByID";
-            CurUserCode = HandleResponse(await RESTCallAsync(svc, new JObject {
-                new JProperty("codeTypeID", codeTypeID)
-            }, ct).ConfigureAwait(false));
-            return CurUserCode;
-        }
-
-        public async Task<string> _UDCodeLookUpAsync(
+        /// <summary>
+        /// Retrieves all UD codes belonging to a code type. Calls
+        /// <c>Ice.BO.UserCodesSvc/GetByID</c> in Epicor.
+        /// </summary>
+        /// <param name="codeTypeID">The code type to retrieve codes for.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="UDCodes"/> entries for the type. On failure,
+        /// <c>ErrorMessage</c> describes what went wrong.
+        /// </returns>
+        public async Task<OperationResult<List<UDCodes>>> GetByIDAsync(
             string codeTypeID,
-            string codeID,
-            string LookupCol = "CodeDesc",
-            CancellationToken ct = default) //LongDesc
+            CancellationToken ct = default)
         {
-            if (codeID.IndexOf("long") > -1)
-                LookupCol = "LongDesc";
+            string svc = "Ice.BO.UserCodesSvc/GetByID";
+            JObject payload = new JObject {
+                new JProperty("codeTypeID", codeTypeID)
+            };
 
-            await GetByIDAsync(codeTypeID, ct).ConfigureAwait(false);
-
-            JArray UDCodes = JArray.FromObject(CurUserCode["ds"]["UDCodes"]);
-            string result = (from row in UDCodes where row["CodeID"].ToString() == codeID select row[LookupCol].ToString()).FirstOrDefault();
-            return result;
+            JObject response = HandleResponse(
+                await RESTCallAsync(svc, payload, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r.ExtractDtoList<UDCodes>("UDCodes"));
         }
     }
 }

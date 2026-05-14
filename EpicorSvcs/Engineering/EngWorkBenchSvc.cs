@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
+using EpicorSvcs.Dtos; 
 
 namespace EpicorSvcs
 {
@@ -38,7 +39,7 @@ namespace EpicorSvcs
             var ds = await GetNewECOOprAsync(FirstMtl.GroupID, FirstMtl.PartNum, FirstMtl.RevisionNum, ct).ConfigureAwait(false);
 
             JArray newOprs = new JArray();
-            JArray srcBomOprs = JArray.FromObject(bom["ds"]["PartOpr"]);
+            JArray srcBomOprs = JArray.FromObject(bom.Value["ds"]["PartOpr"]);
             JObject newEcoOpr = JObject.FromObject(ds["ds"]["ECOOpr"][0]);
 
             foreach (JObject opr in srcBomOprs)
@@ -158,7 +159,7 @@ namespace EpicorSvcs
 
 
             //****  Unlock Group for other users after adding materials..****
-            await GroupUnLockAsync(JObject.FromObject(new GroupUnlock
+            await GroupUnLockAsync(JObject.FromObject(new GroupUnLockDataset
             {
                 ipGroupID = FirstMtl.GroupID,
                 ipPartNum = FirstMtl.PartNum,
@@ -312,43 +313,5 @@ namespace EpicorSvcs
             base.Dispose(disposing);
         }
 
-
-        public class ECOMtl
-        {
-            public string PartNum { get; set; } = "";
-            public string RevisionNum { get; set; } = "";
-            public int MtlSeq { get; set; }
-            public string MtlPartNum { get; set; } = "";
-            public string QtyPer { get; set; }
-            public string GroupID { get; set; } = "";
-            public string MtlPartNumPartDescription { get; set; } = "";
-            public string SI_Part_Description_c { get; set; } = "";
-            public string AltMethod { get; set; } = "";
-            public string ProcessMfgID { get; set; } = "";
-            public string SI_Width_c { get; set; }
-            public string SI_Length_c { get; set; }
-            public string SI_Program1_c { get; set; } = "";
-            public string SI_Program2_c { get; set; } = "";
-            public string UOMCode { get; set; } = "EA";
-        }
-
-        public class GroupUnlock
-        {
-            public string ipGroupID { get; set; } = "IS TEST";
-            public string ipPartNum { get; set; } = "";
-            public string ipRevisionNum { get; set; } = "";
-            public string ipAltMethod { get; set; } = "";
-            public string ipProcessMfgID { get; set; } = "";
-
-            // Evaluated per-instance so each request gets today's date,
-            // not the date the type was first loaded.
-            public string ipAsOfDate { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
-
-            public bool ipCompleteTree { get; set; } = false;
-            public bool ipReturn { get; set; } = false;
-            public bool ipGetDatasetForTree { get; set; } = false;
-            public bool ipUseMethodForParts { get; set; } = false;
-            public JObject ds { get; set; } = new JObject();
-        }
     }
 }
