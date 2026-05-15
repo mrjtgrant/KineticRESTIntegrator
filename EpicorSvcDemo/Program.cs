@@ -42,23 +42,40 @@ namespace EpicorSvcDemo
                 JArray reportData = JArray.FromObject(baqResult.Value);  // the actual result rows
 
 
-                //for overriding EEMAIL format look at EmailDataReport in FileProcessing
-                FileProcessing.EmailDataReport(new EMailMeta
+                // Construct the email body inline. The library no longer
+                // overrides caller-set Subject/Body — what you set here is
+                // what gets sent.
+                var recipientName = "John Doe";
+                var attachmentName = "EXAMPLE_REPORT";
+
+                var body = new System.Text.StringBuilder();
+                body.AppendFormat("<p>{0}, </p>", recipientName);
+                body.AppendFormat("<p>The following file has been attached: {0}</p><br/><br/><br/>", attachmentName);
+                // body.AppendFormat("<p>Sincerely,<br/>Support Team</p>");
+
+                var mailMeta = new EMailMeta
                 {
                     From = "noreply@your_company.com",
                     To = "jgrant@your_company.com",
                     CC = "",
                     BCC = "",
                     SMTPHost = "10.10.10.10",
-                    RecipientName = "John Doe",
+                    RecipientName = recipientName,
                     ExcelSheetName = "EXAMPLE_REPORT",
-                    AttachmentName = "EXAMPLE_REPORT",
+                    AttachmentName = attachmentName,
                     AttachmentType = "xlsx",
                     AttachmentDateFormat = "yyyy-MM-dd", // Examples: "none", "u", "s", "yyyy-MM-dd HH.mm.ss"
                     AttachmentHeaderMap = AttachmentColHeaderMap,
-                    AttachmentData = reportData
+                    AttachmentData = reportData,
+                    Subject = String.Format("Test Email to showcase Attachment {0}", attachmentName),
+                    Body = body.ToString()
                     //,Error = error
-                });
+                };
+
+                // EmailReport returns a step-by-step log; print it so the
+                // demo run shows what happened end-to-end.
+                List<string> emailResult = FileProcessing.EmailReport(mailMeta);
+                Console.WriteLine(String.Join(",\n", emailResult));
             }
         }
 

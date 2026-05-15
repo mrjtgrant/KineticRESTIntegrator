@@ -100,6 +100,8 @@ namespace FileHandling
          */
         public static string ConvertJArrayToHTMLTable(JArray data)
         {
+            if (data == null || data.Count == 0) return string.Empty;
+
             List<string> Columns = GetPropertyNames(JObject.FromObject(data[0]));
             string html = "<table border='1' style = 'border-collapse:collapse; white-space:nowrap;'  cellpadding = '10'> ";
             //add header row
@@ -143,26 +145,6 @@ namespace FileHandling
         private static List<dynamic> GetPropertyValues(JObject line)
         {
             return (from row in line.Properties() select row.Value.ToString().Replace(",", "")).ToList<dynamic>();
-        }
-
-
-        public static void EmailDataReport(EMailMeta mailMeta)
-        {
-            //SETUP Formatted BODY
-            StringBuilder MsgBody = new StringBuilder();
-            MsgBody.AppendFormat("<p>{0}, </p>", mailMeta.RecipientName);
-            MsgBody.AppendFormat("<p>The following file has been attached: {0}</p><br/><br/><br/>", mailMeta.AttachmentName);
-            //MsgBody.AppendFormat("<p>Sincerely,<br/>Support Team</p>");
-
-            //SET Subject and Body
-            mailMeta.Subject = String.Format("Test Email to showcase Attachment {0}", mailMeta.AttachmentName);
-            mailMeta.Body = MsgBody.ToString();
-
-            //SEND THE EMAIL assign results to list
-            List<string> emailResult = FileProcessing.EmailReport(mailMeta);
-
-            //OUTPUT EMAIL RESULTS LiST
-            Console.WriteLine(String.Join(",\n", emailResult));
         }
 
 
