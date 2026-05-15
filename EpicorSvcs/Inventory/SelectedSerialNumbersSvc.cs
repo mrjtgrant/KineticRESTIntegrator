@@ -8,28 +8,57 @@ using RESTServices;
 
 namespace EpicorSvcs
 {
+    /// <summary>
+    /// Retrieves and processes serial-number selections via the REST API.
+    /// Calls <c>Erp.BO.SelectedSerialNumbersSvc</c> in Epicor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both methods return <c>OperationResult&lt;JObject&gt;</c>. Their
+    /// responses are multi-dataset envelopes — <c>ds</c> (available serials),
+    /// <c>ds1</c> (selected serials plus serial-format rows), a
+    /// <c>validateMultipleLot</c> flag, and side-channel properties this
+    /// service adds — and they are passed as-is between services (notably to
+    /// <see cref="InvTransferSvc"/>'s serial-tracking flow). A single typed
+    /// DTO cannot represent that, so the raw <see cref="JObject"/> is carried
+    /// through. Use <see cref="Dtos.SerialNumberSelection"/> to materialize
+    /// individual rows when needed.
+    /// </para>
+    /// </remarks>
     public class SelectedSerialNumbersSvc : EpicorSvc
     {
+        /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
+        /// <param name="env">
+        /// Optional environment selector that overrides
+        /// <c>DefaultEnvironment</c> from config. Typical values:
+        /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
+        /// </param>
         public SelectedSerialNumbersSvc(string env = null) : base(env) { }
+
+        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <param name="env">A fully-configured session.</param>
         public SelectedSerialNumbersSvc(RESTSessionKey env) : base(env) { }
 
-        /*
-         {
-            "whereClause": "Company = 'EPIC06' and PartNum = 'RAM-4-ID-BASE-60-R' and SNStatus = 'INVENTORY' and WarehouseCode = 'Main' and Voided = 0 and BinNum = 'Main' and PCID = ''",
-            "startSerialNumber": "",
-            "endSerialNumber": "",
-            "forSelected": false,
-            "sourceRowID": "2e8b930c-ecf3-4d56-a520-f86fab1bd1f2",
-            "transType": "",
-            "ds": {
-                "SerialNumberSelection": []
-            }
-        }
-         */
-        /**
-         * Erp.BO.SelectedSerialNumbersSvc/RetrieveSerialNumbers
-         */
-        public async Task<JObject> RetrieveSerialNumbersAsync(
+        /// <summary>
+        /// Retrieves the serial numbers available for a transaction. Calls
+        /// <c>Erp.BO.SelectedSerialNumbersSvc/RetrieveSerialNumbers</c> in
+        /// Epicor.
+        /// </summary>
+        /// <param name="whereClause">
+        /// The Epicor where-clause that scopes the candidate serials (part,
+        /// warehouse, bin, status, and so on).
+        /// </param>
+        /// <param name="sourceRowID">
+        /// The source row GUID that ties the selection to its transaction.
+        /// </param>
+        /// <param name="transType">The transaction type.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw dataset. The
+        /// available serials are at <c>Value["ds"]["SerialNumberSelection"]</c>.
+        /// On failure, <c>ErrorMessage</c> describes what went wrong.
+        /// </returns>
+        public async Task<OperationResult<JObject>> RetrieveSerialNumbersAsync(
             string whereClause,
             string sourceRowID,
             string transType,
@@ -43,29 +72,42 @@ namespace EpicorSvcs
             ds.Add(new JProperty("forSelected", false));
             ds.Add(new JProperty("sourceRowID", sourceRowID));
             ds.Add(new JProperty("transType", transType));
-            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+
+            JObject response = HandleResponse(
+                await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
         }
 
-        //SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers
-        /*
-         Modified ds result from RetrieveSerialNumbers with 
-         RowMod = "U"  
-         and 
-         RowSelected = true
-         
-         and 
-         add the object 
-          
-        {
-         "ds1":{
-            "SelectedSerialNumbers": [],
-            "SNFormat": []
-            }
-        }
-        Erp.BO.SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers
-
-         */
-        public async Task<JObject> ProcessSelectedSerialNumbersAsync(
+        /// <summary>
+        /// Marks the requested serial numbers as selected within an available-
+        /// serials dataset and posts the result. Calls
+        /// <c>Erp.BO.SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers</c>
+        /// in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// The returned dataset carries two extra properties this method adds:
+        /// <c>MissingSerialNumbers</c> (a <c>~</c>-joined string of requested
+        /// serials that were not found among the available ones) and
+        /// <c>SerialNumberFound</c> (true if at least one was matched).
+        /// Callers inspect these to decide whether the selection succeeded —
+        /// they are business outcomes, not transport failures, so the result
+        /// is still <c>Success</c> when they are present.
+        /// </remarks>
+        /// <param name="ds">
+        /// The available-serials dataset, typically the <c>Value</c> from a
+        /// prior <see cref="RetrieveSerialNumbersAsync"/> call.
+        /// </param>
+        /// <param name="SelectedSerialNumbers">
+        /// The serial numbers to mark as selected.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the processed dataset,
+        /// including the <c>MissingSerialNumbers</c> and
+        /// <c>SerialNumberFound</c> properties. On failure,
+        /// <c>ErrorMessage</c> describes what went wrong.
+        /// </returns>
+        public async Task<OperationResult<JObject>> ProcessSelectedSerialNumbersAsync(
             JObject ds,
             List<string> SelectedSerialNumbers,
             CancellationToken ct = default)
@@ -73,34 +115,36 @@ namespace EpicorSvcs
             List<string> FoundSerialNumbers = new List<string>();
             string svc = "Erp.BO.SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers";
 
-            //all available serial numbers.  
-            JArray SelectSerialNumbersParams = JArray.FromObject(ds["ds"]["SerialNumberSelection"]);
+            // All available serial numbers from the input dataset.
+            JArray available = JArray.FromObject(ds["ds"]["SerialNumberSelection"]);
 
-            //just set the RowMod of the found serial number to U
-            for (int i = 0; i < SelectSerialNumbersParams.Count; i++)
+            // Mark the rows whose serial number is in the requested list.
+            for (int i = 0; i < available.Count; i++)
             {
-                String SerialNumber = ds["ds"]["SerialNumberSelection"][i]["SerialNumber"].ToString();
-                //if matches, add item to FoundSerialNumbers
-                if (SelectedSerialNumbers.Contains(SerialNumber))
+                string serialNumber = ds["ds"]["SerialNumberSelection"][i]["SerialNumber"].ToString();
+                if (SelectedSerialNumbers.Contains(serialNumber))
                 {
                     ds["ds"]["SerialNumberSelection"][i]["RowSelected"] = true;
                     ds["ds"]["SerialNumberSelection"][i]["RowMod"] = "U";
-                    FoundSerialNumbers.Add(SerialNumber);
+                    FoundSerialNumbers.Add(serialNumber);
                 }
             }
 
-            //captures added materials items after the fact
+            // Epicor expects the ds1 envelope present on input.
             ds.Add(new JProperty("ds1", new JObject {
                 new JProperty("SelectedSerialNumbers", new JArray()),
                 new JProperty("SNFormat", new JArray())
             }));
-            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
 
-            //MissingSerialNumbers is everything in your list that wasn't present in SelectedSerialNumbers
-            response.Add(new JProperty("MissingSerialNumbers", String.Join("~", SelectedSerialNumbers.Except(FoundSerialNumbers))));
+            JObject response = HandleResponse(
+                await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+
+            // MissingSerialNumbers: everything requested that wasn't found.
+            response.Add(new JProperty("MissingSerialNumbers",
+                String.Join("~", SelectedSerialNumbers.Except(FoundSerialNumbers))));
             response.Add(new JProperty("SerialNumberFound", FoundSerialNumbers.Count > 0));
 
-            return response;
+            return response.ToOperationResult(r => r);
         }
     }
 }

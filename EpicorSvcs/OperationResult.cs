@@ -183,10 +183,9 @@ namespace EpicorSvcs
             if (response == null) return default(T);
             JToken ds = response["ds"];
             if (ds == null) return default(T);
-            JToken table = ds[tableName];
-            if (table == null) return default(T);
-            JToken row = table[0];
-            return row != null ? row.ToObject<T>() : default(T);
+            JArray table = ds[tableName] as JArray;
+            if (table == null || table.Count == 0) return default(T);
+            return table[0].ToObject<T>();
         }
 
 

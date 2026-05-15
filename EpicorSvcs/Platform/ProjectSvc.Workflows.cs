@@ -29,7 +29,7 @@ namespace EpicorSvcs
         /// <see cref="Project"/> as echoed back by Epicor's <c>Update</c>.
         /// On failure, <c>ErrorMessage</c> describes what went wrong.
         /// </returns>
-        public async Task<OperationResult<Project>> _NewProjectAsync(
+        public async Task<OperationResult<Project>> NewProjectAsync(
             string ProjectID,
             DateTime StartDate,
             string Description = "",

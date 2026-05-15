@@ -3,23 +3,186 @@ using System;
 namespace EpicorSvcs.Dtos
 {
     /// <summary>
-    /// Represents the Epicor <c>Part</c> table — part master record.
+    /// Represents the Epicor <c>Part</c> table — a part master record.
     /// </summary>
     /// <remarks>
-    /// Minimal starter DTO. Only fields the Keri framework currently uses are
-    /// typed. For unmodeled fields, use the <c>OperationResult&lt;T&gt;.RawResponse</c>
-    /// escape hatch.
+    /// <para>
+    /// Used by <see cref="PartSvc"/>. The Epicor <c>Part</c> table has well
+    /// over 250 columns and the <c>GetByID</c> dataset additionally includes
+    /// many nested child tables (<c>PartRev</c>, <c>PartPlant</c>,
+    /// <c>PartWhse</c>, <c>PartUOM</c>, and more). This DTO deliberately
+    /// models only a practical core set of header columns — identifiers,
+    /// descriptions, the unit-of-measure and pricing fields, tracking flags,
+    /// and the standard user-defined columns.
+    /// </para>
+    /// <para>
+    /// For any column not modeled here, or for the nested child tables, use
+    /// the <c>OperationResult&lt;T&gt;.RawResponse</c> escape hatch.
+    /// </para>
+    /// <para>
+    /// Installation-specific custom columns (Epicor <c>_c</c> fields) are
+    /// intentionally excluded — they are not part of a standard Epicor
+    /// installation and do not belong in a shared library DTO. The standard
+    /// user-defined columns (<c>Character01</c>, <c>ShortChar01</c>, etc.)
+    /// are retained, as they exist on every Epicor installation.
+    /// </para>
     /// </remarks>
     public class Part
     {
-        /// <summary>The part number — Epicor's primary key for Part.</summary>
+        /// <summary>Epicor company code.</summary>
+        public string Company { get; set; }
+
+        /// <summary>The part number — primary key.</summary>
         public string PartNum { get; set; }
 
-        /// <summary>Part description.</summary>
+        /// <summary>The part's search word (a short lookup keyword).</summary>
+        public string SearchWord { get; set; }
+
+        /// <summary>The part description.</summary>
         public string PartDescription { get; set; }
 
-        /// <summary>The search-word index value, used for fuzzy part lookups.</summary>
-        public string SearchWord { get; set; }
+        /// <summary>The part class ID.</summary>
+        public string ClassID { get; set; }
+
+        /// <summary>Inventory unit of measure.</summary>
+        public string IUM { get; set; }
+
+        /// <summary>Purchasing unit of measure.</summary>
+        public string PUM { get; set; }
+
+        /// <summary>Sales unit of measure.</summary>
+        public string SalesUM { get; set; }
+
+        /// <summary>The part type code (e.g. manufactured, purchased, sales kit).</summary>
+        public string TypeCode { get; set; }
+
+        /// <summary>True if the part is non-stock.</summary>
+        public bool NonStock { get; set; }
+
+        /// <summary>The base unit price.</summary>
+        public decimal UnitPrice { get; set; }
+
+        /// <summary>The price-per code (e.g. per each, per hundred, per thousand).</summary>
+        public string PricePerCode { get; set; }
+
+        /// <summary>The internal unit price.</summary>
+        public decimal InternalUnitPrice { get; set; }
+
+        /// <summary>The product group code.</summary>
+        public string ProdCode { get; set; }
+
+        /// <summary>The cost method for the part.</summary>
+        public string CostMethod { get; set; }
+
+        /// <summary>The tax category ID.</summary>
+        public string TaxCatID { get; set; }
+
+        /// <summary>True if the part is inactive.</summary>
+        public bool InActive { get; set; }
+
+        /// <summary>True if the part has a method of manufacture.</summary>
+        public bool Method { get; set; }
+
+        /// <summary>True if the part is lot-tracked.</summary>
+        public bool TrackLots { get; set; }
+
+        /// <summary>True if the part is dimension-tracked.</summary>
+        public bool TrackDimension { get; set; }
+
+        /// <summary>True if the part is serial-number tracked.</summary>
+        public bool TrackSerialNum { get; set; }
+
+        /// <summary>True if the part tracks inventory by revision.</summary>
+        public bool TrackInventoryByRevision { get; set; }
+
+        /// <summary>True if the part tracks inventory attributes.</summary>
+        public bool TrackInventoryAttributes { get; set; }
+
+        /// <summary>True if this part uses part revisions.</summary>
+        public bool UsePartRev { get; set; }
+
+        /// <summary>True if the part is a phantom BOM.</summary>
+        public bool PhantomBOM { get; set; }
+
+        /// <summary>The selling factor between sales and inventory UOM.</summary>
+        public decimal SellingFactor { get; set; }
+
+        /// <summary>The net weight of the part.</summary>
+        public decimal NetWeight { get; set; }
+
+        /// <summary>The net weight unit of measure.</summary>
+        public string NetWeightUOM { get; set; }
+
+        /// <summary>True if the part is on hold.</summary>
+        public bool OnHold { get; set; }
+
+        /// <summary>The date the part was placed on hold.</summary>
+        public DateTime? OnHoldDate { get; set; }
+
+        /// <summary>The reason code for the hold.</summary>
+        public string OnHoldReasonCode { get; set; }
+
+        /// <summary>True if this is a global part.</summary>
+        public bool GlobalPart { get; set; }
+
+        /// <summary>The commodity code.</summary>
+        public string CommodityCode { get; set; }
+
+        /// <summary>The UOM class ID.</summary>
+        public string UOMClassID { get; set; }
+
+        /// <summary>The attribute class ID.</summary>
+        public string AttrClassID { get; set; }
+
+        /// <summary>The default attribute set ID.</summary>
+        public int DefaultAttributeSetID { get; set; }
+
+        /// <summary>Free-form comment text for the part.</summary>
+        public string CommentText { get; set; }
+
+        /// <summary>The image file name associated with the part.</summary>
+        public string ImageFileName { get; set; }
+
+        /// <summary>Who created the record.</summary>
+        public string CreatedBy { get; set; }
+
+        /// <summary>When the record was created.</summary>
+        public DateTime? CreatedOn { get; set; }
+
+        /// <summary>When the record was last changed.</summary>
+        public DateTime? ChangedOn { get; set; }
+
+        /// <summary>Epicor row-version identifier.</summary>
+        public int SysRevID { get; set; }
+
+        /// <summary>Epicor system row GUID (as a string).</summary>
+        public string SysRowID { get; set; }
+
+        /// <summary>Epicor bit-flag field.</summary>
+        public int BitFlag { get; set; }
+
+        // Standard user-defined columns — present on every Epicor installation.
+
+        /// <summary>Standard user-defined character column 01.</summary>
+        public string Character01 { get; set; }
+
+        /// <summary>Standard user-defined character column 10.</summary>
+        public string Character10 { get; set; }
+
+        /// <summary>Standard user-defined short-character column 01.</summary>
+        public string ShortChar01 { get; set; }
+
+        /// <summary>Standard user-defined short-character column 02.</summary>
+        public string ShortChar02 { get; set; }
+
+        /// <summary>Standard user-defined numeric column 02.</summary>
+        public decimal Number02 { get; set; }
+
+        /// <summary>Standard user-defined date column 01.</summary>
+        public DateTime? Date01 { get; set; }
+
+        /// <summary>Standard user-defined checkbox column 01.</summary>
+        public bool CheckBox01 { get; set; }
 
         /// <summary>
         /// Row state for Epicor's dataset protocol: <c>"A"</c> = added,

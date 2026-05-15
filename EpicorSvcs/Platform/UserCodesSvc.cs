@@ -13,7 +13,7 @@ namespace EpicorSvcs
     /// </summary>
     /// <remarks>
     /// <para>
-    /// UD codes are Epicor's generic lookup-table mechanism — small sets of
+    /// UD codes are Epicor's generic lookup-table mechanism â€” small sets of
     /// coded values (each belonging to a code type) that customizations and
     /// configuration features use instead of hardcoding string constants.
     /// </para>
@@ -33,7 +33,7 @@ namespace EpicorSvcs
         /// </param>
         public UserCodesSvc(string env = null) : base(env) { }
 
-        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <summary>Construct with a programmatic session â€” bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public UserCodesSvc(RESTSessionKey env) : base(env) { }
 

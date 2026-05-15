@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>KineticRESTIntegrator.Tests</RootNamespace>
+    <AssemblyName>KineticRESTIntegrator.Tests</AssemblyName>
+
+    <!-- This is a test project, not a shipping library. -->
+    <IsPackable>false</IsPackable>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Deterministic>true</Deterministic>
+
+    <!-- xUnit + the VS / dotnet test runners -->
+    <!-- These three packages are the standard xUnit-on-.NET setup:
+         - xunit              : the [Fact]/[Theory] attributes and Assert API
+         - xunit.runner.visualstudio : lets Visual Studio's Test Explorer and
+                                       'dotnet test' discover and run the tests
+         - Microsoft.NET.Test.Sdk    : the test host both runners build on -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.6" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.6">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests exercise EpicorSvcs' offline-deterministic surface:
+         OperationResult<T>, the OperationResultExtensions, UDRow, and the
+         UDXSvc static legend helpers. No RESTServices reference is needed —
+         nothing here touches the transport layer. -->
+    <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
+  </ItemGroup>
+
+</Project>

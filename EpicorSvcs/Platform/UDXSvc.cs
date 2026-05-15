@@ -33,6 +33,29 @@ namespace EpicorSvcs
         /// <param name="env">A fully-configured session.</param>
         public UDXSvc(RESTSessionKey env) : base(env) { }
 
+        /// <summary>
+        /// The UD table every method on this service targets when its
+        /// <c>UDTable</c> argument is left null. Defaults to <c>"UD22"</c>.
+        /// </summary>
+        /// <remarks>
+        /// There are two ways to choose the target table: set this property
+        /// once on the instance and then call methods without a <c>UDTable</c>
+        /// argument, or pass <c>UDTable</c> per call to override it for that
+        /// call only. A per-call argument always wins over this property.
+        /// </remarks>
+        public string UDTableDefault { get; set; } = "UD22";
+
+        // Resolves the table for a call: the per-call argument if supplied,
+        // otherwise the instance default. Throws if neither yields a value.
+        private string ResolveTable(string udTable)
+        {
+            string table = udTable ?? UDTableDefault;
+            if (string.IsNullOrWhiteSpace(table))
+                throw new InvalidOperationException(
+                    "No UD table specified — pass a UDTable argument or set UDTableDefault.");
+            return table;
+        }
+
         // All UD columns supported by the generic upsert / select logic below.
         private static readonly List<string> udcols = new List<string>
         {
@@ -155,7 +178,10 @@ namespace EpicorSvcs
         /// <c>DeleteByID</c> when <paramref name="delete"/> is true).
         /// </summary>
         /// <param name="udrow">The UD-column values to write.</param>
-        /// <param name="UDTable">The target UD table. Defaults to <c>"UD22"</c>.</param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
         /// <param name="delete">When true, deletes the row instead of upserting.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
@@ -164,14 +190,16 @@ namespace EpicorSvcs
         /// </returns>
         public async Task<OperationResult<JObject>> UpdateAsync(
             UDRow udrow,
-            string UDTable = "UD22",
+            string UDTable = null,
             bool delete = false,
             CancellationToken ct = default)
         {
-            if (delete)
-                return await DeleteByIDAsync(udrow, UDTable, ct).ConfigureAwait(false);
+            string table = ResolveTable(UDTable);
 
-            string svc = String.Format("Ice.BO.{0}Svc/{0}s", UDTable);
+            if (delete)
+                return await DeleteByIDAsync(udrow, table, ct).ConfigureAwait(false);
+
+            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
             JObject lineObject = JObject.FromObject(udrow);
             JObject ds = new JObject
             {
@@ -203,7 +231,10 @@ namespace EpicorSvcs
         /// limited to the UD columns this row populates; when null, all
         /// columns are returned.
         /// </param>
-        /// <param name="UDTable">The target UD table. Defaults to <c>"UD22"</c>.</param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 5000.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
@@ -212,11 +243,12 @@ namespace EpicorSvcs
         /// </returns>
         public async Task<OperationResult<List<UDRow>>> GetAllAsync(
             UDRow udrow = null,
-            string UDTable = "UD22",
+            string UDTable = null,
             int top = 5000,
             CancellationToken ct = default)
         {
-            string svc = String.Format("Ice.BO.{0}Svc/{0}s", UDTable);
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
             svc += "?$top=" + top;
 
             if (udrow != null)
@@ -240,17 +272,22 @@ namespace EpicorSvcs
         /// Deletes every row of a UD table, one row at a time. Calls
         /// <c>GetAll</c> then <c>DeleteByID</c> for each row.
         /// </summary>
-        /// <param name="UDTable">The target UD table. Defaults to <c>"UD22"</c>.</param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the number of rows
         /// deleted. Fails if the initial <c>GetAll</c> fails.
         /// </returns>
         public async Task<OperationResult<int>> DeleteAllAsync(
-            string UDTable = "UD22",
+            string UDTable = null,
             CancellationToken ct = default)
         {
-            var all = await GetAllAsync(null, UDTable, 5000, ct).ConfigureAwait(false);
+            string table = ResolveTable(UDTable);
+
+            var all = await GetAllAsync(null, table, 5000, ct).ConfigureAwait(false);
             if (all.IsFailure)
                 return OperationResult<int>.Failure(
                     all.ErrorMessage, all.StatusCode, all.ResourcePath, all.RawResponse);
@@ -258,7 +295,7 @@ namespace EpicorSvcs
             int deleted = 0;
             foreach (var ud in all.Value)
             {
-                await DeleteByIDAsync(ud, UDTable, ct).ConfigureAwait(false);
+                await DeleteByIDAsync(ud, table, ct).ConfigureAwait(false);
                 deleted++;
             }
 
@@ -273,7 +310,10 @@ namespace EpicorSvcs
         /// The row whose Key1–Key5 form the filter, and whose populated UD
         /// columns determine the OData <c>$select</c>.
         /// </param>
-        /// <param name="UDTable">The target UD table. Defaults to <c>"UD22"</c>.</param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the matching
@@ -281,10 +321,11 @@ namespace EpicorSvcs
         /// </returns>
         public async Task<OperationResult<List<UDRow>>> GetByIDAsync(
             UDRow udrow,
-            string UDTable = "UD22",
+            string UDTable = null,
             CancellationToken ct = default)
         {
-            string svc = String.Format("Ice.BO.{0}Svc/{0}s", UDTable);
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
             JObject lineObject = JObject.FromObject(udrow);
 
             // Only the UD columns this row actually populates.
@@ -319,17 +360,21 @@ namespace EpicorSvcs
         /// <c>Ice.BO.{UDTable}Svc/DeleteByID</c> in Epicor.
         /// </summary>
         /// <param name="udrow">The row whose Key1–Key5 identify the record to delete.</param>
-        /// <param name="UDTable">The target UD table. Defaults to <c>"UD22"</c>.</param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.
         /// </returns>
         public async Task<OperationResult<JObject>> DeleteByIDAsync(
             UDRow udrow,
-            string UDTable = "UD22",
+            string UDTable = null,
             CancellationToken ct = default)
         {
-            string svc = String.Format("Ice.BO.{0}Svc/DeleteByID", UDTable);
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/DeleteByID", table);
             JObject payload = new JObject {
                 new JProperty("key1", udrow.Key1),
                 new JProperty("key2", udrow.Key2),
@@ -346,16 +391,20 @@ namespace EpicorSvcs
         /// Gets a fresh, empty row for a UD table. Calls
         /// <c>Ice.BO.{UDTable}Svc/GetaNew{UDTable}</c> in Epicor.
         /// </summary>
-        /// <param name="UDTable">The target UD table. Defaults to <c>"UD22"</c>.</param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.
         /// </returns>
         public async Task<OperationResult<JObject>> GetaNewUDAsync(
-            string UDTable = "UD22",
+            string UDTable = null,
             CancellationToken ct = default)
         {
-            string svc = String.Format("Ice.BO.{0}Svc/GetaNew{0}", UDTable);
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/GetaNew{0}", table);
             JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }

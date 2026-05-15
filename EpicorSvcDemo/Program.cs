@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Security.Policy;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml.Drawing.Charts;
 using DocumentFormat.OpenXml.ExtendedProperties;
 using EpicorSvcs;
 using FileHandling;
@@ -13,44 +15,49 @@ namespace EpicorSvcDemo
     {
         static async Task Main(string[] args)
         {
+            string error = ""; 
             // BAQSvc owns an HttpClient and must be disposed.
-            using (var baq = new BAQSvc(/*new RESTSessionKey
-                {
-                //these details can be set and referenced here, through Environment variables, Windows Credentials manager, or App.config.  
-                //whichver option suits the need of the application being built.  
-                //this option would allow the user to pass credentials on the fly, such as through a web interface for example. 
-                //If you have an executable script that runs in a local, closed network, it might make more sense to set it up with App.Config 
-
-                Company = "EPIC06",
-                Environment = "https://example-live.epicorsaas.com/server",
+            using (var epicor = new EpicorClient(/* OPTIONAL on the fly.. Example for allowing the user to pass credential through a web interface
+            new RESTSessionKey
+            {
+                Company = "YOUR_COMPANY",
+                Environment = "https://your_company.epicorsaas.com/server",
                 AuthObject = new RESTServices.RESTAuthenticationObject
                 {
-                    ApiKey = "", //leave blank for Basic(v1) Authentication
-                    Userkey = "manager",
-                    Username = "manger"
+                    ApiKey = "", //leave blank if using Basic Auth (v1)
+                    Userkey = "",
+                    Username = "username"
                 }
-            }*/))
+            }//IF NOT CONFIGURE HERE > Configure in APP.Config or ENVIRONMENT VARIABLES.. APP.Config useful for scheduled windows task  */
+            ))
             {
-                JObject BAQResult = await baq.BAQResultsAsync("EXAMPLE_BAQ").ConfigureAwait(false);
+                var baqResult = await epicor.BAQ.BAQResultsAsync("BAQ_ID_BAQ").ConfigureAwait(false);
 
-                string error = BAQResult["ErrorMessage"]?.ToString();
-                JArray reportData = BAQResult["value"]?.ToObject<JArray>() ?? new JArray();
+                if (baqResult.IsFailure)
+                {
+                    error = $"BAQ failed: {baqResult.ErrorMessage}";
+                    return; 
+                }
 
+                JArray reportData = JArray.FromObject(baqResult.Value);  // the actual result rows
+
+
+                //for overriding EEMAIL format look at EmailDataReport in FileProcessing
                 FileProcessing.EmailDataReport(new EMailMeta
                 {
-                    From = "noreply@company.com",
-                    To = "user@company.com",
+                    From = "noreply@your_company.com",
+                    To = "jgrant@your_company.com",
                     CC = "",
                     BCC = "",
-                    //SMTPHost = "10.10.10.10", //Can be set here or in App.Config
+                    SMTPHost = "10.10.10.10",
                     RecipientName = "John Doe",
                     ExcelSheetName = "EXAMPLE_REPORT",
                     AttachmentName = "EXAMPLE_REPORT",
                     AttachmentType = "xlsx",
-                    AttachmentDateFormat = "none", // Examples: "none", "u", "s", "yyyy-MM-dd HH.mm.ss"
+                    AttachmentDateFormat = "yyyy-MM-dd", // Examples: "none", "u", "s", "yyyy-MM-dd HH.mm.ss"
                     AttachmentHeaderMap = AttachmentColHeaderMap,
-                    AttachmentData = reportData,
-                    Error = error
+                    AttachmentData = reportData
+                    //,Error = error
                 });
             }
         }

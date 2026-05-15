@@ -137,28 +137,6 @@ namespace EpicorSvcs
         }
 
 
-        // NOTE: RESTFilterBuilder is retained until PartSvc and SalesOrderSvc
-        // are converted off it (the last Stage C service batch). Once those
-        // call sites are gone, this method should be deleted — callers build
-        // OData filters with a List<string> joined by " and " and passed
-        // through UrlEncode instead.
-        public string RESTFilterBuilder(List<String> filter = null, List<string> inList = null)
-        {
-            StringBuilder filterStr = new StringBuilder("$filter=");
-
-            if (filter != null)
-                filterStr.AppendFormat(String.Join(" and ", filter.ToArray()));
-
-            if (filter != null && inList != null)
-                filterStr.AppendFormat(" and ");
-
-            if (inList != null && inList.Count > 0)
-                filterStr.AppendFormat("({0})", String.Join(" or ", inList.ToArray()));
-
-            return filterStr.Replace(" ", "%20").ToString();
-        }
-
-
 
         /// <summary>
         /// Reads a value from an environment variable first, falling back to app.config.

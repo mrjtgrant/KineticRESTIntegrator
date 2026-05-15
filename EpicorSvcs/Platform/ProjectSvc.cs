@@ -72,7 +72,7 @@ namespace EpicorSvcs
         /// </summary>
         /// <remarks>
         /// Native BO call returning the raw Epicor dataset. Used by the
-        /// <see cref="_NewProjectAsync"/> orchestrator; exposed publicly for
+        /// <see cref="NewProjectAsync"/> orchestrator; exposed publicly for
         /// callers that need to drive the project-creation sequence directly.
         /// </remarks>
         /// <param name="ct">Cancellation token.</param>

@@ -4,114 +4,75 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
+using EpicorSvcs.Dtos;
 
 namespace EpicorSvcs
 {
-    public class SalesOrderSvc : EpicorSvc
+    /// <summary>
+    /// Creates and reads Epicor sales orders via the REST API. Calls
+    /// <c>Erp.BO.SalesOrderSvc</c> in Epicor.
+    /// </summary>
+    /// <remarks>
+    /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
+    /// here in <c>SalesOrderSvc.cs</c>; the multi-call orchestrators
+    /// (<c>FindOrderByPONumAsync</c>, <c>NewOrderLineAsync</c>,
+    /// <c>NewOrderAsync</c>) live in <c>SalesOrderSvc.Workflows.cs</c>.
+    /// </remarks>
+    public partial class SalesOrderSvc : EpicorSvc
     {
+        /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
+        /// <param name="env">
+        /// Optional environment selector that overrides
+        /// <c>DefaultEnvironment</c> from config. Typical values:
+        /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
+        /// </param>
         public SalesOrderSvc(string env = null) : base(env) { }
+
+        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <param name="env">A fully-configured session.</param>
         public SalesOrderSvc(RESTSessionKey env) : base(env) { }
 
-
-        //RESTFilterBuilder
-        public async Task<JObject> _FindOrderByPONumAsync(string PONum, CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.SalesOrderSvc/SalesOrders";
-            svc += "?$select=OrderNum";
-
-            if (PONum != null)
-                svc += "&" + RESTFilterBuilder(new List<string> {
-                        String.Format("PONum eq '{0}'", PONum)
-                    });
-
-            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-        }
-
-        public async Task<JObject> GetByIDAsync(int OrderNum, CancellationToken ct = default)
+        /// <summary>
+        /// Retrieves a full sales order by its order number. Calls
+        /// <c>Erp.BO.SalesOrderSvc/GetByID</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// The <c>GetByID</c> response is a wide, multi-table dataset — the
+        /// <c>OrderHed</c> header plus roughly twenty related tables
+        /// (<c>OrderDtl</c>, <c>OrderRel</c>, <c>OrderMsc</c>, the tax
+        /// tables, and more). It is returned intact as a <c>JObject</c>
+        /// rather than projected to a DTO, because a sales order <i>is</i>
+        /// its whole dataset. To work with individual rows, materialize them
+        /// from <c>RawResponse</c>, e.g.
+        /// <c>result.Value["ds"]["OrderHed"][0].ToObject&lt;OrderHed&gt;()</c>
+        /// or iterate <c>result.Value["ds"]["OrderDtl"]</c> as
+        /// <see cref="OrderDtl"/>.
+        /// </remarks>
+        /// <param name="orderNum">The order number to retrieve.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw multi-table
+        /// order dataset.
+        /// </returns>
+        public async Task<OperationResult<JObject>> GetByIDAsync(
+            int orderNum,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/GetByID";
-            svc += String.Format("?orderNum={0}", OrderNum);
+            svc += String.Format("?orderNum={0}", orderNum);
 
-            return await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            JObject response = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
         }
 
-        public async Task<JObject> _NewOrderLineAsync(
-            int OrderNum,
-            string PartNum,
-            JObject CustomerItem = null,
-            CancellationToken ct = default)
-        {
-            JObject ds = await GetNewOrderDtlAsync(OrderNum, ct).ConfigureAwait(false);
-            ds = await ChangePartNumMasterAsync(ds, PartNum, ct).ConfigureAwait(false);
-
-            string CustNum = ds["ds"]["OrderDtl"][0]["CustNum"].ToString();
-
-            // Customer-supplied per-item details (e.g. EDI feed, customer-specific mapping)
-            if (CustomerItem != null)
-            {
-                //Mapped Customer Item Keys
-                string DockDateKey = CustomerItem["DockDateKey"].ToString();
-                string RequiredQuantityKey = CustomerItem["RequiredQuantityKey"].ToString();
-                string LineNumberKey = CustomerItem["LineNumberKey"].ToString();
-
-                //string DocUnitPrice = CustomerItem["UnitPrice"].ToString(); //NOTE: Already set on Part record..
-                DateTime NeedByDate = DateTime.Parse(CustomerItem[DockDateKey].ToString());//??????  Are NeedBy and Request Date backwards. 
-                DateTime ShipByDate = NeedByDate;
-                int OrderQty = Convert.ToInt32(CustomerItem[RequiredQuantityKey]);
-                string SI_Group_c = CustomerItem[LineNumberKey].ToString();
-
-                ds["ds"]["OrderDtl"][0]["RequestDate"] = ShipByDate;
-                ds["ds"]["OrderDtl"][0]["NeedByDate"] = NeedByDate;
-                ds["ds"]["OrderDtl"][0]["SI_Group_c"] = SI_Group_c;
-                ds["ds"]["OrderDtl"][0]["LineDesc"] = String.Format("{0}.{1}", PartNum, SI_Group_c);
-                ds["ds"]["OrderDtl"][0]["RevisionNum"] = OrderNum;
-                ds = await ChangeSellingQtyMasterAsync(ds, PartNum, OrderQty, ct).ConfigureAwait(false);
-                ds = JObject.FromObject(ds["parameters"]);
-            }
-
-            //Make sure the Line Description is something... 
-            if (ds["ds"]["OrderDtl"][0]["LineDesc"].ToString() == "")
-                ds["ds"]["OrderDtl"][0]["LineDesc"] = PartNum;
-
-
-            //separate line to debug payload easily by commenting out.. 
-            return await MasterUpdateAsync(ds, CustNum, OrderNum, "OrderDtl", ct).ConfigureAwait(false);
-        }
-
-
-        /************ NEW ORDERS ******************
-         * Constructs New Order Details via Erp.BO.SalesOrderSvc calls as traced from Epicor
-         *  and passes them into MasterUpdate to add the Order to Epicor
-         *  
-         * Requires: CustID, ShipDate
-         * sets PONum if exists in form, otherwise exclude
-         *  
-         * Methods:  
-         * GetNewOrderHed
-         * ChangeOrderHedCustomerCustID
-         * ChangeSoldToContact
-         * MasterUpdate
-         */
-        public async Task<JObject> _NewOrderAsync(
-            string CustID,
-            DateTime NeedByDate,
-            string PONum = null,
-            CancellationToken ct = default)
-        {
-            JObject ds = await GetNewOrderHedAsync(ct).ConfigureAwait(false);
-            ds = await ChangeOrderHedCustomerCustIDAsync(ds, CustID, 0, ct).ConfigureAwait(false);
-            ds = await ChangeSoldToContactAsync(ds, ct).ConfigureAwait(false);
-
-            //RequestDate
-            ds["ds"]["OrderHed"][0]["PONum"] = PONum ?? "";
-            ds["ds"]["OrderHed"][0]["RequestDate"] = NeedByDate;
-            ds["ds"]["OrderHed"][0]["NeedByDate"] = NeedByDate;
-
-            return await MasterUpdateAsync(ds, ds["ds"]["OrderHed"][0]["CustNum"].ToString(), 0, "OrderHed", ct).ConfigureAwait(false);
-        }
-
-        //DIRECT EPICOR STEPS
-        private async Task<JObject> GetNewOrderDtlAsync(int ordernum, CancellationToken ct = default)
+        /// <summary>
+        /// Gets a fresh, empty order-detail row for an existing order. Calls
+        /// <c>Erp.BO.SalesOrderSvc/GetNewOrderDtl</c> in Epicor.
+        /// </summary>
+        /// <param name="ordernum">The order number to add the line under.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The raw Epicor dataset for a new order line.</returns>
+        public async Task<JObject> GetNewOrderDtlAsync(int ordernum, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/GetNewOrderDtl";
 
@@ -121,8 +82,19 @@ namespace EpicorSvcs
             return HandleResponse(await RESTCallAsync(svc, newOrderDtl, ct).ConfigureAwait(false));
         }
 
-
-        private async Task<JObject> ChangePartNumMasterAsync(JObject ds, string partNum, CancellationToken ct = default)
+        /// <summary>
+        /// Applies a part number to an order-detail dataset, running Epicor's
+        /// master on-change logic. Calls
+        /// <c>Erp.BO.SalesOrderSvc/ChangePartNumMaster</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The order-detail dataset being built.</param>
+        /// <param name="partNum">The part number to apply.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ChangePartNumMasterAsync(
+            JObject ds,
+            string partNum,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/ChangePartNumMaster";
 
@@ -143,9 +115,17 @@ namespace EpicorSvcs
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-
-
-        private async Task<JObject> ChangeSellingQtyMasterAsync(
+        /// <summary>
+        /// Applies a selling quantity to an order-detail dataset, running
+        /// Epicor's master on-change logic. Calls
+        /// <c>Erp.BO.SalesOrderSvc/ChangeSellingQtyMaster</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The order-detail dataset being built.</param>
+        /// <param name="PartNum">The part number for the line.</param>
+        /// <param name="OrderQty">The selling quantity to apply.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ChangeSellingQtyMasterAsync(
             JObject ds,
             string PartNum,
             decimal OrderQty,
@@ -171,14 +151,31 @@ namespace EpicorSvcs
             return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
         }
 
-
-        private async Task<JObject> GetNewOrderHedAsync(CancellationToken ct = default)
+        /// <summary>
+        /// Gets a fresh, empty order-header dataset. Calls
+        /// <c>Erp.BO.SalesOrderSvc/GetNewOrderHed</c> in Epicor.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The raw Epicor dataset for a new order header.</returns>
+        public async Task<JObject> GetNewOrderHedAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/GetNewOrderHed";
             return HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
         }
 
-        private async Task<JObject> ChangeOrderHedCustomerCustIDAsync(
+        /// <summary>
+        /// Applies a customer ID to an order-header dataset, running Epicor's
+        /// on-change logic. Calls
+        /// <c>Erp.BO.SalesOrderSvc/ChangeOrderHedCustomerCustID</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The order-header dataset being built.</param>
+        /// <param name="CustID">The customer ID to apply.</param>
+        /// <param name="ordernum">
+        /// The order number, or 0 for a new order. Defaults to 0.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ChangeOrderHedCustomerCustIDAsync(
             JObject ds,
             string CustID,
             int ordernum = 0,
@@ -190,13 +187,36 @@ namespace EpicorSvcs
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        private async Task<JObject> ChangeSoldToContactAsync(JObject ds, CancellationToken ct = default)
+        /// <summary>
+        /// Applies the sold-to contact to an order-header dataset, running
+        /// Epicor's on-change logic. Calls
+        /// <c>Erp.BO.SalesOrderSvc/ChangeSoldToContact</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The order-header dataset being built.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ChangeSoldToContactAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/ChangeSoldToContact";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        private async Task<JObject> MasterUpdateAsync(
+        /// <summary>
+        /// Persists an order dataset through Epicor's master-update entry
+        /// point. Calls <c>Erp.BO.SalesOrderSvc/MasterUpdate</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The order dataset to persist.</param>
+        /// <param name="custnum">The customer number for the order.</param>
+        /// <param name="ordernum">
+        /// The order number, or 0 for a new order. Defaults to 0.
+        /// </param>
+        /// <param name="table">
+        /// The driving table name — <c>"OrderHed"</c> or <c>"OrderDtl"</c>.
+        /// Defaults to <c>"OrderHed"</c>.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The raw Epicor response from the master update.</returns>
+        public async Task<JObject> MasterUpdateAsync(
             JObject ds,
             string custnum,
             int ordernum = 0,

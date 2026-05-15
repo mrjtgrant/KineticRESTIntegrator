@@ -1,15 +1,35 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RESTServices;
+using EpicorSvcs.Dtos;
 
 namespace EpicorSvcs
 {
-    public class InvTransferSvc : EpicorSvc
+    /// <summary>
+    /// Performs Epicor inventory bin-to-bin transfers via the REST API,
+    /// including serial-number tracking. Calls <c>Erp.BO.InvTransferSvc</c>
+    /// in Epicor.
+    /// </summary>
+    /// <remarks>
+    /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
+    /// here in <c>InvTransferSvc.cs</c>; the multi-call orchestrators
+    /// (<c>MoveInventoryAsync</c>, <c>TrackSerialNumberAsync</c>) live in
+    /// <c>InvTransferSvc.Workflows.cs</c>.
+    /// </remarks>
+    public partial class InvTransferSvc : EpicorSvc
     {
+        /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
+        /// <param name="env">
+        /// Optional environment selector that overrides
+        /// <c>DefaultEnvironment</c> from config. Typical values:
+        /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
+        /// </param>
         public InvTransferSvc(string env = null) : base(env) { }
+
+        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <param name="env">A fully-configured session.</param>
         public InvTransferSvc(RESTSessionKey env) : base(env) { }
 
         // Inner service for serial-number handling. Constructed lazily so it
@@ -20,174 +40,181 @@ namespace EpicorSvcs
         private SelectedSerialNumbersSvc SelectedSerialNumbersSvc =>
             _selectedSerialNumbersSvc ?? (_selectedSerialNumbersSvc = new SelectedSerialNumbersSvc(sesh));
 
-        public async Task<JObject> _MoveInventoryAsync(InvTransfer InvTrans, CancellationToken ct = default)
-        {
-            if (InvTrans.FromBinNum == InvTrans.ToBinNum)
-                return new JObject(new JProperty("MSG", "Please choose a To bin."));
-
-            bool TrackSerialnumbers = false;
-
-            JObject ds = await GetNewInventoryTransferAsync(InvTrans, ct).ConfigureAwait(false);
-            ds = await ValidatePartNumAsync(ds, InvTrans, ct).ConfigureAwait(false);
-
-            //TrackSerialnumbers
-            JObject trackedSerialNums = new JObject();
-            TrackSerialnumbers = Convert.ToBoolean(ds["ds"]["InvTrans"][0]["TrackSerialnumbers"]);
-
-            if (TrackSerialnumbers)
-            {
-                trackedSerialNums = await _TrackSerialNumberAsync(ds, InvTrans, ct).ConfigureAwait(false);
-
-                if (trackedSerialNums["MissingSerialNumbers"].ToString().Length > 0)
-                    return trackedSerialNums;
-
-                //enforce Quantity of 1 on serial tracking.
-                //Serial tracking requires 1 serial number for each item.  No matter what, this item will require a serial number. 
-                InvTrans.TransferQty = 1;
-
-                JArray SelectedSerialNumbers = JArray.FromObject(trackedSerialNums["ds1"]["SelectedSerialNumbers"]);
-                SelectedSerialNumbers[0]["RowMod"] = "A";
-
-                ds["ds"]["SelectedSerialNumbers"] = SelectedSerialNumbers;
-            }
-
-            ds = await ChangeTransferQtyRowModAsync(ds, InvTrans, ct).ConfigureAwait(false);
-
-            if (InvTrans.FromBinNum != "Main")
-                ds = await ChangeFromBinRowModAsync(ds, InvTrans, ct).ConfigureAwait(false);
-
-            //ds = MasterInventoryBinTests(ds, InvTrans);
-
-            if (InvTrans.ToBinNum != "Main")
-                ds = await ChangeToBinRowModAsync(ds, InvTrans, ct).ConfigureAwait(false);
-
-
-            if (ds["ErrorMessage"] != null)
-                return ds;
-
-            ds = await MasterInventoryBinTestsAsync(ds, InvTrans, ct).ConfigureAwait(false);
-            // Validate MasterInventoryBinTests
-            if (ds["pcNeqQtyAction"].ToString().ToLower() == "stop")
-            {
-                //check object for pcNeqQtyMessage in output "error" handling
-                return ds;
-            }
-
-            ds = await PreCommitTransferAsync(ds, ct).ConfigureAwait(false);
-            ds = await CommitTransferAndUpdateHistoryAsync(ds, ct).ConfigureAwait(false);
-            return ds;
-        }
-
-        //Erp.Bo.InvTransferSvc/GetNewInventoryTransfer
-        private async Task<JObject> GetNewInventoryTransferAsync(InvTransfer InvTrans, CancellationToken ct = default)
+        /// <summary>
+        /// Gets a fresh inventory-transfer dataset. Calls
+        /// <c>Erp.BO.InvTransferSvc/GetNewInventoryTransfer</c> in Epicor.
+        /// </summary>
+        /// <param name="invTrans">The transfer parameters (supplies the source type).</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The raw Epicor dataset for a new inventory transfer.</returns>
+        public async Task<JObject> GetNewInventoryTransferAsync(
+            InvTransferDataset invTrans,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/GetNewInventoryTransfer";
             JObject ds = (JObject)NewDS.DeepClone();
-            ds.Add(new JProperty("ipSourceType", InvTrans.ipSourceType));
+            ds.Add(new JProperty("ipSourceType", invTrans.ipSourceType));
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-
-        //Erp.Bo.InvTransferSvc/ValidatePartNum
-        private async Task<JObject> ValidatePartNumAsync(JObject ds, InvTransfer InvTrans, CancellationToken ct = default)
+        /// <summary>
+        /// Validates the part number against a transfer dataset. Calls
+        /// <c>Erp.BO.InvTransferSvc/ValidatePartNum</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The transfer dataset being built.</param>
+        /// <param name="invTrans">The transfer parameters (supplies the part number).</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ValidatePartNumAsync(
+            JObject ds,
+            InvTransferDataset invTrans,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/ValidatePartNum";
-            ds.Add(new JProperty("proposedPartNum", InvTrans.PartNum));
+            ds.Add(new JProperty("proposedPartNum", invTrans.PartNum));
             ds.Add(new JProperty("uomCodePartXRef", ""));
             ds.Add(new JProperty("refreshMode", false));
-            ds.Add(new JProperty("partList", "")); //curious about this...
+            ds.Add(new JProperty("partList", ""));
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        //Erp.Bo.InvTransferSvc/ChangeTransferQtyRowMod
-        private async Task<JObject> ChangeTransferQtyRowModAsync(JObject ds, InvTransfer InvTrans, CancellationToken ct = default)
+        /// <summary>
+        /// Applies the transfer quantity to a transfer dataset. Calls
+        /// <c>Erp.BO.InvTransferSvc/ChangeTransferQtyRowMod</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The transfer dataset being built.</param>
+        /// <param name="invTrans">The transfer parameters (supplies the quantity).</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ChangeTransferQtyRowModAsync(
+            JObject ds,
+            InvTransferDataset invTrans,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/ChangeTransferQtyRowMod";
-            ds.Add(new JProperty("proposedValue", InvTrans.TransferQty));
+            ds.Add(new JProperty("proposedValue", invTrans.TransferQty));
             ds["ds"]["InvTrans"][0]["RowMod"] = "U";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-
-        //Erp.Bo.InvTransferSvc/ChangeFromBinRowMod
-        private async Task<JObject> ChangeFromBinRowModAsync(JObject ds, InvTransfer InvTrans, CancellationToken ct = default)
+        /// <summary>
+        /// Applies the source bin to a transfer dataset. Calls
+        /// <c>Erp.BO.InvTransferSvc/ChangeFromBinRowMod</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The transfer dataset being built.</param>
+        /// <param name="invTrans">The transfer parameters (supplies the source bin).</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ChangeFromBinRowModAsync(
+            JObject ds,
+            InvTransferDataset invTrans,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/ChangeFromBinRowMod";
-            ds.Add(new JProperty("ipBinNum", InvTrans.FromBinNum));
+            ds.Add(new JProperty("ipBinNum", invTrans.FromBinNum));
             ds["ds"]["InvTrans"][0]["RowMod"] = "U";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        //Erp.Bo.InvTransferSvc/ChangeToBinRowMod
-        private async Task<JObject> ChangeToBinRowModAsync(JObject ds, InvTransfer InvTrans, CancellationToken ct = default)
+        /// <summary>
+        /// Applies the destination bin to a transfer dataset. Calls
+        /// <c>Erp.BO.InvTransferSvc/ChangeToBinRowMod</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// Returns the dataset unchanged if it already carries an
+        /// <c>ErrorMessage</c>.
+        /// </remarks>
+        /// <param name="ds">The transfer dataset being built.</param>
+        /// <param name="invTrans">The transfer parameters (supplies the destination bin).</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> ChangeToBinRowModAsync(
+            JObject ds,
+            InvTransferDataset invTrans,
+            CancellationToken ct = default)
         {
             if (ds["ErrorMessage"] != null)
                 return ds;
 
             string svc = "Erp.BO.InvTransferSvc/ChangeToBinRowMod";
-            ds.Add(new JProperty("ipToBinNum", InvTrans.ToBinNum));
+            ds.Add(new JProperty("ipToBinNum", invTrans.ToBinNum));
             ds["ds"]["InvTrans"][0]["RowMod"] = "U";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        //Erp.Bo.InvTransferSvc/MasterInventoryBinTests
-        /*
-         IMPORTANT VALIDATION STEP FROM OUTPUT: 
-
-            result:
-            "pcNeqQtyAction": "Stop",
-            "pcNeqQtyMessage": "This transaction will result in a negative onhand quantity for the bin.",
-            ...
-         */
-        private async Task<JObject> MasterInventoryBinTestsAsync(JObject ds, InvTransfer InvTrans, CancellationToken ct = default)
+        /// <summary>
+        /// Runs Epicor's master inventory bin tests against a transfer
+        /// dataset. Calls <c>Erp.BO.InvTransferSvc/MasterInventoryBinTests</c>
+        /// in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// This is the validation step that can flag a transfer with
+        /// <c>pcNeqQtyAction = "Stop"</c> and a <c>pcNeqQtyMessage</c> (for
+        /// example, when the transfer would drive a bin's on-hand quantity
+        /// negative).
+        /// </remarks>
+        /// <param name="ds">The transfer dataset being built.</param>
+        /// <param name="invTrans">The transfer parameters.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The raw Epicor dataset, including any bin-test result properties.</returns>
+        public async Task<JObject> MasterInventoryBinTestsAsync(
+            JObject ds,
+            InvTransferDataset invTrans,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/MasterInventoryBinTests";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        //Erp.Bo.InvTransferSvc/PreCommitTransfer
-        private async Task<JObject> PreCommitTransferAsync(JObject ds, CancellationToken ct = default)
+        /// <summary>
+        /// Pre-commit step for a transfer dataset. Calls
+        /// <c>Erp.BO.InvTransferSvc/PreCommitTransfer</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The transfer dataset being committed.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated raw Epicor dataset.</returns>
+        public async Task<JObject> PreCommitTransferAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/PreCommitTransfer";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-        //Erp.Bo.InvTransferSvc/CommitTransferAndUpdateHistory
-        //Could potentially loop through all steps prior to this
-        //and construct an object with multiple records to update all at once.
-        private async Task<JObject> CommitTransferAndUpdateHistoryAsync(JObject ds, CancellationToken ct = default)
+        /// <summary>
+        /// Commits a transfer and updates inventory history. Calls
+        /// <c>Erp.BO.InvTransferSvc/CommitTransferAndUpdateHistory</c> in
+        /// Epicor.
+        /// </summary>
+        /// <param name="ds">The transfer dataset to commit.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The raw Epicor dataset as echoed back after the commit.</returns>
+        public async Task<JObject> CommitTransferAndUpdateHistoryAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/CommitTransferAndUpdateHistory";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
-
-        //TRACKING SERIAL NUMBER
-        private async Task<JObject> _TrackSerialNumberAsync(JObject ds, InvTransfer InvTrans, CancellationToken ct = default)
-        {
-            //gets the query for looking up available serial numbers
-            ds = await GetSelectSerialNumbersParamsRowModAsync(ds, InvTrans, ct).ConfigureAwait(false);
-            string whereClause = ds["ds"]["SelectSerialNumbersParams"][0]["whereClause"].ToString();
-            string sourceRowID = ds["ds"]["SelectSerialNumbersParams"][0]["sourceRowID"].ToString();
-            string transType = ds["ds"]["SelectSerialNumbersParams"][0]["transType"].ToString();
-            //gets available serial numbers for the part..
-            ds = await SelectedSerialNumbersSvc.RetrieveSerialNumbersAsync(whereClause, sourceRowID, transType, ct).ConfigureAwait(false);
-            //for this method, pass and track 1 number
-            ds = await SelectedSerialNumbersSvc.ProcessSelectedSerialNumbersAsync(ds, new List<string> { InvTrans.SerialNumber }, ct).ConfigureAwait(false);
-
-            ds.Add(new JProperty("whereClause", whereClause));
-            ds.Add(new JProperty("InvTransfer", JObject.FromObject(InvTrans)));
-
-            return ds;
-        }
-
-        //Erp.Bo.InvTransferSvc/GetSelectSerialNumbersParamsRowMod
-        private async Task<JObject> GetSelectSerialNumbersParamsRowModAsync(JObject ds, InvTransfer InvTrans, CancellationToken ct = default)
+        /// <summary>
+        /// Prepares the select-serial-numbers parameters on a transfer
+        /// dataset. Calls
+        /// <c>Erp.BO.InvTransferSvc/GetSelectSerialNumbersParamsRowMod</c> in
+        /// Epicor.
+        /// </summary>
+        /// <param name="ds">The transfer dataset being built.</param>
+        /// <param name="invTrans">The transfer parameters (supplies the bins).</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// The raw Epicor dataset, including the
+        /// <c>SelectSerialNumbersParams</c> table.
+        /// </returns>
+        public async Task<JObject> GetSelectSerialNumbersParamsRowModAsync(
+            JObject ds,
+            InvTransferDataset invTrans,
+            CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/GetSelectSerialNumbersParamsRowMod";
-            ds["ds"]["InvTrans"][0]["FromBinNum"] = InvTrans.FromBinNum;
+            ds["ds"]["InvTrans"][0]["FromBinNum"] = invTrans.FromBinNum;
             ds["ds"]["InvTrans"][0]["RowMod"] = "U";
-            ds["ds"]["InvTrans"][0]["ToBinNum"] = InvTrans.ToBinNum;
+            ds["ds"]["InvTrans"][0]["ToBinNum"] = invTrans.ToBinNum;
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
@@ -202,16 +229,5 @@ namespace EpicorSvcs
             }
             base.Dispose(disposing);
         }
-    }
-
-    public class InvTransfer
-    {
-        public string ipSourceType { get; set; } = "";
-        public string PartNum { get; set; }
-        public int TransferQty { get; set; }
-        public string FromBinNum { get; set; } = "Main";
-        public string ToBinNum { get; set; } = "Main";
-        public string SerialNumber { get; set; } = null;
-        public string LotNum { get; set; }
     }
 }

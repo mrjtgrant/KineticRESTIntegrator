@@ -4,54 +4,53 @@ using Newtonsoft.Json.Linq;
 namespace EpicorSvcs.Dtos
 {
     /// <summary>
-    /// Parameter bundle for <see cref="EngWorkBenchSvc.GroupUnLockAsync"/>.
-    /// Mirrors the named parameters Epicor's <c>GroupUnLock</c> action method
-    /// expects.
+    /// Mirrors the input to Epicor's <c>EngWorkBenchSvc/GroupUnLock</c>
+    /// transaction — the call that releases an ECO group's lock so other
+    /// users can work with it.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// This is <b>not</b> an Epicor table. It's a request shape — a bundle
-    /// of named arguments that get serialized as the JSON body of a single
-    /// <c>GroupUnLock</c> call.
-    /// </para>
-    /// <para>
-    /// The Epicor method name is <c>GroupUnLock</c> with a capital L, which
-    /// is preserved in the property naming.
-    /// </para>
+    /// This carries the <c>Dataset</c> suffix because it represents an actual
+    /// Epicor transaction pattern that has no single backing table — the
+    /// <c>ip*</c>-prefixed properties are Epicor's own parameter names for the
+    /// <c>GroupUnLock</c> call. It is used by
+    /// <see cref="EngWorkBenchSvc._AddMtlsAsync"/>.
     /// </remarks>
     public class GroupUnLockDataset
     {
-        /// <summary>The ECO group to unlock.</summary>
+        /// <summary>The ECO group ID to unlock.</summary>
         public string ipGroupID { get; set; } = "";
 
-        /// <summary>The part being edited.</summary>
+        /// <summary>The part number context for the unlock.</summary>
         public string ipPartNum { get; set; } = "";
 
-        /// <summary>The revision being edited.</summary>
+        /// <summary>The revision number context for the unlock.</summary>
         public string ipRevisionNum { get; set; } = "";
 
-        /// <summary>Alternative method ID, if any.</summary>
+        /// <summary>The alternate method context, if any.</summary>
         public string ipAltMethod { get; set; } = "";
 
-        /// <summary>Process manufacturing ID, if applicable.</summary>
+        /// <summary>The process-manufacturing ID context, if any.</summary>
         public string ipProcessMfgID { get; set; } = "";
 
-        /// <summary>Effective-date for the unlock — typically today.</summary>
+        /// <summary>
+        /// The as-of date for the unlock. Evaluated per-instance so each
+        /// request gets the current date, not the date the type was loaded.
+        /// </summary>
         public string ipAsOfDate { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
 
-        /// <summary>Whether to unlock the entire tree or just this node.</summary>
+        /// <summary>Whether the complete method tree is involved.</summary>
         public bool ipCompleteTree { get; set; } = false;
 
-        /// <summary>Reserved Epicor flag.</summary>
+        /// <summary>Epicor return flag.</summary>
         public bool ipReturn { get; set; } = false;
 
-        /// <summary>Whether to also return the dataset after unlocking.</summary>
+        /// <summary>Whether to return the tree dataset.</summary>
         public bool ipGetDatasetForTree { get; set; } = false;
 
-        /// <summary>Whether to use the method-based parts list.</summary>
+        /// <summary>Whether to use the method for parts.</summary>
         public bool ipUseMethodForParts { get; set; } = false;
 
-        /// <summary>Empty dataset passed alongside the parameters.</summary>
+        /// <summary>The dataset envelope Epicor's call expects.</summary>
         public JObject ds { get; set; } = new JObject();
     }
 }
