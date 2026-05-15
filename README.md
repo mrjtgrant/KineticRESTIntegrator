@@ -243,16 +243,27 @@ The `OperationResult` also carries:
 
 A few conventions hold across the library:
 
-- **Every call is async.** Methods end in `Async` and return `Task<OperationResult<T>>`. Always `await` them.
+- **Every public call is async.** Methods end in `Async` and return `Task<OperationResult<T>>`. Always `await` them.
 - **Services are split into two files.** `*Svc.cs` holds thin wrappers around individual Epicor BO calls. `*Svc.Workflows.cs` holds orchestrators — methods that compose multiple BO calls into one operation (e.g. `SalesOrderSvc.NewOrderAsync` calls `GetNewOrderHed` → `ChangeOrderHedCustomerCustID` → `MasterUpdate`). You don't have to know which file a method lives in to use it; the split is for contributors. Both files declare the same `public partial class`.
 - **DTO naming reflects what the DTO is.** A class named after an Epicor table (`Customer`, `Part`, `OrderHed`) corresponds to that real table. A class with the `Dataset` suffix (`InvTransferDataset`, `GroupUnLockDataset`) faithfully mirrors an Epicor transaction-input shape that spans tables. A class with the `Input` suffix (`QuoteInput`, `MiscShipLineInput`, `ECOMtlInput`) is a caller-facing convenience shape — a reshaped subset for one of the orchestrators.
 - **`_c` columns are stripped.** Default DTOs contain only standard Epicor columns. Per-installation custom columns (Epicor's `_c` suffix convention) are not modeled — they're installation-specific by definition and don't belong in a shared library DTO. The standard user-defined columns (`Character01`, `ShortChar01`, `Number01`, `CheckBox01`, etc.) are retained, since they exist on every install. If you need access to a `_c` column, use `result.RawResponse`.
+
+### Public methods vs internal helpers
+
+Not every method on a service is part of the public API. Methods are classified by *audience*:
+
+- **Public** — generic, broadly useful primitives: `GetByIDAsync`, `UpdateAsync`, `GetRowsAsync<T>`, `GetNew*Async` template-fetchers, table-name-shaped reads like `PartsAsync` or `ECOMtlsAsync`. These return `OperationResult<T>` and are the methods callers reach via the `EpicorClient` facade.
+- **Internal** — process-step methods that exist only because a specific Epicor workflow requires them as one of several chained steps. `CheckOutAsync`, `ApproveAndCheckInAllAsync`, the `OnChange*` and `*RowMod` mutators, etc. These keep raw `Task<JObject>` returns and are marked `internal` — they're implementation details of the orchestrators that need them, not standalone operations a caller would use.
+
+The user-facing entry point for any multi-step operation is the **orchestrator** in `*Svc.Workflows.cs`: `AddMtlsAsync`, `MoveInventoryAsync`, `NewOrderAsync`, `NewQuoteHedAsync`, etc. Orchestrators are always `public`, always return `OperationResult<T>`, and handle the internal sequencing — get a template, mutate it through the right `OnChange*` calls, write it through the right `Update`/`MasterUpdate`. From a caller's perspective, the orchestrator is the operation.
+
+This split keeps the public API surface small and consistent: every public method either returns data, requests a template, or persists a write — there are no half-step operations sitting next to whole-step ones to confuse new readers.
 
 ### Worked examples
 
 For per-service worked examples — running BAQs with parameters, creating orders, the `UDRow` column-legend convention, the `GetRowsAsync<T>` projection pattern for typed BO list calls — see [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md).
 
-For runnable examples, the `EpicorSvcPOCs` project has four labeled scenarios:
+For runnable examples, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDX, SalesOrder, MenuTree):
 
 ```
 dotnet run --project EpicorSvcPOCs
