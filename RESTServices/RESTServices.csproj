@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>RESTServices</RootNamespace>
     <AssemblyName>RESTServices</AssemblyName>
@@ -33,9 +33,11 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="System.Configuration" />
-	  <Reference Include="System.Net.Http" />
+  <!-- System.Net.Http is a built-in assembly on .NET Framework 4.8 but is not
+       auto-referenced by the SDK — needs an explicit Reference. On .NET 6+,
+       HttpClient is part of the BCL and auto-referenced; no Reference needed. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
 </Project>
