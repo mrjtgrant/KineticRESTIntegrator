@@ -66,7 +66,15 @@ namespace EpicorSvcs
                 return OperationResult<JObject>.Success(
                     new JObject(new JProperty("MSG", "Please choose a To bin.")));
 
-            JObject ds = await GetNewInventoryTransferAsync(invTrans, ct).ConfigureAwait(false);
+            // GetNewInventoryTransferAsync is now a public OperationResult-returning
+            // method — propagate transport/Epicor failures up immediately.
+            var newTransfer = await GetNewInventoryTransferAsync(invTrans, ct).ConfigureAwait(false);
+            if (newTransfer.IsFailure)
+                return newTransfer;
+            JObject ds = newTransfer.Value;
+
+            // Internal process steps below return raw JObject; ErrorMessage
+            // is surfaced via ds["ErrorMessage"] when Epicor reports one.
             ds = await ValidatePartNumAsync(ds, invTrans, ct).ConfigureAwait(false);
 
             bool trackSerialNumbers =
@@ -144,6 +152,8 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             // Get the query parameters for looking up available serial numbers.
+            // GetSelectSerialNumbersParamsRowModAsync is an internal process step
+            // returning raw JObject.
             ds = await GetSelectSerialNumbersParamsRowModAsync(ds, invTrans, ct).ConfigureAwait(false);
             string whereClause = ds["ds"]["SelectSerialNumbersParams"][0]["whereClause"].ToString();
             string sourceRowID = ds["ds"]["SelectSerialNumbersParams"][0]["sourceRowID"].ToString();

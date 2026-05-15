@@ -68,18 +68,30 @@ namespace EpicorSvcs
             string partNum,
             CancellationToken ct = default)
         {
-            JObject ds = await GetNewOrderDtlAsync(orderNum, ct).ConfigureAwait(false);
+            // GetNewOrderDtlAsync is now public and returns OperationResult —
+            // propagate transport/Epicor failures up immediately.
+            var newDtl = await GetNewOrderDtlAsync(orderNum, ct).ConfigureAwait(false);
+            if (newDtl.IsFailure)
+                return newDtl;
+            JObject ds = newDtl.Value;
+
+            // Internal process steps below return raw JObject; ErrorMessage
+            // is surfaced via ds["ErrorMessage"] when Epicor reports one.
             ds = await ChangePartNumMasterAsync(ds, partNum, ct).ConfigureAwait(false);
 
             string custNum = ds["ds"]["OrderDtl"][0]["CustNum"].ToString();
             int orderQty = Convert.ToInt32(ds["ds"]["OrderDtl"][0]["OrderQty"]);
 
             ds = await ChangeSellingQtyMasterAsync(ds, partNum, orderQty, ct).ConfigureAwait(false);
+
+            // ChangeSellingQtyMaster returns a "parameters envelope" shape —
+            // unwrap it before passing to MasterUpdate.
             ds = JObject.FromObject(ds["parameters"]);
 
-            JObject response = await MasterUpdateAsync(
+            // MasterUpdateAsync is now public and returns OperationResult —
+            // its value is the orchestrator's terminal value, so return directly.
+            return await MasterUpdateAsync(
                 ds, custNum, orderNum, "OrderDtl", ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
         }
 
         /// <summary>
@@ -107,7 +119,15 @@ namespace EpicorSvcs
             string PONum = null,
             CancellationToken ct = default)
         {
-            JObject ds = await GetNewOrderHedAsync(ct).ConfigureAwait(false);
+            // GetNewOrderHedAsync is now public and returns OperationResult —
+            // propagate transport/Epicor failures up immediately.
+            var newHed = await GetNewOrderHedAsync(ct).ConfigureAwait(false);
+            if (newHed.IsFailure)
+                return newHed;
+            JObject ds = newHed.Value;
+
+            // Internal process steps below return raw JObject; ErrorMessage
+            // is surfaced via ds["ErrorMessage"] when Epicor reports one.
             ds = await ChangeOrderHedCustomerCustIDAsync(ds, CustID, 0, ct).ConfigureAwait(false);
             ds = await ChangeSoldToContactAsync(ds, ct).ConfigureAwait(false);
 
@@ -117,9 +137,10 @@ namespace EpicorSvcs
 
             string custNum = ds["ds"]["OrderHed"][0]["CustNum"].ToString();
 
-            JObject response = await MasterUpdateAsync(
+            // MasterUpdateAsync is now public and returns OperationResult —
+            // its value is the orchestrator's terminal value, so return directly.
+            return await MasterUpdateAsync(
                 ds, custNum, 0, "OrderHed", ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
         }
     }
 }

@@ -29,15 +29,25 @@ namespace EpicorSvcs
             MiscShipLineInput line,
             CancellationToken ct = default)
         {
-            JObject ds = await GetNewMscShpDtAsync(line.PackNum, ct).ConfigureAwait(false);
+            // GetNewMscShpDtAsync is now public and returns OperationResult —
+            // propagate transport/Epicor failures up immediately.
+            var newLine = await GetNewMscShpDtAsync(line.PackNum, ct).ConfigureAwait(false);
+            if (newLine.IsFailure)
+                return newLine;
+            JObject ds = newLine.Value;
+
+            // OnChange* mutators are internal process steps — raw JObject in,
+            // raw JObject out. Errors surface via ds["ErrorMessage"] when
+            // Epicor reports one.
             ds = await OnChangePartNumAsync(ds, line.PartNum, ct).ConfigureAwait(false);
             ds = await OnChangeQuantityAsync(ds, line.Quantity, ct).ConfigureAwait(false);
 
             ds["ds"]["MscShpDt"][0]["LineDesc"] = line.LineDesc;
             ds["ds"]["MscShpDt"][0]["ShipComment"] = line.ShipComment;
 
-            JObject response = await UpdateAsync(ds, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
+            // UpdateAsync is now public and returns OperationResult — its
+            // value is the orchestrator's terminal value, so return directly.
+            return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }
     }
 }

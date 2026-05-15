@@ -31,7 +31,15 @@ namespace EpicorSvcs
             QuoteInput quote,
             CancellationToken ct = default)
         {
-            JObject ds = await GetNewQuoteHedAsync(ct).ConfigureAwait(false);
+            // GetNewQuoteHedAsync is now public and returns OperationResult —
+            // propagate transport/Epicor failures up immediately.
+            var newQuote = await GetNewQuoteHedAsync(ct).ConfigureAwait(false);
+            if (newQuote.IsFailure)
+                return newQuote;
+            JObject ds = newQuote.Value;
+
+            // Internal process steps below return raw JObject; ErrorMessage
+            // is surfaced via ds["ErrorMessage"] when Epicor reports one.
             ds = await QuoteHedCustomerCustIDAfterChangeAsync(ds, quote.CustomerCustID, ct).ConfigureAwait(false);
 
             // Pass the caller's ship-by / need-by dates through for validation.
@@ -47,14 +55,20 @@ namespace EpicorSvcs
             ds["ds"]["QuoteHed"][0]["OTSZIP"] = quote.OTSZIP;
             ds["ds"]["QuoteHed"][0]["OTSCountryNum"] = quote.OTSCountryNum;
 
-            ds = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            // UpdateAsync is now public and returns OperationResult. Propagate
+            // failure; on success, build the orchestrator's custom result
+            // shape ({QuoteNum, QuoteObj}) from the saved dataset.
+            var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            if (updated.IsFailure)
+                return updated;
 
+            JObject saved = updated.Value;
             JObject result = new JObject {
-                new JProperty("QuoteNum", ds["ds"]["QuoteHed"][0]["QuoteNum"].ToString()),
-                new JProperty("QuoteObj", ds)
+                new JProperty("QuoteNum", saved["ds"]["QuoteHed"][0]["QuoteNum"].ToString()),
+                new JProperty("QuoteObj", saved)
             };
 
-            return result.ToOperationResult(r => r);
+            return OperationResult<JObject>.Success(result);
         }
     }
 }

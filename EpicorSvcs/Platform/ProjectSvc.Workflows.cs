@@ -35,14 +35,34 @@ namespace EpicorSvcs
             string Description = "",
             CancellationToken ct = default)
         {
-            JObject ds = await GetNewProjectAsync(ct).ConfigureAwait(false);
+            // GetNewProjectAsync is now public and returns OperationResult —
+            // propagate transport/Epicor failures up immediately, re-typed to
+            // the orchestrator's typed return.
+            var newProject = await GetNewProjectAsync(ct).ConfigureAwait(false);
+            if (newProject.IsFailure)
+                return OperationResult<Project>.Failure(
+                    newProject.ErrorMessage, newProject.StatusCode,
+                    newProject.ResourcePath, newProject.RawResponse);
+            JObject ds = newProject.Value;
+
+            // Internal process steps below return raw JObject; ErrorMessage
+            // is surfaced via ds["ErrorMessage"] when Epicor reports one.
             ds = await OnChangeProjectIDAsync(ds, ProjectID, ct).ConfigureAwait(false);
             ds = await OnChangeStartDateAsync(ds, StartDate, ct).ConfigureAwait(false);
 
             ds["ds"]["Project"][0]["Description"] = Description;
 
-            JObject response = await UpdateAsync(ds, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractDto<Project>("Project"));
+            // UpdateAsync is now public and returns OperationResult. Propagate
+            // failure (re-typed), then extract the typed Project from the
+            // saved dataset.
+            var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            if (updated.IsFailure)
+                return OperationResult<Project>.Failure(
+                    updated.ErrorMessage, updated.StatusCode,
+                    updated.ResourcePath, updated.RawResponse);
+
+            return OperationResult<Project>.Success(
+                updated.Value.ExtractDto<Project>("Project"));
         }
     }
 }

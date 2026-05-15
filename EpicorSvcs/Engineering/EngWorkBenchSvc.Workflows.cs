@@ -29,8 +29,8 @@ namespace EpicorSvcs
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the ECO dataset as
-        /// echoed back by Epicor's <c>Update</c>. Fails if the source BOM
-        /// lookup fails.
+        /// echoed back by Epicor's <c>Update</c>. Fails if any of the
+        /// composed calls fails.
         /// </returns>
         public async Task<OperationResult<JObject>> AddOprsAsync(
             List<ECOMtlInput> mtls,
@@ -47,8 +47,11 @@ namespace EpicorSvcs
                 return OperationResult<JObject>.Failure(
                     bom.ErrorMessage, bom.StatusCode, bom.ResourcePath, bom.RawResponse);
 
-            JObject ds = await GetNewECOOprAsync(
+            var newOprResult = await GetNewECOOprAsync(
                 firstMtl.GroupID, firstMtl.PartNum, firstMtl.RevisionNum, ct).ConfigureAwait(false);
+            if (newOprResult.IsFailure)
+                return newOprResult;
+            JObject ds = newOprResult.Value;
 
             JArray newOprs = new JArray();
             JArray srcBomOprs = JArray.FromObject(bom.Value["ds"]["PartOpr"]);
@@ -77,8 +80,7 @@ namespace EpicorSvcs
 
             ds["ds"]["ECOOpr"] = newOprs;
 
-            JObject response = await UpdateAsync(ds, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
+            return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -98,11 +100,9 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             var firstMtl = mtls.First();
-            JObject tree = HandleResponse(
-                await GetDatasetForTreeByRefAsync(
-                    firstMtl.GroupID, firstMtl.PartNum, firstMtl.RevisionNum, ct)
-                .ConfigureAwait(false));
-            return tree.ToOperationResult(r => r);
+            return await GetDatasetForTreeByRefAsync(
+                firstMtl.GroupID, firstMtl.PartNum, firstMtl.RevisionNum, ct)
+                .ConfigureAwait(false);
         }
 
         /// <summary>
@@ -128,18 +128,32 @@ namespace EpicorSvcs
         {
             var firstMtl = mtls.First();
 
-            JObject ds = await GetByIDAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
-            if (ds["ErrorMessage"] != null)
+            // Look up the group. If it does not exist, generate it.
+            var groupResult = await GetByIDAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
+            JObject ds;
+            if (groupResult.IsFailure)
             {
+                // Group does not exist — try to create it.
                 var generated = await GenerateGroupAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
+                if (generated.IsFailure)
+                    return generated;
                 ds = generated.Value;
             }
+            else
+            {
+                ds = groupResult.Value;
+            }
 
-            // Check out the parent part to the group.
+            // Check out the parent part to the group. CheckOutAsync is an
+            // internal process step — its raw response is not inspected here;
+            // failure to lock will surface on the subsequent calls.
             await CheckOutAsync(
                 firstMtl.GroupID, firstMtl.PartNum, firstMtl.RevisionNum, ct).ConfigureAwait(false);
 
-            ds = await GetECOGroupAndECORevAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
+            var groupAndRev = await GetECOGroupAndECORevAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
+            if (groupAndRev.IsFailure)
+                return groupAndRev;
+            ds = groupAndRev.Value;
 
             bool isError = false;
             int mtlseq = 0;
@@ -161,7 +175,16 @@ namespace EpicorSvcs
                     ds["altMethod"] = mtl.AltMethod;
                     ds["processMfgID"] = mtl.ProcessMfgID;
                 }
-                ds = await GetNewECOMtlAsync(ds, ct).ConfigureAwait(false);
+
+                var newMtlResult = await GetNewECOMtlAsync(ds, ct).ConfigureAwait(false);
+                if (newMtlResult.IsFailure)
+                {
+                    // We have the group locked — record the error, stop adding,
+                    // and proceed to unlock so we do not leave the group locked.
+                    isError = true;
+                    break;
+                }
+                ds = newMtlResult.Value;
 
                 try
                 {
@@ -198,6 +221,9 @@ namespace EpicorSvcs
             }
 
             // Unlock the group for other users after adding materials.
+            // GroupUnLockAsync is an internal process step — raw JObject; we
+            // do not inspect its result because we are about to either save
+            // or abandon the dataset, and the unlock itself is best-effort.
             await GroupUnLockAsync(JObject.FromObject(new GroupUnLockDataset
             {
                 ipGroupID = firstMtl.GroupID,
@@ -207,10 +233,10 @@ namespace EpicorSvcs
                 ipProcessMfgID = firstMtl.ProcessMfgID
             }), ct).ConfigureAwait(false);
 
-            if (!isError)
-                ds = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            if (isError)
+                return OperationResult<JObject>.Success(ds);
 
-            return ds.ToOperationResult(r => r);
+            return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -231,13 +257,15 @@ namespace EpicorSvcs
             string groupid,
             CancellationToken ct = default)
         {
-            JObject ds = await GetNewECOGroupAsync(ct).ConfigureAwait(false);
+            var newGroup = await GetNewECOGroupAsync(ct).ConfigureAwait(false);
+            if (newGroup.IsFailure)
+                return newGroup;
+            JObject ds = newGroup.Value;
 
             ds["ds"]["ECOGroup"][0]["GroupID"] = groupid;
             ds["ds"]["ECOGroup"][0]["Description"] = "Auto generated from *";
 
-            JObject response = HandleResponse(await UpdateAsync(ds, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
+            return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }
     }
 }

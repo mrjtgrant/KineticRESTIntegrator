@@ -44,24 +44,5 @@ namespace EpicorSvcs.Dtos
 
         /// <summary>Unit of measure for the material quantity.</summary>
         public string UOMCode { get; set; } = "EA";
-
-        // --- Installation-specific custom columns ---
-
-        /// <summary>
-        /// Installation-specific custom description (custom column).
-        /// </summary>
-        public string SI_Part_Description_c { get; set; } = "";
-
-        /// <summary>Installation-specific custom width measurement (custom column).</summary>
-        public string SI_Width_c { get; set; }
-
-        /// <summary>Installation-specific custom length measurement (custom column).</summary>
-        public string SI_Length_c { get; set; }
-
-        /// <summary>Installation-specific custom program identifier 1 (custom column).</summary>
-        public string SI_Program1_c { get; set; } = "";
-
-        /// <summary>Installation-specific custom program identifier 2 (custom column).</summary>
-        public string SI_Program2_c { get; set; } = "";
     }
 }

@@ -12,9 +12,21 @@ namespace EpicorSvcs
     /// <c>Erp.BO.QuoteSvc</c> in Epicor.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
     /// here in <c>QuoteSvc.cs</c>; the multi-call orchestrator
     /// (<c>NewQuoteHedAsync</c>) lives in <c>QuoteSvc.Workflows.cs</c>.
+    /// </para>
+    /// <para>
+    /// Method visibility on this service follows the framework convention:
+    /// the generic <c>GetNew*</c> template-fetcher and <c>UpdateAsync</c>
+    /// are <c>public</c> and return <see cref="OperationResult{T}"/>.
+    /// The <c>QuoteHedCustomerCustIDAfterChangeAsync</c> mutator and the
+    /// <c>ValidateShippingDateBeforeUpdateAsync</c> pre-update step are
+    /// <c>internal</c> and return raw <see cref="JObject"/> — they are
+    /// implementation details of the quote-creation sequence, reached
+    /// through the orchestrator.
+    /// </para>
     /// </remarks>
     public partial class QuoteSvc : EpicorSvc
     {
@@ -30,28 +42,58 @@ namespace EpicorSvcs
         /// <param name="env">A fully-configured session.</param>
         public QuoteSvc(RESTSessionKey env) : base(env) { }
 
+        // ---------------------------------------------------------------
+        // Public API — generic primitives
+        // ---------------------------------------------------------------
+
         /// <summary>
         /// Gets a fresh, empty quote-header dataset. Calls
         /// <c>Erp.BO.QuoteSvc/GetNewQuoteHed</c> in Epicor.
         /// </summary>
         /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor dataset for a new quote header.</returns>
-        public async Task<JObject> GetNewQuoteHedAsync(CancellationToken ct = default)
+        /// <returns>The new quote-header dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> GetNewQuoteHedAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.QuoteSvc/GetNewQuoteHed";
-            return HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
         }
 
         /// <summary>
-        /// Applies a customer ID to a quote dataset, running Epicor's
-        /// after-change logic. Calls
+        /// Persists a quote dataset. Calls <c>Erp.BO.QuoteSvc/Update</c> in
+        /// Epicor.
+        /// </summary>
+        /// <param name="ds">The quote dataset to persist.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The quote dataset echoed back after the update, wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> UpdateAsync(JObject ds, CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.QuoteSvc/Update";
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        // ---------------------------------------------------------------
+        // Internal API — quote-creation process steps
+        //
+        // These methods mutate an in-flight quote dataset and run Epicor's
+        // on-change / pre-update logic. They are not part of the framework's
+        // public surface; callers reach this functionality via
+        // NewQuoteHedAsync. They keep raw JObject returns because they are
+        // chained inside the orchestrator where wrapping each step in
+        // OperationResult would add ceremony without value.
+        // ---------------------------------------------------------------
+
+        /// <summary>
+        /// Applies a customer ID to an in-flight quote dataset, running
+        /// Epicor's after-change logic. Calls
         /// <c>Erp.BO.QuoteSvc/QuoteHedCustomerCustIDAfterChange</c> in Epicor.
         /// </summary>
         /// <param name="ds">The quote dataset being built.</param>
         /// <param name="CustomerCustID">The customer ID to apply.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> QuoteHedCustomerCustIDAfterChangeAsync(
+        internal async Task<JObject> QuoteHedCustomerCustIDAfterChangeAsync(
             JObject ds,
             string CustomerCustID,
             CancellationToken ct = default)
@@ -62,8 +104,9 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Validates the quote's shipping dates before an update. Calls
-        /// <c>Erp.BO.QuoteSvc/ValidateShippingDateBeforeUpdate</c> in Epicor.
+        /// Applies and validates the quote's shipping dates as a pre-update
+        /// step. Calls <c>Erp.BO.QuoteSvc/ValidateShippingDateBeforeUpdate</c>
+        /// in Epicor.
         /// </summary>
         /// <remarks>
         /// Either date is optional — each is applied to the dataset and
@@ -75,7 +118,7 @@ namespace EpicorSvcs
         /// <param name="NeedByDate">Optional need-by date to apply and validate.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> ValidateShippingDateBeforeUpdateAsync(
+        internal async Task<JObject> ValidateShippingDateBeforeUpdateAsync(
             JObject ds,
             DateTime? ShipByDate = null,
             DateTime? NeedByDate = null,
@@ -91,19 +134,6 @@ namespace EpicorSvcs
 
             ds.Add(new JProperty("dateColumnTable", "QuoteHed"));
 
-            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
-        }
-
-        /// <summary>
-        /// Persists a quote dataset. Calls <c>Erp.BO.QuoteSvc/Update</c> in
-        /// Epicor.
-        /// </summary>
-        /// <param name="ds">The quote dataset to persist.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor dataset as echoed back after the update.</returns>
-        public async Task<JObject> UpdateAsync(JObject ds, CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.QuoteSvc/Update";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
     }

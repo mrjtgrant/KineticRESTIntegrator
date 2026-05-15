@@ -13,9 +13,21 @@ namespace EpicorSvcs
     /// <c>Erp.BO.ProjectSvc</c> in Epicor.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
     /// here in <c>ProjectSvc.cs</c>; multi-call orchestrators live in
     /// <c>ProjectSvc.Workflows.cs</c>.
+    /// </para>
+    /// <para>
+    /// Method visibility on this service follows the framework convention:
+    /// <c>ProjectsAsync</c> (table-name read), <c>GetNewProjectAsync</c>
+    /// (<c>GetNew*</c> template-fetcher), and <c>UpdateAsync</c> (generic
+    /// CRUD write) are <c>public</c> and return <see cref="OperationResult{T}"/>.
+    /// The <c>OnChange*</c> dataset mutators that run Epicor's on-change
+    /// logic are <c>internal</c> and return raw <see cref="JObject"/> —
+    /// they are implementation details of the project-creation sequence,
+    /// reached through the <see cref="NewProjectAsync"/> orchestrator.
+    /// </para>
     /// </remarks>
     public partial class ProjectSvc : EpicorSvc
     {
@@ -30,6 +42,10 @@ namespace EpicorSvcs
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public ProjectSvc(RESTSessionKey env) : base(env) { }
+
+        // ---------------------------------------------------------------
+        // Public API — reads and writes
+        // ---------------------------------------------------------------
 
         /// <summary>
         /// Retrieves project records. Calls <c>Erp.BO.ProjectSvc/Projects</c>
@@ -71,27 +87,54 @@ namespace EpicorSvcs
         /// <c>Erp.BO.ProjectSvc/GetNewProject</c> in Epicor.
         /// </summary>
         /// <remarks>
-        /// Native BO call returning the raw Epicor dataset. Used by the
-        /// <see cref="NewProjectAsync"/> orchestrator; exposed publicly for
-        /// callers that need to drive the project-creation sequence directly.
+        /// Useful as a primitive — for example, to inspect the defaults
+        /// Epicor would assign to a new project, or as a starting point for
+        /// custom workflows that need to construct a project dataset
+        /// differently from <see cref="NewProjectAsync"/>.
         /// </remarks>
         /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor dataset for a new project.</returns>
-        public async Task<JObject> GetNewProjectAsync(CancellationToken ct = default)
+        /// <returns>The new project dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> GetNewProjectAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.ProjectSvc/GetNewProject";
-            return HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
         }
 
         /// <summary>
-        /// Applies a proposed project ID to a project dataset. Calls
-        /// <c>Erp.BO.ProjectSvc/OnChangeProjectID</c> in Epicor.
+        /// Persists a project dataset. Calls <c>Erp.BO.ProjectSvc/Update</c>
+        /// in Epicor.
+        /// </summary>
+        /// <param name="ds">The project dataset to persist.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The project dataset echoed back after the update, wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> UpdateAsync(JObject ds, CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.ProjectSvc/Update";
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        // ---------------------------------------------------------------
+        // Internal API — project-creation process steps
+        //
+        // These methods mutate an in-flight project dataset and run Epicor's
+        // on-change logic. They are not part of the framework's public
+        // surface; callers reach this functionality via NewProjectAsync.
+        // They keep raw JObject returns because they are chained inside the
+        // orchestrator where wrapping each step in OperationResult would
+        // add ceremony without value.
+        // ---------------------------------------------------------------
+
+        /// <summary>
+        /// Applies a proposed project ID to an in-flight project dataset.
+        /// Calls <c>Erp.BO.ProjectSvc/OnChangeProjectID</c> in Epicor.
         /// </summary>
         /// <param name="ds">The project dataset being built.</param>
         /// <param name="ProjectID">The proposed project ID.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> OnChangeProjectIDAsync(
+        internal async Task<JObject> OnChangeProjectIDAsync(
             JObject ds,
             string ProjectID,
             CancellationToken ct = default)
@@ -102,33 +145,20 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Applies a start date to a project dataset. Calls
+        /// Applies a start date to an in-flight project dataset. Calls
         /// <c>Erp.BO.ProjectSvc/OnChangeStartDate</c> in Epicor.
         /// </summary>
         /// <param name="ds">The project dataset being built.</param>
         /// <param name="StartDate">The project start date.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> OnChangeStartDateAsync(
+        internal async Task<JObject> OnChangeStartDateAsync(
             JObject ds,
             DateTime StartDate,
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.ProjectSvc/OnChangeStartDate";
             ds.Add(new JProperty("ipStartDate", StartDate.ToString("s")));
-            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
-        }
-
-        /// <summary>
-        /// Persists a project dataset. Calls <c>Erp.BO.ProjectSvc/Update</c>
-        /// in Epicor.
-        /// </summary>
-        /// <param name="ds">The project dataset to persist.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor dataset as echoed back after the update.</returns>
-        public async Task<JObject> UpdateAsync(JObject ds, CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.ProjectSvc/Update";
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
     }

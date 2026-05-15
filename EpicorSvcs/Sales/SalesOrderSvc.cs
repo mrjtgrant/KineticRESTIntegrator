@@ -13,10 +13,23 @@ namespace EpicorSvcs
     /// <c>Erp.BO.SalesOrderSvc</c> in Epicor.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
     /// here in <c>SalesOrderSvc.cs</c>; the multi-call orchestrators
     /// (<c>FindOrderByPONumAsync</c>, <c>NewOrderLineAsync</c>,
     /// <c>NewOrderAsync</c>) live in <c>SalesOrderSvc.Workflows.cs</c>.
+    /// </para>
+    /// <para>
+    /// Method visibility on this service follows the framework convention:
+    /// <c>GetByIDAsync</c> (CRUD read), the <c>GetNew*</c> template-fetchers,
+    /// and <c>MasterUpdateAsync</c> (the BO's CRUD write primitive — Epicor
+    /// names it <c>MasterUpdate</c> instead of <c>Update</c> on this service)
+    /// are <c>public</c> and return <see cref="OperationResult{T}"/>.
+    /// The <c>Change*</c> dataset mutators that run Epicor's on-change
+    /// logic are <c>internal</c> and return raw <see cref="JObject"/> —
+    /// they are implementation details of the order- and line-creation
+    /// sequences, reached through the orchestrators.
+    /// </para>
     /// </remarks>
     public partial class SalesOrderSvc : EpicorSvc
     {
@@ -31,6 +44,10 @@ namespace EpicorSvcs
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public SalesOrderSvc(RESTSessionKey env) : base(env) { }
+
+        // ---------------------------------------------------------------
+        // Public API — reads, template-fetchers, and the write primitive
+        // ---------------------------------------------------------------
 
         /// <summary>
         /// Retrieves a full sales order by its order number. Calls
@@ -71,27 +88,92 @@ namespace EpicorSvcs
         /// </summary>
         /// <param name="ordernum">The order number to add the line under.</param>
         /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor dataset for a new order line.</returns>
-        public async Task<JObject> GetNewOrderDtlAsync(int ordernum, CancellationToken ct = default)
+        /// <returns>The new order-detail dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> GetNewOrderDtlAsync(int ordernum, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/GetNewOrderDtl";
 
             JObject newOrderDtl = new JObject(NewDS);
             newOrderDtl.Add(new JProperty("orderNum", ordernum));
 
-            return HandleResponse(await RESTCallAsync(svc, newOrderDtl, ct).ConfigureAwait(false));
+            JObject response = HandleResponse(await RESTCallAsync(svc, newOrderDtl, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
         }
 
         /// <summary>
-        /// Applies a part number to an order-detail dataset, running Epicor's
-        /// master on-change logic. Calls
+        /// Gets a fresh, empty order-header dataset. Calls
+        /// <c>Erp.BO.SalesOrderSvc/GetNewOrderHed</c> in Epicor.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The new order-header dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> GetNewOrderHedAsync(CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.SalesOrderSvc/GetNewOrderHed";
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Persists an order dataset through Epicor's master-update entry
+        /// point. Calls <c>Erp.BO.SalesOrderSvc/MasterUpdate</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// Epicor names this entry point <c>MasterUpdate</c> rather than
+        /// <c>Update</c> on the sales-order service — it's the same kind of
+        /// primitive (the CRUD write), just with the BO's preferred name.
+        /// </remarks>
+        /// <param name="ds">The order dataset to persist.</param>
+        /// <param name="custnum">The customer number for the order.</param>
+        /// <param name="ordernum">
+        /// The order number, or 0 for a new order. Defaults to 0.
+        /// </param>
+        /// <param name="table">
+        /// The driving table name — <c>"OrderHed"</c> or <c>"OrderDtl"</c>.
+        /// Defaults to <c>"OrderHed"</c>.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The Epicor response from the master update, wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> MasterUpdateAsync(
+            JObject ds,
+            string custnum,
+            int ordernum = 0,
+            string table = "OrderHed",
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.SalesOrderSvc/MasterUpdate";
+
+            ds.Add(new JProperty("lCheckForOrderChangedMsg", true));
+            ds.Add(new JProperty("lcheckForResponse", true));
+            ds.Add(new JProperty("cTableName", table));
+            ds.Add(new JProperty("iCustNum", custnum));
+            ds.Add(new JProperty("iOrderNum", ordernum));
+            ds.Add(new JProperty("lweLicensed", true));
+
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        // ---------------------------------------------------------------
+        // Internal API — order- and line-creation process steps
+        //
+        // These methods mutate an in-flight order or order-detail dataset
+        // and run Epicor's on-change logic. They are not part of the
+        // framework's public surface; callers reach this functionality via
+        // NewOrderAsync or NewOrderLineAsync. They keep raw JObject returns
+        // because they are chained inside orchestrators where wrapping each
+        // step in OperationResult would add ceremony without value.
+        // ---------------------------------------------------------------
+
+        /// <summary>
+        /// Applies a part number to an in-flight order-detail dataset,
+        /// running Epicor's master on-change logic. Calls
         /// <c>Erp.BO.SalesOrderSvc/ChangePartNumMaster</c> in Epicor.
         /// </summary>
         /// <param name="ds">The order-detail dataset being built.</param>
         /// <param name="partNum">The part number to apply.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> ChangePartNumMasterAsync(
+        internal async Task<JObject> ChangePartNumMasterAsync(
             JObject ds,
             string partNum,
             CancellationToken ct = default)
@@ -116,8 +198,8 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Applies a selling quantity to an order-detail dataset, running
-        /// Epicor's master on-change logic. Calls
+        /// Applies a selling quantity to an in-flight order-detail dataset,
+        /// running Epicor's master on-change logic. Calls
         /// <c>Erp.BO.SalesOrderSvc/ChangeSellingQtyMaster</c> in Epicor.
         /// </summary>
         /// <param name="ds">The order-detail dataset being built.</param>
@@ -125,7 +207,7 @@ namespace EpicorSvcs
         /// <param name="OrderQty">The selling quantity to apply.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> ChangeSellingQtyMasterAsync(
+        internal async Task<JObject> ChangeSellingQtyMasterAsync(
             JObject ds,
             string PartNum,
             decimal OrderQty,
@@ -148,24 +230,16 @@ namespace EpicorSvcs
             ds.Add(new JProperty("pcDimCode", "EA"));
             ds.Add(new JProperty("pdDimConvFactor", "1"));
 
-            return await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+            // Added HandleResponse to normalize Epicor error shape, matching
+            // every other wrapper on this service. Previously missing — a
+            // structured error response would not have surfaced as
+            // ds["ErrorMessage"].
+            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
         /// <summary>
-        /// Gets a fresh, empty order-header dataset. Calls
-        /// <c>Erp.BO.SalesOrderSvc/GetNewOrderHed</c> in Epicor.
-        /// </summary>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor dataset for a new order header.</returns>
-        public async Task<JObject> GetNewOrderHedAsync(CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.SalesOrderSvc/GetNewOrderHed";
-            return HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
-        }
-
-        /// <summary>
-        /// Applies a customer ID to an order-header dataset, running Epicor's
-        /// on-change logic. Calls
+        /// Applies a customer ID to an in-flight order-header dataset,
+        /// running Epicor's on-change logic. Calls
         /// <c>Erp.BO.SalesOrderSvc/ChangeOrderHedCustomerCustID</c> in Epicor.
         /// </summary>
         /// <param name="ds">The order-header dataset being built.</param>
@@ -175,7 +249,7 @@ namespace EpicorSvcs
         /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> ChangeOrderHedCustomerCustIDAsync(
+        internal async Task<JObject> ChangeOrderHedCustomerCustIDAsync(
             JObject ds,
             string CustID,
             int ordernum = 0,
@@ -188,50 +262,16 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Applies the sold-to contact to an order-header dataset, running
-        /// Epicor's on-change logic. Calls
+        /// Applies the sold-to contact to an in-flight order-header dataset,
+        /// running Epicor's on-change logic. Calls
         /// <c>Erp.BO.SalesOrderSvc/ChangeSoldToContact</c> in Epicor.
         /// </summary>
         /// <param name="ds">The order-header dataset being built.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The updated raw Epicor dataset.</returns>
-        public async Task<JObject> ChangeSoldToContactAsync(JObject ds, CancellationToken ct = default)
+        internal async Task<JObject> ChangeSoldToContactAsync(JObject ds, CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/ChangeSoldToContact";
-            return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
-        }
-
-        /// <summary>
-        /// Persists an order dataset through Epicor's master-update entry
-        /// point. Calls <c>Erp.BO.SalesOrderSvc/MasterUpdate</c> in Epicor.
-        /// </summary>
-        /// <param name="ds">The order dataset to persist.</param>
-        /// <param name="custnum">The customer number for the order.</param>
-        /// <param name="ordernum">
-        /// The order number, or 0 for a new order. Defaults to 0.
-        /// </param>
-        /// <param name="table">
-        /// The driving table name — <c>"OrderHed"</c> or <c>"OrderDtl"</c>.
-        /// Defaults to <c>"OrderHed"</c>.
-        /// </param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor response from the master update.</returns>
-        public async Task<JObject> MasterUpdateAsync(
-            JObject ds,
-            string custnum,
-            int ordernum = 0,
-            string table = "OrderHed",
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.SalesOrderSvc/MasterUpdate";
-
-            ds.Add(new JProperty("lCheckForOrderChangedMsg", true));
-            ds.Add(new JProperty("lcheckForResponse", true));
-            ds.Add(new JProperty("cTableName", table));
-            ds.Add(new JProperty("iCustNum", custnum));
-            ds.Add(new JProperty("iOrderNum", ordernum));
-            ds.Add(new JProperty("lweLicensed", true));
-
             return HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
     }
