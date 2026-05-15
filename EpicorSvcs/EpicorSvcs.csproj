@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>EpicorSvcs</RootNamespace>
     <AssemblyName>EpicorSvcs</AssemblyName>
@@ -30,21 +30,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Platform\UserCodeSvc.Workflows.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="Platform\UserCodeSvc.Workflows.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="RestSharp" Version="106.15.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="System.Configuration" />
+  <!-- Microsoft.CSharp is required on .NET Framework to enable `dynamic`
+       typing support. On .NET 6+, `dynamic` works without this reference. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <!-- System.Configuration.ConfigurationManager: makes `Properties.Settings.Default.X`
+       and App.config file loading work on .NET 6+, matching the behavior provided
+       by the built-in System.Configuration assembly on .NET Framework. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
