@@ -1,8 +1,31 @@
 # Kinetic REST Integrator
 
-A C# class library framework for integrating with Epicor Kinetic (formerly Epicor ERP 10/11) over its REST API. Wraps Epicor's Business Objects (BOs) and Business Activity Queries (BAQs) in strongly typed C# classes and adds Excel export and SMTP email helpers on top.
+A C# library for integrating with **Epicor Kinetic** (formerly Epicor ERP 10/11) over its REST API. Wraps Epicor's Business Objects (BOs) and Business Activity Queries (BAQs) in async, strongly-typed C# classes, and adds Excel export and SMTP email helpers on top.
 
-Built on .NET Framework 4.8.
+Sometimes called **Keri** for short. Built on .NET Framework 4.8.
+
+```csharp
+using (var client = new EpicorClient("pilot"))
+{
+    var result = await client.BAQ.BAQResultsAsync("MyOpenOrders_BAQ");
+    if (result.IsFailure)
+    {
+        Console.WriteLine($"BAQ failed: {result.ErrorMessage}");
+        return;
+    }
+
+    foreach (var row in result.Value)
+        Console.WriteLine($"{row["OrderNum"]}  {row["CustID"]}");
+}
+```
+
+That snippet is the whole shape. Construct a client, await an async call, check `IsFailure`, use `Value`. Every service in the library follows that pattern.
+
+---
+
+## Status
+
+**v0.1.0 — pre-1.0, API may change.** All twenty Epicor service wrappers are converted, fifty-two unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
 
 ---
 
@@ -11,9 +34,11 @@ Built on .NET Framework 4.8.
 | Project | Output | Purpose |
 |---|---|---|
 | `RESTServices` | `RESTServices.dll` | Low-level REST client. Owns auth, session, URL building, and JSON error handling. |
-| `EpicorSvcs` | `EpicorSvcs.dll` | Strongly typed wrappers for ~20 Epicor BOs (Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, EngWorkBench, and more). |
+| `EpicorSvcs` | `EpicorSvcs.dll` | Async wrappers for ~20 Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
 | `FileHandling` | `FileHandling.dll` | Excel generation (ClosedXML), CSV writer, and SMTP email sender. |
-| `EpicorSvcDemo` | `EpicorSvcDemo.exe` | Sample console app: runs a BAQ → builds an Excel attachment → emails it. |
+| `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
+| `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
+| `KineticRESTIntegrator.Tests` | xUnit test project | 52 offline unit tests covering the framework's deterministic surface. |
 
 ---
 
@@ -21,45 +46,41 @@ Built on .NET Framework 4.8.
 
 ### Prerequisites
 
-- Windows
-- Visual Studio 2022 (or `msbuild` + `nuget` from the command line)
+- Windows, Visual Studio 2022 (or `dotnet` CLI / `msbuild`)
 - .NET Framework 4.8 developer pack
 - Network access to your Epicor Kinetic application server
 - An Epicor account with REST access (Basic auth) **or** an Epicor API key (v2 OData)
 
 ### Setup
 
-1. **Clone the repo.**
-
+1. **Clone.**
    ```
-   git clone <your-repo-url>
+   git clone https://github.com/mrjtgrant/KineticRESTIntegrator.git
    cd KineticRESTIntegrator
    ```
 
-2. **Restore NuGet packages.** Visual Studio does this automatically on the first build. From the command line:
-
+2. **Restore packages.** Visual Studio does this on the first build; from the command line:
    ```
-   nuget restore KineticRESTIntegrator.sln
+   dotnet restore KineticRESTIntegrator.sln
    ```
 
-3. **Create your local `App.config` files** from the templates. In each project that has an `App.config.template`, copy it to `App.config` in the same folder:
-
+3. **Create your local `App.config` files** from the templates:
    ```
    copy EpicorSvcs\App.config.template   EpicorSvcs\App.config
    copy FileHandling\App.config.template FileHandling\App.config
    ```
 
-4. **Edit each `App.config`** and replace the `YOUR_*` placeholder values with your real Epicor URLs, credentials, and SMTP settings. See [Configuration](#configuration) below for what each setting means.
+4. **Edit each `App.config`** and replace the `YOUR_*` placeholders with your real Epicor URLs, credentials, and SMTP settings. See [Configuration](#configuration) below.
 
 5. **Build.**
-
    ```
-   msbuild KineticRESTIntegrator.sln /p:Configuration=Release
+   dotnet build KineticRESTIntegrator.sln
    ```
 
-   Or open `KineticRESTIntegrator.sln` in Visual Studio and build normally.
-
-6. **Run the demo** (`EpicorSvcDemo.exe`) to verify your connection end-to-end. It runs a BAQ, builds an Excel attachment, and emails it.
+6. **Run the demo** (`EpicorSvcDemo`) to verify your connection end-to-end — it runs a BAQ, builds an Excel attachment, and emails it.
+   ```
+   dotnet run --project EpicorSvcDemo
+   ```
 
 > **`App.config` is gitignored.** Your credentials stay on your machine. Don't remove the gitignore rule, and never commit `App.config` directly.
 
@@ -67,7 +88,19 @@ Built on .NET Framework 4.8.
 
 ## Configuration
 
-The framework reads settings from each project's `App.config` (`userSettings` section). Every setting can also be overridden by an environment variable of the same name — useful for CI builds and production deployment where you don't want to ship a config file with secrets.
+The framework reads settings from each project's `App.config` (`userSettings` section). **Every setting can also be overridden by an environment variable of the same name** — useful for CI builds and production deployment where you don't want a config file with secrets.
+
+### Where credentials come from
+
+The framework supports three ways to provide credentials, and the right choice depends on **where the credentials live and how long they last**.
+
+| Source | Best for | Why |
+|---|---|---|
+| **Programmatic session** — `new EpicorClient(new RESTSessionKey { ... })` | User-facing applications: web portals, desktop apps with sign-in, multi-tenant services. | Credentials come from a user action (a login form, a vault lookup, a token exchange) and exist only for the lifetime of that session. They never touch any config file or environment variable. The caller fully owns the credential lifecycle. |
+| **`App.config`** | Per-developer local setup. One developer working on one machine. | The file is gitignored, sits next to the binaries, and survives across runs without further action. Easy to set up, easy to edit, easy to switch environments by editing one line. Not appropriate for shared/production machines — a config file is a credential left on disk. |
+| **Environment variables** | Automated processes: scheduled jobs, services, CI builds, containers. | The credentials live in the surrounding system's secret store (a scheduler vault, a CI runner's secret manager, a container orchestrator) and reach the process only at startup. No secret-bearing file in the source tree, no secret-bearing file on disk. |
+
+These sources stack — you don't pick *one*. A programmatic session, if supplied, bypasses both other sources. Environment variables override individual `App.config` settings row by row. So the same binary can read its credentials from `App.config` on a developer's machine and from env vars when deployed, with no code change between the two.
 
 ### `EpicorSvcs/App.config`
 
@@ -77,21 +110,52 @@ The framework reads settings from each project's `App.config` (`userSettings` se
 | `DefaultPasskey` | `EPICOR_PASS` | Password for that account. | (secret) |
 | `DefaultApiKey` | `EPICOR_APIKEY` | API key (v2 OData). Alternative to user+pass. | (secret) |
 | `DefaultCompany` | `EPICOR_COMPANY` | Epicor company ID. | `EPIC01` |
-| `DefaultEnvironment` | `EPICOR_ENV` | Which env to use by default: `prod`/`live`, `pilot`, `test`/`third`, or a literal URL. | `pilot` |
-| `EnvLive` | `EPICOR_ENV_LIVE` | Production app server URL. | `https://erp.example.com/ERP_Prod` |
-| `EnvPilot` | `EPICOR_ENV_PILOT` | Pilot app server URL. | `https://pilot.example.com/ERP_Pilot` |
-| `EnvTest` | `EPICOR_ENV_TEST` | Test/dev app server URL. | `https://dev.example.com/ERP_Dev` |
+| `DefaultEnvironment` | `EPICOR_ENV` | Default env: `prod`/`live`, `pilot`, `test`/`third`, or a literal URL. | `pilot` |
+| `EnvLive` | `EPICOR_ENV_LIVE` | Production app server URL. | `https://company-live.example.com/server` |
+| `EnvPilot` | `EPICOR_ENV_PILOT` | Pilot app server URL. | `https://company-pilot.example.com/server` |
+| `EnvTest` | `EPICOR_ENV_TEST` | Test/dev app server URL. | `https://company-test.example.com/server` |
 
-You need **either** `DefaultUser` + `DefaultPasskey` (Basic auth) **or** `DefaultApiKey` (API-key auth), not both. The framework auto-detects which mode based on whether an API key is set.
+You need **either** `DefaultUser` + `DefaultPasskey` (Basic auth) **or** `DefaultApiKey` (API-key auth). The framework auto-detects which based on whether an API key is set.
+
+For the `Env*` URLs: use the URL shown in the upper-right corner of your Epicor client. The framework treats it as an opaque string — copy it as-is, including the protocol and trailing path.
+
+### Switching environments
+
+`DefaultEnvironment` is a **selector**, not a URL. It names which of `EnvLive`/`EnvPilot`/`EnvTest` to use for the current run. The URLs themselves are defined once, in the `Env*` rows, and stay put.
+
+That separation means switching environments is a one-line change:
+
+```
+# Change DefaultEnvironment in App.config from 'pilot' to 'prod'
+# ...or, without editing config at all, set the env var for a single run:
+
+set EPICOR_ENV=prod
+dotnet run --project EpicorSvcDemo
+```
+
+`DefaultEnvironment` also accepts a **literal URL** when none of the named environments fit — handy for a one-off connection to a sandbox or someone else's server without permanently adding it to the `Env*` table:
+
+```
+set EPICOR_ENV=https://other-pilot.example.com/server
+```
+
+You can also pass the override directly to `EpicorClient`'s constructor, scoping it to one block of code without touching config at all:
+
+```csharp
+using (var client = new EpicorClient("prod"))   // one-time override, equivalent to EPICOR_ENV=prod
+{
+    /* ... */
+}
+```
 
 ### `FileHandling/App.config`
 
-Only needed if you use the email / file-handling helpers.
+Only needed if you use the email helpers.
 
 | Setting | Purpose |
 |---|---|
 | `FromEmail` | Default `From:` address on outbound mail. |
-| `DeveloperEmail` | Used as the default BCC and as the sole recipient when `EmailSpecs.IsDebug = true`. Set this to your own address so test runs don't email customers. |
+| `DeveloperEmail` | Default BCC, and the sole recipient when `EmailSpecs.IsDebug = true`. Set this to your own address so test runs don't email customers. |
 | `GroupEmail` | Optional broader distribution list. |
 | `SMTPHost` | SMTP relay host or IP. The current implementation uses port 25, no SSL, no auth. |
 
@@ -104,7 +168,7 @@ set EPICOR_USER=your_epicor_user
 set EPICOR_PASS=...
 set EPICOR_COMPANY=EPIC01
 set EPICOR_ENV=prod
-set EPICOR_ENV_LIVE=https://erp.example.com/ERP_Prod
+set EPICOR_ENV_LIVE=https://company-live.example.com/server
 ```
 
 The framework reads env vars first and falls back to `App.config`. Anything set in the environment wins.
@@ -117,100 +181,89 @@ The framework validates settings on the first service construction. If anything 
 
 ## Using the library
 
-### Construct a service
+### The `EpicorClient` facade
 
-Every Epicor service has three constructors, in order of how much control you want:
-
-```csharp
-var svc1 = new BAQSvc();              // Pulls everything from App.config / env vars
-var svc2 = new BAQSvc("prod");        // Override the environment only
-var svc3 = new BAQSvc(sessionKey);    // Fully programmatic, e.g. for multi-tenant
-```
-
-### Run a BAQ
+`EpicorClient` is a disposable wrapper that holds one configured session and lazy-constructs each Epicor service on first access. It's the recommended entry point — one connection, many services, all disposed together.
 
 ```csharp
-var baq = new BAQSvc();
-JObject result = baq.BAQResults("MyCompany_OpenPOs_BAQ");
-if (result["ErrorMessage"] != null)
+using (var client = new EpicorClient("pilot"))      // env override; null/omitted = config default
 {
-    Console.WriteLine($"BAQ failed: {result["ErrorMessage"]}");
-    return;
+    var customers = await client.Customer.GetListAsync("Inactive = false");
+    var parts     = await client.Part.PartsAsync(top: 10);
+    var order     = await client.SalesOrder.GetByIDAsync(orderNum: 12345);
+    // …all services disposed here
 }
-JArray rows = result["value"].ToObject<JArray>();
 ```
 
-With parameters (strings auto-quoted, numerics left bare):
+Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDX`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `Quote`, `SalesOrder`.
+
+Direct service construction (`new BAQSvc()`, etc.) still works for one-off, short-lived usage — useful in scripts and tests. The facade is additive, not a replacement.
+
+For advanced scenarios (multi-tenant servers, sessions from a vault, programmatic credentials) construct a session yourself and hand it to the client:
 
 ```csharp
-JObject result = baq.BAQResults("MyCompany_PartsByPlant_BAQ", new Dictionary<string, dynamic> {
-    { "Plant", "MAIN" },
-    { "OnHandQty_gt", 0 }
-});
-```
-
-### Create a sales order
-
-```csharp
-var sales = new SalesOrderSvc();
-JObject order = sales.NewOrder(
-    CustID:     "CUST001",
-    NeedByDate: DateTime.Today.AddDays(14),
-    PONum:      "PO-99887"
-);
-int newOrderNum = (int)order["ds"]["OrderHed"][0]["OrderNum"];
-```
-
-### Move inventory (with optional serial tracking)
-
-```csharp
-var inv = new InvTransferSvc();
-JObject result = inv.MoveInventory(new InvTransfer {
-    PartNum      = "WIDGET-42",
-    TransferQty  = 1,
-    FromBinNum   = "Main",
-    ToBinNum     = "Staging",
-    SerialNumber = "SN-0042"   // only required if the part is serial-tracked
-});
-```
-
-### Generate a report and email it
-
-```csharp
-var baq = new BAQSvc();
-JObject baqResult = baq.BAQResults("My_Report_BAQ");
-JArray  rows      = baqResult["value"]?.ToObject<JArray>() ?? new JArray();
-string  error     = baqResult["ErrorMessage"]?.ToString();
-
-var columnMap = new Dictionary<string, string> {
-    { "Customer_CustID", "Customer ID" },
-    { "Customer_Name",   "Customer" },
-    { "RowIdent",        "REMOVE_COLUMN" }   // drops the column from the report
+var session = new RESTSessionKey
+{
+    Company = "EPIC01",
+    Environment = "https://company-pilot.example.com/server",
+    AuthObject = new RESTAuthenticationObject { Username = "...", Userkey = "..." }
 };
 
-FileProcessing.EmailDataReport(new EMailMeta {
-    From                 = "epicor@example.com",
-    To                   = "recipient@example.com",
-    RecipientName        = "Jim",
-    ExcelSheetName       = "Open POs",
-    AttachmentName       = "OpenPOs_Report",
-    AttachmentType       = "xlsx",            // or "csv"
-    AttachmentDateFormat = "yyyy-MM-dd",      // "none" to omit the date suffix
-    AttachmentHeaderMap  = columnMap,
-    AttachmentData       = rows,
-    Error                = error
-});
+using (var client = new EpicorClient(session)) { /* ... */ }
 ```
 
-For the full surface area, see `USER_GUIDE.md`.
+### The `OperationResult<T>` pattern
 
----
+Every service call returns an `OperationResult<T>`. Always check `IsSuccess` (or `IsFailure`) before reading `Value`.
 
-## Documentation
+```csharp
+var result = await client.Customer.GetByIDAsync("CUST001");
 
-- **`USER_GUIDE.md`** — How to use every service in the library, with worked examples.
-- **`RELEASE_NOTES.md`** — Capabilities by domain, known limitations, build notes.
-- **`CLEANUP_RECOMMENDATIONS.md`** — Open improvement ideas and known issues.
+if (result.IsFailure)
+{
+    Console.WriteLine($"Failed: {result.ErrorMessage}");
+    if (result.StatusCode.HasValue)
+        Console.WriteLine($"  HTTP {result.StatusCode}");
+    return;
+}
+
+Customer cust = result.Value;
+Console.WriteLine($"{cust.CustID} — {cust.Name}");
+```
+
+On a failure, `Value` returns `default(T)` rather than throwing — so the check is mandatory, not nominal.
+
+The `OperationResult` also carries:
+- `StatusCode` — HTTP status (when applicable)
+- `ResourcePath` — which BO path was called (useful for logging)
+- `RawResponse` — the underlying `JObject`, an escape hatch for columns the typed DTO doesn't model
+- `Exception` — the underlying exception on transport-level failures
+
+### Naming conventions
+
+A few conventions hold across the library:
+
+- **Every call is async.** Methods end in `Async` and return `Task<OperationResult<T>>`. Always `await` them.
+- **Services are split into two files.** `*Svc.cs` holds thin wrappers around individual Epicor BO calls. `*Svc.Workflows.cs` holds orchestrators — methods that compose multiple BO calls into one operation (e.g. `SalesOrderSvc.NewOrderAsync` calls `GetNewOrderHed` → `ChangeOrderHedCustomerCustID` → `MasterUpdate`). You don't have to know which file a method lives in to use it; the split is for contributors. Both files declare the same `public partial class`.
+- **DTO naming reflects what the DTO is.** A class named after an Epicor table (`Customer`, `Part`, `OrderHed`) corresponds to that real table. A class with the `Dataset` suffix (`InvTransferDataset`, `GroupUnLockDataset`) faithfully mirrors an Epicor transaction-input shape that spans tables. A class with the `Input` suffix (`QuoteInput`, `MiscShipLineInput`, `ECOMtlInput`) is a caller-facing convenience shape — a reshaped subset for one of the orchestrators.
+- **`_c` columns are stripped.** Default DTOs contain only standard Epicor columns. Per-installation custom columns (Epicor's `_c` suffix convention) are not modeled — they're installation-specific by definition and don't belong in a shared library DTO. The standard user-defined columns (`Character01`, `ShortChar01`, `Number01`, `CheckBox01`, etc.) are retained, since they exist on every install. If you need access to a `_c` column, use `result.RawResponse`.
+
+### Worked examples
+
+For per-service worked examples — running BAQs with parameters, creating orders, the `UDRow` column-legend convention, the `GetRowsAsync<T>` projection pattern for typed BO list calls — see [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md).
+
+For runnable examples, the `EpicorSvcPOCs` project has four labeled scenarios:
+
+```
+dotnet run --project EpicorSvcPOCs
+```
+
+Reads run safely against your configured environment. Write operations (UDX upsert, SalesOrder create) are **gated** — they dry-run by default, printing the exact payload they *would* send. To arm writes for a session:
+
+```
+set KERI_POC_ALLOW_WRITES=true
+dotnet run --project EpicorSvcPOCs
+```
 
 ---
 
@@ -219,34 +272,53 @@ For the full surface area, see `USER_GUIDE.md`.
 ```
 KineticRESTIntegrator/
 ├── KineticRESTIntegrator.sln
-├── LICENSE
-├── README.md                    (this file)
+├── LICENSE                          Apache License 2.0
+├── NOTICE                           Apache 2.0 attribution
+├── README.md                        (this file)
+├── EXAMPLES_EPICOR.md               Per-service worked examples
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── CLEANUP_RECOMMENDATIONS.md
 ├── .gitignore
-├── .gitattributes
 │
-├── RESTServices/                Low-level REST transport
-│   ├── RESTConnect.cs
-│   ├── RESTRestSharp.cs
+├── RESTServices/                    Low-level REST transport
+│   ├── Authentication/              RESTSessionKey, RESTAuthenticationObject
+│   ├── Transport/                   RESTConnect (HttpClient-based)
 │   └── RESTServices.csproj
 │
-├── EpicorSvcs/                  Business Object wrappers
-│   ├── App.config.template      ← copy to App.config and edit
-│   ├── EpicorSvc.cs             (base class — credential validation lives here)
-│   ├── BAQSvc.cs
-│   ├── SalesOrderSvc.cs
-│   ├── ... (~20 services)
+├── EpicorSvcs/                      Business Object wrappers
+│   ├── App.config.template          ← copy to App.config and edit
+│   ├── EpicorSvc.cs                 (base class — credential validation)
+│   ├── EpicorClient.cs              (the disposable facade)
+│   ├── OperationResult.cs           (the standard return type)
+│   ├── Dtos/                        ~40 typed DTOs
+│   ├── Sales/                       QuoteSvc, SalesOrderSvc
+│   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
+│   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
+│   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
+│   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDXSvc, UserCodesSvc
+│   ├── AR/                          PayMethodSvc, PaymentEntrySvc
 │   └── EpicorSvcs.csproj
 │
-├── FileHandling/                Excel, CSV, email
-│   ├── App.config.template      ← copy to App.config and edit
+├── FileHandling/                    Excel, CSV, email
+│   ├── App.config.template          ← copy to App.config and edit
 │   ├── ExcelParser.cs
 │   ├── Emailer.cs
 │   ├── FileProcessing.cs
 │   └── FileHandling.csproj
 │
-└── EpicorSvcDemo/               Sample console app
-    ├── Program.cs
-    └── EpicorSvcDemo.csproj
+├── EpicorSvcDemo/                   End-to-end sample app
+│   ├── Program.cs
+│   └── EpicorSvcDemo.csproj
+│
+├── EpicorSvcPOCs/                   Per-service runnable examples
+│   ├── Program.cs
+│   ├── PocConfig.cs                 (the write-gate)
+│   ├── UserCodesPoc.cs, PartPoc.cs, UdxPoc.cs, SalesOrderPoc.cs
+│   └── EpicorSvcPOCs.csproj
+│
+└── KineticRESTIntegrator.Tests/     xUnit unit tests (offline, deterministic)
+    └── KineticRESTIntegrator.Tests.csproj
 ```
 
 ---
@@ -256,26 +328,42 @@ KineticRESTIntegrator/
 | Symptom | Likely cause |
 |---|---|
 | `InvalidOperationException: EpicorSvcs is not configured...` | You haven't copied `App.config.template` → `App.config`, or you left `YOUR_*` placeholders in place. The exception lists what's missing. |
-| HTTP 401 in the `ErrorMessage` field | Bad username/passkey, account disabled, or wrong environment URL. |
-| HTTP 404 in the `ErrorMessage` field | Wrong BO name, wrong company segment in the URL, or a BAQ was renamed/deleted. |
+| `result.IsFailure` with HTTP 401 | Bad username/passkey, account disabled, or wrong environment URL. |
+| `result.IsFailure` with HTTP 404 | Wrong BO name, wrong company segment in the URL, or a record/BAQ was renamed/deleted. |
+| `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 — the type is `DateTime?` and accommodates this. |
 | `pcNeqQtyAction = "Stop"` on inventory transfer | The move would create negative on-hand. Check source bin quantity. |
 | Excel file is empty (`EMPTY_DATASET`) | `AttachmentData` was null. The framework treats this as a no-data case and emails the error message instead of an attachment. |
 | Email never arrives | SMTP host unreachable, port 25 blocked, or the relay requires auth (the current code provides none). Check `EmailError` in the returned `EmailSpecs`. |
-| Build fails: `error MSB3245: Could not resolve this reference` | Stale absolute `HintPath` references in `EpicorSvcs.csproj` — see `CLEANUP_RECOMMENDATIONS.md` §2. |
+| `KineticRESTIntegrator.Tests` fails on first run | First run pulls xUnit/test-SDK packages from NuGet — slow, ~30s, network required. Subsequent runs are fast and offline. |
+
+---
+
+## Tests
+
+The library has a real test project. From the command line:
+
+```
+dotnet test KineticRESTIntegrator.Tests
+```
+
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDXSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 52 tests, all green.
+
+Test Explorer in Visual Studio also discovers and runs them.
 
 ---
 
 ## Contributing
 
-Before sending a pull request:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
 
-1. Don't commit `App.config` — use `App.config.template` for any new settings.
-2. Don't commit secrets, internal URLs, real email addresses, or customer-specific data.
-3. Match the existing code style.
-4. Add or update XML doc comments (`///`) on any new public method.
+1. **Never commit `App.config`** — it has credentials. Use `App.config.template` for any new settings.
+2. **Never commit secrets, internal URLs, real email addresses, or customer-specific data** in source files, tests, or examples.
+3. **Match the existing code style.** Async-with-`Async`-suffix, `OperationResult<T>` returns, XML doc comments on every public method, no `_c` columns in default DTOs.
 
 ---
 
 ## License
 
-MIT — see `LICENSE`.
+Licensed under the Apache License, Version 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Copyright © 2025–2026 Justin Grant.
