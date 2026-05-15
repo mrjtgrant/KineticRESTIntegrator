@@ -47,9 +47,13 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Date20_AlwaysSerializes_EvenThoughOtherDatesDoNot()
         {
-            // Date20 is the deliberate exception: it is a non-nullable
-            // DateTime defaulting to DateTime.Now, and is always sent. It is
-            // the reserved "transaction timestamp" column.
+            // Date20 is the deliberate exception: it is nullable (DateTime?)
+            // like the other Date columns, but it carries no
+            // [JsonProperty(NullValueHandling.Ignore)] attribute and defaults
+            // to DateTime.Now at construction — so a fresh UDRow always
+            // serializes Date20 with a real value. It is the reserved
+            // "transaction timestamp" column. The nullability accommodates
+            // legacy rows read from Epicor that predate the convention.
             var row = new UDRow();
 
             JObject json = JObject.FromObject(row);
@@ -91,13 +95,16 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Date20_DefaultsToApproximatelyNow()
         {
-            // Date20 defaults to DateTime.Now at construction. We can't assert
-            // an exact instant, but it should be very recent.
+            // Date20 defaults to DateTime.Now at construction. The property
+            // is nullable (DateTime?) to accommodate legacy Epicor rows that
+            // predate the convention, but a freshly-constructed UDRow always
+            // carries a value — never null.
             var before = DateTime.Now.AddSeconds(-5);
             var row = new UDRow();
             var after = DateTime.Now.AddSeconds(5);
 
-            Assert.InRange(row.Date20, before, after);
+            Assert.NotNull(row.Date20);
+            Assert.InRange(row.Date20.Value, before, after);
         }
 
         [Fact]
@@ -122,7 +129,7 @@ namespace KineticRESTIntegrator.Tests
             {
                 Key1 = "PRINTED_PACKSLIP_LOG",
                 Key2 = "PACK-00123",
-                ShortChar01 = "WIDGET-42",
+                ShortChar01 = "EXAMPLE-PART",
                 Number01 = 99.5,
                 CheckBox01 = true,
                 Date05 = new DateTime(2026, 1, 31)
@@ -133,7 +140,7 @@ namespace KineticRESTIntegrator.Tests
 
             Assert.Equal("PRINTED_PACKSLIP_LOG", restored.Key1);
             Assert.Equal("PACK-00123", restored.Key2);
-            Assert.Equal("WIDGET-42", restored.ShortChar01);
+            Assert.Equal("EXAMPLE-PART", restored.ShortChar01);
             Assert.Equal(99.5, restored.Number01);
             Assert.True(restored.CheckBox01);
             Assert.Equal(new DateTime(2026, 1, 31), restored.Date05);

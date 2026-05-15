@@ -38,6 +38,19 @@ namespace EpicorSvcPOCs
                 Console.WriteLine($"  FAILED: {allCodes.ErrorMessage}");
                 if (allCodes.StatusCode.HasValue)
                     Console.WriteLine($"  HTTP {allCodes.StatusCode}");
+
+                // If Epicor said "no such code type," that's an install-specific
+                // setup issue, not a Keri problem. Point the user at the fix.
+                if (allCodes.StatusCode == 404 ||
+                    (allCodes.ErrorMessage ?? "").IndexOf("not found", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine($"  → '{SampleCodeType}' is not a UDCodeType on this Epicor install.");
+                    Console.WriteLine("    UDCodeType IDs are user-defined per installation. To run this");
+                    Console.WriteLine("    POC, change SampleCodeType in UserCodesPoc.cs to a code type");
+                    Console.WriteLine("    that exists on your server (check User Codes Maintenance in");
+                    Console.WriteLine("    Epicor for the list).");
+                }
                 return;  // bail out — nothing more this POC can do
             }
 

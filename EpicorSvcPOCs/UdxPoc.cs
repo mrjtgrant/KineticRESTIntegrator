@@ -123,9 +123,9 @@ namespace EpicorSvcPOCs
                 Key1 = DemoRowIndicator,
                 Key2 = "DEMO-" + DateTime.Now.ToString("yyyyMMddHHmmss"),
                 Character10 = built,                    // the legend we just built
-                ShortChar01 = "WIDGET-42",              // → "PartNum"
-                ShortChar02 = "MAIN",                   // → "WarehouseCode"
-                Number01 = 17d,                         // → "QtyOnHand"
+                ShortChar01 = "EXAMPLE-PART",           // → "PartNum"
+                ShortChar02 = "EXAMPLE-WHSE",           // → "WarehouseCode"
+                Number01 = 1d,                          // → "QtyOnHand"
                 CheckBox01 = true                       // → "WasCounted"
                 // Date20 and CheckBox20 use their reserved defaults
                 // (DateTime.Now and true) — see UDRow.Date20 remarks.

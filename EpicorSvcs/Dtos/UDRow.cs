@@ -429,7 +429,8 @@ namespace EpicorSvcs.Dtos
         /// explicitly before the call. The framework does not enforce this.
         /// </para>
         /// </summary>
-        public DateTime Date20 { get; set; } = DateTime.Now;
+        /// 
+        public DateTime? Date20 { get; set; } = DateTime.Now;
 
         #endregion
 

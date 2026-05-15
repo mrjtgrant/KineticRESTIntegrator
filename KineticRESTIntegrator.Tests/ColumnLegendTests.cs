@@ -185,13 +185,13 @@ namespace KineticRESTIntegrator.Tests
             var row = new UDRow
             {
                 Character10 = "ShortChar02:PartNum|Number05:OnHandQty",
-                ShortChar02 = "WIDGET-42",
+                ShortChar02 = "EXAMPLE-PART",
                 Number05 = 17d
             };
 
             Dictionary<string, string> mapped = row.ToMappedValues();
 
-            Assert.Equal("WIDGET-42", mapped["PartNum"]);
+            Assert.Equal("EXAMPLE-PART", mapped["PartNum"]);
             Assert.Equal("17", mapped["OnHandQty"]);
         }
 
