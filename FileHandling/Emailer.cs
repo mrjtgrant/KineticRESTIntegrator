@@ -25,7 +25,7 @@ namespace FileHandling
                 IsBodyHtml = true,
             };
 
-            if (!String.IsNullOrEmpty(report.FileAddress) && report.FileAddress != "EMPTY_DATASET")
+            if (!String.IsNullOrEmpty(report.FileAddress))
             {
                 // Create  the file attachment for this email message.
                 Attachment data = new Attachment(report.FileAddress, MediaTypeNames.Application.Octet);

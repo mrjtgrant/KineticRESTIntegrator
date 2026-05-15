@@ -343,7 +343,7 @@ KineticRESTIntegrator/
 | `result.IsFailure` with HTTP 404 | Wrong BO name, wrong company segment in the URL, or a record/BAQ was renamed/deleted. |
 | `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 — the type is `DateTime?` and accommodates this. |
 | `pcNeqQtyAction = "Stop"` on inventory transfer | The move would create negative on-hand. Check source bin quantity. |
-| Excel file is empty (`EMPTY_DATASET`) | `AttachmentData` was null. The framework treats this as a no-data case and emails the error message instead of an attachment. |
+| Email arrives with no attachment, only the error message in the body | `AttachmentData` was null or `Error` was set on the `EMailMeta`. The framework treats either as a no-data case and emails the error message instead of an attachment. |
 | Email never arrives | SMTP host unreachable, port 25 blocked, or the relay requires auth (the current code provides none). Check `EmailError` in the returned `EmailSpecs`. |
 | `KineticRESTIntegrator.Tests` fails on first run | First run pulls xUnit/test-SDK packages from NuGet — slow, ~30s, network required. Subsequent runs are fast and offline. |
 

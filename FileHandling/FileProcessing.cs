@@ -32,12 +32,12 @@ namespace FileHandling
 
                 if(!String.IsNullOrEmpty(mailMeta.Error))
                 {
-                    EmailSpecs.FileAddress = "EMPTY_DATASET"; 
+                    EmailSpecs.FileAddress = null;
                     EmailSpecs.EmailError = mailMeta.Error; 
                     EmailSpecs.EmailBody = mailMeta.Error;
                 }
 
-                if(EmailSpecs.FileAddress == "EMPTY_DATASET")
+                if(string.IsNullOrEmpty(EmailSpecs.FileAddress))
                 {
                     steplist.Add("3 No Data to Report");
                 }
@@ -88,7 +88,7 @@ namespace FileHandling
             string tempFilePath = Path.Combine(Path.GetTempPath(), filename);
 
             if (data == null)
-                return "EMPTY_DATASET"; 
+                return null;
 
             DataTable dt = (DataTable)JsonConvert.DeserializeObject(data.ToString(Formatting.None), (typeof(DataTable)));
 

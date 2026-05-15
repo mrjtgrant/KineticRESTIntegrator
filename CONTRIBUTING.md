@@ -112,7 +112,7 @@ The convention exists so a contributor or user running the POCs against a real e
 
 - One thing per PR. A bug fix, a feature, a doc update — not a mix.
 - Short description: what changed, and why. Link the issue if there is one.
-- The build must pass and the tests must stay green. CI may be added in a future release ([CLEANUP_RECOMMENDATIONS.md](CLEANUP_RECOMMENDATIONS.md) #6); in the meantime, please run `dotnet build` and `dotnet test` locally before opening the PR.
+- The build must pass and the tests must stay green. CI may be added in a future release ([CLEANUP_RECOMMENDATIONS.md](CLEANUP_RECOMMENDATIONS.md) #4); in the meantime, please run `dotnet build` and `dotnet test` locally before opening the PR.
 - If you change a public API, update the relevant XML doc and any examples in `EXAMPLES_EPICOR.md` that reference it.
 - If you fix a bug listed in `CLEANUP_RECOMMENDATIONS.md`, move the entry to the *Recently addressed* section in the same PR.
 
