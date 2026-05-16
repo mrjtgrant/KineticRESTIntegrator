@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>FileHandling</RootNamespace>
     <AssemblyName>FileHandling</AssemblyName>
@@ -34,8 +34,11 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="System.Configuration" />
+  <!-- System.Configuration.ConfigurationManager: makes Properties.Settings.Default.X
+       and App.config file loading work on .NET 6+, matching the behavior provided
+       by the built-in System.Configuration assembly on .NET Framework. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
