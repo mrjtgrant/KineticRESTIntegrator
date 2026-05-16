@@ -66,17 +66,52 @@
 			</setting>
 
 			<!-- SMTP relay host or IP address.
-			     The current Emailer implementation connects on PORT 25
-			     with NO SSL and NO authentication, so this must be an
-			     internal/anonymous relay reachable from where the code
-			     runs. Examples:
+			     Examples:
 			       smtp.example.com
 			       mail.internal.example.com
 			       10.0.0.25
-			     If your relay requires TLS or auth, see Emailer.cs —
-			     the current code does not support either. -->
+			     For the default configuration (anonymous relay on
+			     port 25 with no TLS), set this and leave the four
+			     SMTP* settings below at their defaults. -->
 			<setting name="SMTPHost" serializeAs="String">
 				<value>YOUR_SMTP_HOST</value>
+			</setting>
+
+			<!-- SMTP port. Default is 25 (anonymous relay convention).
+			     Modern setups use 587 (STARTTLS with auth). -->
+			<setting name="SMTPPort" serializeAs="String">
+				<value>25</value>
+			</setting>
+
+			<!-- Enable TLS for the SMTP connection.
+			     - False (default): plain connection, no TLS - required
+			       for legacy anonymous port-25 relays.
+			     - True: STARTTLS - connect plain, upgrade to TLS. Use
+			       port 587 (the modern STARTTLS convention).
+			     Misconfigurations rejected with a clear error in
+			     EmailSpecs.EmailError:
+			     - Port 25 + SMTPEnableSsl=True (port 25 is plain-text)
+			     - Port 465 + SMTPEnableSsl=True (implicit TLS is not
+			       supported by this library - use port 587 instead). -->
+			<setting name="SMTPEnableSsl" serializeAs="String">
+				<value>False</value>
+			</setting>
+
+			<!-- SMTP authentication username. Leave empty for anonymous
+			     relays. When set, the connection authenticates with
+			     SMTPUsername / SMTPPassword. -->
+			<setting name="SMTPUsername" serializeAs="String">
+				<value />
+			</setting>
+
+			<!-- SMTP authentication password.
+			     WARNING: stored in plain text in App.config. For
+			     production deployments, prefer the environment-variable
+			     override mechanism (SMTP_ prefix) or another secure
+			     credential store rather than committing a password
+			     into a config file on disk. -->
+			<setting name="SMTPPassword" serializeAs="String">
+				<value />
 			</setting>
 		</FileHandling.Properties.Settings>
 	</userSettings>

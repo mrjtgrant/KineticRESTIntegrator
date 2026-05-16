@@ -344,7 +344,7 @@ KineticRESTIntegrator/
 | `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 — the type is `DateTime?` and accommodates this. |
 | `pcNeqQtyAction = "Stop"` on inventory transfer | The move would create negative on-hand. Check source bin quantity. |
 | Email arrives with no attachment, only the error message in the body | `AttachmentData` was null or `Error` was set on the `EMailMeta`. The framework treats either as a no-data case and emails the error message instead of an attachment. |
-| Email never arrives | SMTP host unreachable, port 25 blocked, or the relay requires auth (the current code provides none). Check `EmailError` in the returned `EmailSpecs`. |
+| Email never arrives | SMTP host unreachable, port blocked, or auth failed. By default the library connects anonymously on port 25 with no TLS; for relays that require auth or TLS, set `SMTPPort=587`, `SMTPEnableSsl=true`, `SMTPUsername`, and `SMTPPassword` in `App.config`. Port 25 + TLS and port 465 (implicit TLS) are rejected as misconfigurations — use port 587 with STARTTLS instead. Check `EmailError` in the returned `EmailSpecs` for the underlying exception message. |
 | `KineticRESTIntegrator.Tests` fails on first run | First run pulls xUnit/test-SDK packages from NuGet — slow, ~30s, network required. Subsequent runs are fast and offline. |
 
 ---

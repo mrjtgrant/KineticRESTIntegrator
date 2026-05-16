@@ -41,6 +41,15 @@
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
   </ItemGroup>
 
+  <!-- MailKit 4.16.0+ for SMTP on .NET 6+. The net48 build uses
+       System.Net.Mail.SmtpClient (BCL) instead - MailKit 4.x dropped
+       .NET Framework support, and the only net48-compatible MailKit (3.x)
+       has an unpatched STARTTLS-Response-Injection CVE (GHSA-9j88-vvj5-vhgr).
+       Using System.Net.Mail on net48 avoids that CVE entirely. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="MailKit" Version="4.16.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
     <ProjectReference Include="..\RESTServices\RESTServices.csproj" />

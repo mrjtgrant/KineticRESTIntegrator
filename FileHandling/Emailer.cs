@@ -1,92 +1,236 @@
-﻿
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Net.Mail;
-using System.Net.Mime;
 using System.Text;
-using DocumentFormat.OpenXml.Spreadsheet;
 using EpicorSvcs;
 using Newtonsoft.Json.Linq;
-using ContentDisposition = System.Net.Mime.ContentDisposition;
+
+#if NET48
+using System.Net;
+using System.Net.Mail;
+#else
+using MailKit.Net.Smtp;
+using MailKit.Security;
+using MimeKit;
+#endif
 
 namespace FileHandling
 {
+    /// <summary>
+    /// Sends emails via SMTP. Uses <see cref="System.Net.Mail.SmtpClient"/> on
+    /// .NET Framework 4.8 and <see cref="MailKit.Net.Smtp.SmtpClient"/> on
+    /// .NET 8+. The implementation choice is invisible to callers — the same
+    /// configurations behave the same way on both targets. Default behavior is
+    /// anonymous, no TLS, port 25 — suitable for internal relays. Auth and
+    /// STARTTLS are opt-in via the <c>SMTPUsername</c>, <c>SMTPPassword</c>,
+    /// <c>SMTPPort</c>, and <c>SMTPEnableSsl</c> settings.
+    /// </summary>
     public class Emailer
     {
-        public static EmailSpecs DotNetEmail(EmailSpecs report)
+        /// <summary>
+        /// Sends a single email described by <paramref name="report"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Configuration validation runs before any work — if the SMTP settings
+        /// are inconsistent (e.g. <c>SMTPEnableSsl=true</c> with port 25, or
+        /// port 465 on .NET Framework), the call returns immediately with
+        /// <see cref="EmailSpecs.EmailError"/> set and no message constructed.
+        /// </para>
+        /// <para>
+        /// On send failure, the exception message is stored in
+        /// <see cref="EmailSpecs.EmailError"/> and the call returns normally —
+        /// callers should inspect <c>EmailError</c> on the returned object.
+        /// </para>
+        /// </remarks>
+        /// <param name="report">The email to send.</param>
+        /// <returns>The same <see cref="EmailSpecs"/>, with
+        /// <see cref="EmailSpecs.EmailError"/> set on failure.</returns>
+        public static EmailSpecs Send(EmailSpecs report)
         {
-            var mailMessage = new MailMessage
+            // ----- Validation: fail fast before any message construction -----
+            string validationError = ValidateSmtpConfig(report.smtpspecs);
+            if (validationError != null)
             {
-                From = new MailAddress(report.EmailFrom ?? report.smtpspecs.acct),
-                Subject = report.EmailSubject,
-                Body = emailbody(report),
-                IsBodyHtml = true,
-            };
-
-            if (!String.IsNullOrEmpty(report.FileAddress))
-            {
-                // Create  the file attachment for this email message.
-                Attachment data = new Attachment(report.FileAddress, MediaTypeNames.Application.Octet);
-                // Add time stamp information for the file.
-                ContentDisposition disposition = data.ContentDisposition;
-                disposition.CreationDate = System.IO.File.GetCreationTime(report.FileAddress);
-                disposition.ModificationDate = System.IO.File.GetLastWriteTime(report.FileAddress);
-                disposition.ReadDate = System.IO.File.GetLastAccessTime(report.FileAddress);
-                // Add the file attachment to this email message.
-                mailMessage.Attachments.Add(data);
+                report.EmailError = validationError;
+                return report;
             }
 
-            using (var smtpClient = new SmtpClient(report.smtpspecs.host)
+            string fromAddress = report.EmailFrom ?? report.smtpspecs.acct;
+
+#if NET48
+            // ===== .NET Framework path: System.Net.Mail =====
+            try
             {
-                Port = 25,
-                EnableSsl = false,
-            })
+                using (var message = new MailMessage())
+                using (var client = new SmtpClient(report.smtpspecs.host, report.smtpspecs.port))
+                {
+                    message.From = new MailAddress(fromAddress);
+
+                    if (report.IsDebug)
+                    {
+                        foreach (string emailto in report.EmailRecipientDefault)
+                            if (IsRoutableAddress(emailto))
+                                message.To.Add(emailto);
+                    }
+                    else
+                    {
+                        if (report.EmailRecipients != null)
+                            foreach (string emailto in report.EmailRecipients)
+                                if (IsRoutableAddress(emailto))
+                                    message.To.Add(emailto);
+
+                        foreach (string emailbcc in report.EmailRecipientDefault)
+                            if (IsRoutableAddress(emailbcc))
+                                message.Bcc.Add(emailbcc);
+
+                        if (report.EmailCCRecipients != null)
+                            foreach (string emailcc in report.EmailCCRecipients)
+                                if (IsRoutableAddress(emailcc))
+                                    message.CC.Add(emailcc);
+
+                        if (report.EmailBCCRecipients != null)
+                            foreach (string emailbcc in report.EmailBCCRecipients)
+                                if (IsRoutableAddress(emailbcc))
+                                    message.Bcc.Add(emailbcc);
+                    }
+
+                    message.Subject = report.EmailSubject;
+                    message.Body = emailbody(report);
+                    message.IsBodyHtml = true;
+
+                    if (!String.IsNullOrEmpty(report.FileAddress))
+                    {
+                        message.Attachments.Add(new Attachment(report.FileAddress));
+                    }
+
+                    client.EnableSsl = report.smtpspecs.enableSsl;
+
+                    if (!String.IsNullOrEmpty(report.smtpspecs.username))
+                    {
+                        client.Credentials = new NetworkCredential(
+                            report.smtpspecs.username,
+                            report.smtpspecs.password);
+                    }
+
+                    client.Send(message);
+                }
+            }
+            catch (Exception e)
             {
+                report.EmailError = e.Message;
+            }
+#else
+            // ===== .NET 8+ path: MailKit =====
+            try
+            {
+                var message = new MimeMessage();
+                message.From.Add(MailboxAddress.Parse(fromAddress));
+
                 if (report.IsDebug)
                 {
                     foreach (string emailto in report.EmailRecipientDefault)
-                        mailMessage.To.Add(emailto);
+                        if (IsRoutableAddress(emailto))
+                            message.To.Add(MailboxAddress.Parse(emailto));
                 }
                 else
                 {
-                    foreach (string emailto in report.EmailRecipients)
-                        mailMessage.To.Add(emailto);
+                    if (report.EmailRecipients != null)
+                        foreach (string emailto in report.EmailRecipients)
+                            if (IsRoutableAddress(emailto))
+                                message.To.Add(MailboxAddress.Parse(emailto));
 
                     foreach (string emailbcc in report.EmailRecipientDefault)
-                    {
-                        if (string.IsNullOrWhiteSpace(emailbcc)) continue;
-                        if (!emailbcc.Contains("@")) continue;
-                        // Skip obvious template placeholders
-                        if (emailbcc.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase)) continue;
-
-                        mailMessage.Bcc.Add(emailbcc);
-                    }
+                        if (IsRoutableAddress(emailbcc))
+                            message.Bcc.Add(MailboxAddress.Parse(emailbcc));
 
                     if (report.EmailCCRecipients != null)
-                    foreach (string emailcc in report.EmailCCRecipients)
-                        mailMessage.CC.Add(emailcc);
+                        foreach (string emailcc in report.EmailCCRecipients)
+                            if (IsRoutableAddress(emailcc))
+                                message.Cc.Add(MailboxAddress.Parse(emailcc));
 
                     if (report.EmailBCCRecipients != null)
-                        foreach (string emailcc in report.EmailBCCRecipients)
-                        mailMessage.Bcc.Add(emailcc);
+                        foreach (string emailbcc in report.EmailBCCRecipients)
+                            if (IsRoutableAddress(emailbcc))
+                                message.Bcc.Add(MailboxAddress.Parse(emailbcc));
                 }
 
+                message.Subject = report.EmailSubject;
 
-                try
+                var builder = new BodyBuilder { HtmlBody = emailbody(report) };
+                if (!String.IsNullOrEmpty(report.FileAddress))
                 {
-                    smtpClient.Send(mailMessage);
+                    builder.Attachments.Add(report.FileAddress);
                 }
-                catch (Exception e)
+                message.Body = builder.ToMessageBody();
+
+                // Pick the SecureSocketOptions. Validation already rejected port 25
+                // and port 465 with EnableSsl, so the choice is binary: plain or
+                // STARTTLS. The same rules apply on net48 via System.Net.Mail's
+                // EnableSsl flag.
+                SecureSocketOptions socketOptions = report.smtpspecs.enableSsl
+                    ? SecureSocketOptions.StartTls
+                    : SecureSocketOptions.None;
+
+                using (var client = new SmtpClient())
                 {
-                    report.EmailError = e.Message;
+                    client.Connect(report.smtpspecs.host, report.smtpspecs.port, socketOptions);
+
+                    if (!String.IsNullOrEmpty(report.smtpspecs.username))
+                    {
+                        client.Authenticate(report.smtpspecs.username, report.smtpspecs.password);
+                    }
+
+                    client.Send(message);
+                    client.Disconnect(true);
                 }
-
-
-            };
+            }
+            catch (Exception e)
+            {
+                report.EmailError = e.Message;
+            }
+#endif
 
             return report;
+        }
+
+        // Validates the SMTP configuration. Returns an error message if invalid,
+        // or null if the config is okay. Rules apply identically on both target
+        // frameworks — the library exposes the same SMTP capabilities everywhere,
+        // independent of whether System.Net.Mail or MailKit handles the connection.
+        private static string ValidateSmtpConfig(SmtpSettings smtp)
+        {
+            // Port 25 is the legacy plain-text relay convention. Servers on port 25
+            // typically don't speak STARTTLS, and never do implicit TLS.
+            if (smtp.port == 25 && smtp.enableSsl)
+            {
+                return "SMTP misconfiguration: port 25 with SMTPEnableSsl=true is not a "
+                     + "standard setup. Port 25 is the legacy plain-text relay convention. "
+                     + "For STARTTLS, use port 587.";
+            }
+
+            // Implicit TLS on port 465 is a fading convention that adds runtime
+            // complexity (System.Net.Mail can't do it at all). The library exposes
+            // STARTTLS as its single TLS path — modern, well-supported, identical
+            // behavior across both target frameworks.
+            if (smtp.port == 465 && smtp.enableSsl)
+            {
+                return "SMTP misconfiguration: port 465 (implicit TLS) is not supported "
+                     + "by this library. Use port 587 with STARTTLS instead.";
+            }
+
+            return null;
+        }
+
+        // Filter out null/empty addresses, anything without an @, and obvious
+        // template placeholders. Applied uniformly to all recipient lists.
+        private static bool IsRoutableAddress(string address)
+        {
+            if (string.IsNullOrWhiteSpace(address)) return false;
+            if (!address.Contains("@")) return false;
+            if (address.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
         }
 
         public static string emailbody(EmailSpecs mailitems)
@@ -148,11 +292,19 @@ namespace FileHandling
         internal SmtpSettings smtpspecs { get; set; } = new SmtpSettings();
     }
 
+    // Internal carrier for SMTP-connection parameters. Defaults pulled from
+    // FileHandling.Properties.Settings.Default (App.config + the env-var override
+    // mechanism documented in App.config.template). FileProcessing.EmailReport
+    // may override `host` for a single message; the other fields are not
+    // currently per-message overridable.
     class SmtpSettings
     {
         public string host { get; set; } = Properties.Settings.Default.SMTPHost;
         public string acct { get; set; } = Properties.Settings.Default.FromEmail;
-        public string pass { get; set; } = "";
+        public int port { get; set; } = Properties.Settings.Default.SMTPPort;
+        public bool enableSsl { get; set; } = Properties.Settings.Default.SMTPEnableSsl;
+        public string username { get; set; } = Properties.Settings.Default.SMTPUsername;
+        public string password { get; set; } = Properties.Settings.Default.SMTPPassword;
     }
 
     

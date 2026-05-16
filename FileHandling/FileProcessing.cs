@@ -59,7 +59,7 @@ namespace FileHandling
                     EmailSpecs.smtpspecs.host = mailMeta.SMTPHost;
 
 
-                var emailresult = JObject.FromObject(Emailer.DotNetEmail(EmailSpecs)).ToString();
+                var emailresult = JObject.FromObject(Emailer.Send(EmailSpecs)).ToString();
 
                 steplist.Add(emailresult);
 
