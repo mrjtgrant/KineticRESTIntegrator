@@ -90,15 +90,33 @@ namespace RESTServices
                 }
                 catch (TaskCanceledException ex)
                 {
-                    // Timeout (HttpClient surfaces timeouts as TaskCanceledException).
-                    return new JObject(new JProperty("ErrorMessage",
-                        $"Request timed out after {sesh.Timeout.TotalSeconds}s: {ex.Message}"));
+                    // With the OperationCanceledException-when-ct-cancelled catch above,
+                    // reaching here means a genuine timeout, not caller cancellation.
+                    // HttpClient surfaces timeouts as TaskCanceledException; the useful
+                    // detail is the configured timeout duration, not the (generic)
+                    // exception text. Append an inner TimeoutException only if present —
+                    // a plain "A task was canceled." inner adds noise, not signal.
+                    string detail = $"Request timed out after {sesh.Timeout.TotalSeconds}s";
+                    if (ex.InnerException is TimeoutException inner)
+                        detail += $" ({inner.Message})";
+
+                    return new JObject(new JProperty("ErrorMessage", detail));
                 }
                 catch (HttpRequestException ex)
                 {
-                    // Network failure, DNS, TLS handshake, etc.
+                    // HttpClient wraps the real cause (DNS failure, connection refused,
+                    // TLS error) in InnerException — sometimes nested. The top-level
+                    // message is a generic "An error occurred while sending the request."
+                    // Walk the chain so the actual cause surfaces.
+                    string detail = ex.Message;
+                    var inner = ex.InnerException;
+                    while (inner != null)
+                    {
+                        detail += $" -> {inner.Message}";
+                        inner = inner.InnerException;
+                    }
                     return new JObject(new JProperty("ErrorMessage",
-                        $"HTTP request failed: {ex.Message}"));
+                        $"HTTP request failed: {detail}"));
                 }
 
                 using (response)
