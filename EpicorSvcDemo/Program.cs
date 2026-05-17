@@ -1,11 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Security.Policy;
 using System.Threading.Tasks;
-using DocumentFormat.OpenXml.Drawing.Charts;
-using DocumentFormat.OpenXml.ExtendedProperties;
 using EpicorSvcs;
 using FileHandling;
+using FileHandling.Dtos;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 
@@ -15,27 +13,37 @@ namespace EpicorSvcDemo
     {
         static async Task Main(string[] args)
         {
-            string error = ""; 
-            // BAQSvc owns an HttpClient and must be disposed.
-            using (var epicor = new EpicorClient(/* OPTIONAL on the fly.. Example for allowing the user to pass credential through a web interface
-            new RESTSessionKey
+            string error = "";
+
+            // EpicorClient with no arguments loads its connection settings from
+            // App.config (or environment variables). Copy App.config.template to
+            // App.config and fill in your environment, company, and credentials.
+            //
+            // To connect programmatically instead — e.g. when credentials come
+            // from a web interface or are chosen at runtime — pass a configured
+            // RESTSessionKey:
+            //
+            //   new EpicorClient(new RESTSessionKey
+            //   {
+            //       Company     = "YOUR_COMPANY",
+            //       Environment = "https://your-epicor-host/your-app",
+            //       AuthObject  = new RESTAuthenticationObject
+            //       {
+            //           Username = "YOUR_USER",
+            //           Userkey  = "YOUR_PASSWORD",
+            //           ApiKey   = ""   // set ApiKey instead for v2 OData auth
+            //       }
+            //   })
+            //
+            // EpicorClient owns an HttpClient and must be disposed.
+            using (var epicor = new EpicorClient())
             {
-                Company = "YOUR_COMPANY",
-                Environment = "https://your_company.epicorsaas.com/server",
-                AuthObject = new RESTServices.RESTAuthenticationObject
-                {
-                    ApiKey = "", //leave blank if using Basic Auth (v1)
-                    Userkey = "",
-                    Username = "username"
-                }
-            }//IF NOT CONFIGURE HERE > Configure in APP.Config or ENVIRONMENT VARIABLES.. APP.Config useful for scheduled windows task  */
-            ))
-            {
-                var baqResult = await epicor.BAQ.BAQResultsAsync("BAQ_ID_BAQ").ConfigureAwait(false);
+                var baqResult = await epicor.BAQ.BAQResultsAsync("YOUR_BAQ_ID").ConfigureAwait(false);
 
                 if (baqResult.IsFailure)
                 {
                     error = $"BAQ failed: {baqResult.ErrorMessage}";
+                    Console.WriteLine(error);
                     return; 
                 }
 
@@ -55,11 +63,11 @@ namespace EpicorSvcDemo
 
                 var mailMeta = new EMailMeta
                 {
-                    From = "noreply@your_company.com",
-                    To = "jgrant@your_company.com",
+                    From = "reports@example.com",
+                    To = "recipient@example.com",
                     CC = "",
                     BCC = "",
-                    SMTPHost = "10.10.10.10",
+                    SMTPHost = "smtp.example.com",
                     RecipientName = recipientName,
                     ExcelSheetName = "EXAMPLE_REPORT",
                     AttachmentName = attachmentName,
