@@ -1,92 +1,18 @@
-﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.IO;
-using Newtonsoft.Json.Linq;
 using ClosedXML.Excel;
-using DocumentFormat.OpenXml.Spreadsheet;
 
 namespace FileHandling
 {
-    public class ExcelParser
+    /// <summary>
+    /// Writes in-memory data (<see cref="DataTable"/>) to Excel <c>.xlsx</c>
+    /// files using ClosedXML. The read counterpart is <see cref="ExcelReader"/>.
+    /// </summary>
+    public class ExcelWriter
     {
-        public string GetAlphaFromStr(string str)
-        {
-            return Regex.Replace(str, @"[^A-Za-z0-9]", "");
-        }
-
-        /**
-         * Relies on ClosedXML
-         */
-        public DataTable WorksheetToDataTable(string filePath, int sheetindex = 1)
-        {
-            // Open the Excel file using ClosedXML.
-            // Keep in mind the Excel file cannot be open when trying to read it
-            using (XLWorkbook workBook = new XLWorkbook(filePath))
-            {
-                //Read the first Sheet from Excel file.
-                IXLWorksheet workSheet = workBook.Worksheet(sheetindex);
-
-                //Create a new DataTable.
-                DataTable dt = new DataTable();
-
-                //Loop through the Worksheet rows.
-                bool firstRow = true;
-                foreach (IXLRow row in workSheet.Rows())
-                {
-                    //Use the first row to add columns to DataTable.
-                    if (firstRow)
-                    {
-                        foreach (IXLCell cell in row.Cells())
-                        {
-                            dt.Columns.Add(GetAlphaFromStr(cell.Value.ToString()));
-                        }
-                        firstRow = false;
-                    }
-                    else
-                    {
-                        //Add rows to DataTable.
-                        dt.Rows.Add();
-                        int i = 0;
-
-                        try
-                        {
-                            foreach (IXLCell cell in row.Cells(row.FirstCellUsed().Address.ColumnNumber, row.LastCellUsed().Address.ColumnNumber))
-                            {
-                                dt.Rows[dt.Rows.Count - 1][i] = cell.Value.ToString();
-                                i++;
-                            }
-                        }
-                        catch { }
-                    }
-                }
-
-                return dt;
-            }
-        }
-
-        public JArray WorksheetToJArray(string file, int sheetindex = 1)
-        {
-            JArray result = new JArray();
-
-            try
-            {
-                using (DataTable dt = WorksheetToDataTable(file, sheetindex))
-                {
-                    result = JArray.FromObject(dt);
-                }
-            }
-            catch (Exception e)
-            {
-                result.Add(JObject.FromObject(e));
-            }
-            return result;
-        }
-
         // Excel sheet name limit per the OOXML spec.
         private const int MaxExcelSheetNameLength = 31;
 
@@ -191,6 +117,5 @@ namespace FileHandling
 
             return Fileaddress;
         }
-
     }
 }

@@ -4,6 +4,7 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
+using FileHandling.Dtos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -11,8 +12,6 @@ namespace FileHandling
 {
     public static class FileProcessing
     {
-        public static ExcelParser ExcelParser = new ExcelParser(); 
-
         public static List<string> EmailReport(EMailMeta mailMeta)
         {
             var steplist = new List<string> { "Emailer Start" };
@@ -92,7 +91,7 @@ namespace FileHandling
 
             DataTable dt = (DataTable)JsonConvert.DeserializeObject(data.ToString(Formatting.None), (typeof(DataTable)));
 
-            return ExcelParser.CreateExcelFileFromDT(dt, tempFilePath, SheetName, HeaderMap); 
+            return ExcelWriter.CreateExcelFileFromDT(dt, tempFilePath, SheetName, HeaderMap); 
         }
 
         /**
