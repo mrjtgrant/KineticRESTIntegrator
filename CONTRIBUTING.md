@@ -12,6 +12,8 @@ dotnet test KineticRESTIntegrator.Tests
 
 Expected: 52 tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
 
+The library multi-targets `net48` and `net8.0`. `dotnet build` produces both target framework outputs from each library project; if you change library code, make sure both targets still compile. Consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`, the test project) remain single-target `net48`.
+
 ---
 
 ## Never commit
@@ -61,7 +63,7 @@ When in doubt: if the method calls Epicor once, it's a wrapper. If it composes m
 
 ### DTOs
 
-Typed DTOs live in `EpicorSvcs/Dtos/`. They model the **practical core** of each BO — the columns every Epicor install has, not install-specific custom columns.
+Typed DTOs live in `EpicorSvcs/Dtos/` (Epicor business-object models) and `FileHandling/Dtos/` (the email DTOs — `EmailSpecs`, `EMailMeta`). The Epicor DTOs model the **practical core** of each BO — the columns every Epicor install has, not install-specific custom columns.
 
 - **No `_c` columns.** Install-specific custom columns (Epicor's `_c` suffix) belong to the installation, not the library. They remain accessible to callers via `OperationResult.RawResponse`.
 - **Property names match Epicor column names exactly**, including case. `Sequence` not `Seq`, `CustID` not `CustomerID`. A mismatch produces silent zero/null binding — there is no compiler check.
@@ -112,7 +114,7 @@ The convention exists so a contributor or user running the POCs against a real e
 
 - One thing per PR. A bug fix, a feature, a doc update — not a mix.
 - Short description: what changed, and why. Link the issue if there is one.
-- The build must pass and the tests must stay green. CI may be added in a future release ([CLEANUP_RECOMMENDATIONS.md](CLEANUP_RECOMMENDATIONS.md) #4); in the meantime, please run `dotnet build` and `dotnet test` locally before opening the PR.
+- The build must pass and the tests must stay green. CI may be added in a future release ([CLEANUP_RECOMMENDATIONS.md](CLEANUP_RECOMMENDATIONS.md) #2); in the meantime, please run `dotnet build` and `dotnet test` locally before opening the PR.
 - If you change a public API, update the relevant XML doc and any examples in `EXAMPLES_EPICOR.md` that reference it.
 - If you fix a bug listed in `CLEANUP_RECOMMENDATIONS.md`, move the entry to the *Recently addressed* section in the same PR.
 

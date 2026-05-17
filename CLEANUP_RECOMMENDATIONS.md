@@ -13,46 +13,22 @@ Severity legend:
 
 ### 1. `FileHandling.ConvertJArrayToHTMLTable` / `ConvertJArrayToCSV` — `data[0]` throws on empty
 
-**🐛 Bug.** Both methods in `FileHandling/FileProcessing.cs` access `data[0]` to read column names from the first row. On an empty `JArray`, this throws `ArgumentOutOfRangeException`. Same class of bug as the `ExtractDto` empty-array bug found by the test project.
+**🐛 Bug.** Both methods in `FileHandling/FileProcessing.cs` access `data[0]` to read column names from the first row. On an empty `JArray`, this throws `ArgumentOutOfRangeException`. (`ConvertJArrayToHTMLTable` is now guarded; `ConvertJArrayToCSV` is not — it still has the bug.) Same class of bug as the `ExtractDto` empty-array bug found by the test project.
 
-**Fix.** Guard with `if (data == null || data.Count == 0) return string.Empty;` at the top of each method. Callers handling "report had no data" already exist in `EmailReport` — the standard pattern is a null `FileAddress` on `EmailSpecs`, which `Emailer.DotNetEmail` treats as "no attachment." These methods should behave consistently with that contract.
-
----
-
-## FileHandling — focused cleanup pass
-
-`FileHandling` is older code that hasn't been touched since before the Stage A/B/C library work. Two remaining items below would benefit from being addressed together in a single focused pass.
-
-### 2. 31-character Excel sheet-name truncation logic is fragile
-
-**🩹 Smell.** Excel's sheet-name limit is 31 characters. `ExcelParser.CreateExcelFileFromDT` handles this by reaching into the filename, searching for `DateTime.Now.ToString("yyyyMMdd")` (and a backup format) to find a cutoff point, then truncating. The logic reproduces what `Path.GetFileNameWithoutExtension` plus a more deliberate sheet-name parameter would handle directly, and breaks if the filename doesn't happen to contain today's date.
-
-**Fix.** Accept the sheet name as an explicit parameter (it already is, optionally — make it required, or default to a clean truncation of the filename). Drop the date-search-and-cutoff logic. If the sheet name exceeds 31 characters, truncate to 31 with a deterministic rule (e.g. ellipsis at the end).
-
----
-
-### 3. SMTP modernization — drop port 25 hardcode, support auth/SSL
-
-**🩹 Smell.** `Emailer.DotNetEmail` uses `System.Net.Mail.SmtpClient` with `Port = 25, EnableSsl = false` hardcoded and no authentication. This works on internal relays that accept anonymous SMTP on port 25 (the original deployment context), but excludes essentially every modern SMTP provider — anything cloud-hosted requires port 587 or 465, TLS, and auth.
-
-**Fix.** Two pieces:
-- Move SMTP settings (`Port`, `EnableSsl`, `Username`, `Password`) into `App.config` / env vars with sensible defaults, the way credentials already work.
-- Migrate from `System.Net.Mail.SmtpClient` (which Microsoft has deprecated in favor of MailKit) to [MailKit](https://github.com/jstedfast/MailKit). MailKit is the de facto modern .NET SMTP library, supports STARTTLS, OAuth, and the full mess of provider-specific quirks.
-
-**Why this matters.** A user installing Keri to email reports from a non-internal relay currently can't, full stop. This blocks a real use case.
+**Fix.** Guard with `if (data == null || data.Count == 0) return string.Empty;` at the top of each method. Callers handling "report had no data" already exist in `EmailReport` — the standard pattern is a null `FileAddress` on `EmailSpecs`, which `Emailer.Send` treats as "no attachment." These methods should behave consistently with that contract.
 
 ---
 
 ## Future work
 
-### 4. CI setup — GitHub Actions: build + test on push and PR
+### 2. CI setup — GitHub Actions: build + test on push and PR
 
 **🔭 Future.** Once the repo is public, a basic CI workflow would catch regressions before they land on `main` and give external contributors confidence that their PRs are sane.
 
 **Suggested scope (minimal):**
 - One workflow file at `.github/workflows/build.yml`
 - Triggered on `push` to `main` and on `pull_request`
-- Sets up .NET, runs `dotnet build` for the solution, runs `dotnet test KineticRESTIntegrator.Tests`
+- Sets up .NET, runs `dotnet build` for the solution (both target frameworks), runs `dotnet test KineticRESTIntegrator.Tests`
 - Status badge in the README
 
 No integration tests in CI — the existing tests are offline by design and that should stay. Live-Epicor testing remains a manual step.
@@ -65,14 +41,13 @@ This is the one item in this document that isn't repairing existing code but add
 
 ### OneDrive paths + spaces in path are a real foot-gun
 
-During the Stage C conversion work, the repo lived under `C:\Users\<user>\OneDrive - <Org>\Documents\Visual Studio 2022\KineticRESTIntegrator`. Two characteristics of that location caused real time loss:
+Early development happened with the repo under `C:\Users\<user>\OneDrive - <Org>\Documents\Visual Studio 2022\KineticRESTIntegrator`. Three characteristics of that location caused real time loss:
 
 - **Path contains spaces** (`Visual Studio 2022`, `OneDrive - <Org>`). PowerShell quoting and `dotnet` argument handling both work fine *if* quoted correctly, but it's an easy source of subtle errors.
 - **OneDrive's "Files On-Demand"** can leave a file present in Explorer but offline on disk, in which case `Get-Item` and `Select-String` report "not found" even though the file is right there.
+- **OneDrive timestamp staleness** can cause `dotnet restore` to skip updating `obj/project.assets.json` even when the csproj has changed. Symptom: `NETSDK1005 Assets file ... doesn't have a target for 'net8.0'` after editing a multi-target csproj. Workaround: `dotnet restore <project>.csproj --force`, or delete `bin/` and `obj/` and restore fresh.
 
-If you're cloning the repo to contribute, **clone outside OneDrive** — somewhere like `C:\src\KineticRESTIntegrator`. The build doesn't care where it lives, and command-line tooling is dramatically less hostile.
-
-This isn't a defect in Keri — it's a tooling-and-environment note worth knowing.
+Clone the repo **outside OneDrive** — somewhere like `C:\src\KineticRESTIntegrator`. The build doesn't care where it lives, and command-line tooling is dramatically less hostile. This isn't a defect in Keri — it's a tooling-and-environment note worth knowing.
 
 ---
 
@@ -89,6 +64,11 @@ This isn't a defect in Keri — it's a tooling-and-environment note worth knowin
 - **Missing `HandleResponse` on six wrapper methods** — `EngWorkBenchSvc.UpdateAsync` and `ECOMtlsAsync` called bare `RESTCallAsync` without normalizing the response shape; `SalesOrderSvc.ChangeSellingQtyMasterAsync` did the same; `EngWorkBenchSvc`'s three internal process-step methods (`CheckOutAsync`, `ApproveAndCheckInAllAsync`, `GroupUnLockAsync`) also missed the wrapping. All six fixed for consistency. Epicor's structured error responses now surface through `ds["ErrorMessage"]` on every call.
 - **Orchestrator identity-transform cleanup** — several orchestrators ended with `response.ToOperationResult(r => r)` — an identity transform that made sense when the underlying wrapper returned raw `JObject`, but became unnecessary once the wrappers themselves returned `OperationResult<T>`. Replaced with direct `return await UpdateAsync(...)` patterns where possible, or `OperationResult<T>.Success(...)` when constructing fresh results.
 - **`FileProcessing.EmailDataReport` removed** — was a demo-shaped public method that silently overrode caller-set `Subject` and `Body`, a misleading API where the caller could not actually control what was sent. Deleted from the library; `EpicorSvcDemo/Program.cs` (the only known caller) updated to construct its subject and body inline and call `EmailReport` directly. `EMailMeta.RecipientName` preserved as a public DTO property to avoid a breaking change.
-- **`"EMPTY_DATASET"` magic string removed** — `WriteDataToExcelFile` used to return the literal string `"EMPTY_DATASET"` as if it were a file path when given null data; two callers (`EmailReport` and `Emailer.DotNetEmail`) string-compared against it. Replaced with a `null` `FileAddress` and `string.IsNullOrEmpty` checks. README troubleshooting entry rewritten symptom-first since the magic string is no longer a user-visible diagnostic.
+- **`"EMPTY_DATASET"` magic string removed** — `WriteDataToExcelFile` used to return the literal string `"EMPTY_DATASET"` as if it were a file path when given null data; two callers string-compared against it. Replaced with a `null` `FileAddress` and `string.IsNullOrEmpty` checks. README troubleshooting entry rewritten symptom-first since the magic string is no longer a user-visible diagnostic.
+- **31-character Excel sheet-name truncation fixed** — `CreateExcelFileFromDT` used to derive the worksheet name by searching the filename for today's date in `yyyyMMdd` or `yyyy-MM-dd` format to find a truncation cutoff. The logic was coincidentally correct for one filename pattern and silently broken for others, plus had an off-by-one bug. Replaced with deterministic logic: caller-supplied `SheetName` wins, otherwise derived from the filename; both paths normalized through a single helper that substitutes Excel's illegal characters (`: \ / ? * [ ]`) with underscores and truncates to 31 chars.
+- **SMTP modernization with dual-path implementation** — `Emailer.DotNetEmail` renamed to `Emailer.Send` and rewritten as a dual-path method: `System.Net.Mail.SmtpClient` on .NET Framework, `MailKit.Net.Smtp.SmtpClient` 4.16.0+ on .NET 8.0+. Same public API, same configuration, same behavior on both targets. New optional settings: `SMTPPort`, `SMTPEnableSsl`, `SMTPUsername`, `SMTPPassword`. Default behavior preserved (anonymous, no TLS, port 25). Validation rejects port 25 + TLS and port 465 + TLS as misconfigurations on both targets. No MailKit dependency on net48 (avoiding the unpatched MailKit 3.x STARTTLS-injection CVE GHSA-9j88-vvj5-vhgr); MailKit 4.16.0 on net8.0 is patched.
+- **Multi-target migration (net48 and net8.0)** — `RESTServices`, `EpicorSvcs`, and `FileHandling` now multi-target both .NET Framework 4.8 and .NET 8.0. Consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`, tests) remain single-target net48. Conditional `System.Configuration.ConfigurationManager` 8.0.0 NuGet on net8.0 preserves `Properties.Settings.Default` and `App.config` behavior matching the built-in support on .NET Framework. Conditional `Microsoft.CSharp` Reference on net48 only. Dead `RestSharp` PackageReference and dead `System.Configuration` References cleaned up.
+- **Transport error-detail improvement** — `RESTHttpClient`'s `HttpRequestException` handler previously surfaced only the generic outer message ("An error occurred while sending the request."); it now walks the `InnerException` chain so the real cause (DNS failure, connection refused, TLS error) is visible. The timeout handler reports the configured timeout duration rather than a generic cancellation message.
+- **`FileHandling` code organization** — `ExcelParser` (a misnomer — the class both read and wrote Excel) split into `ExcelReader` and `ExcelWriter`, each named for what it does. Email DTOs (`EmailSpecs`, `EMailMeta`, `SmtpSettings`) moved to `FileHandling/Dtos/`, matching the `EpicorSvcs/Dtos/` convention. `Emailer.cs` trimmed to just the `Emailer` class.
 
 This section can be pruned periodically — its purpose is short-term continuity, not long-term history (which is what git is for).

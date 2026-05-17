@@ -2,7 +2,7 @@
 
 A C# library for integrating with **Epicor Kinetic** (formerly Epicor ERP 10/11) over its REST API. Wraps Epicor's Business Objects (BOs) and Business Activity Queries (BAQs) in async, strongly-typed C# classes, and adds Excel export and SMTP email helpers on top.
 
-Sometimes called **Keri** for short. Built on .NET Framework 4.8.
+Sometimes called **Keri** for short. Multi-targets **.NET Framework 4.8** and **.NET 8.0**.
 
 ```csharp
 using (var client = new EpicorClient("pilot"))
@@ -29,6 +29,18 @@ That snippet is the whole shape. Construct a client, await an async call, check 
 
 ---
 
+## Target frameworks
+
+The library multi-targets **.NET Framework 4.8** (`net48`) and **.NET 8.0** (`net8.0`).
+
+The three library projects (`RESTServices`, `EpicorSvcs`, `FileHandling`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
+
+The two consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`) and the test project remain single-target `net48`. They consume the `net48` build of the libraries.
+
+The one place where target framework matters internally is `FileHandling.Emailer.Send`: on `net48` it uses `System.Net.Mail.SmtpClient` (BCL, no NuGet dependency), and on `net8.0` it uses `MailKit.Net.Smtp.SmtpClient` 4.16.0+ (a patched, modern SMTP client). The `#if NET48` switch is purely an implementation detail; the same `App.config` settings produce the same behavior on both targets.
+
+---
+
 ## What's in the box
 
 | Project | Output | Purpose |
@@ -47,7 +59,7 @@ That snippet is the whole shape. Construct a client, await an async call, check 
 ### Prerequisites
 
 - Windows, Visual Studio 2022 (or `dotnet` CLI / `msbuild`)
-- .NET Framework 4.8 developer pack
+- **One of:** .NET Framework 4.8 developer pack, or the .NET 8.0 SDK (or any newer SDK that can target net8.0)
 - Network access to your Epicor Kinetic application server
 - An Epicor account with REST access (Basic auth) **or** an Epicor API key (v2 OData)
 
@@ -157,7 +169,11 @@ Only needed if you use the email helpers.
 | `FromEmail` | Default `From:` address on outbound mail. |
 | `DeveloperEmail` | Default BCC, and the sole recipient when `EmailSpecs.IsDebug = true`. Set this to your own address so test runs don't email customers. |
 | `GroupEmail` | Optional broader distribution list. |
-| `SMTPHost` | SMTP relay host or IP. The current implementation uses port 25, no SSL, no auth. |
+| `SMTPHost` | SMTP relay host or IP. The default configuration uses port 25, no TLS, no auth — suitable for internal anonymous relays. |
+| `SMTPPort` | SMTP port. Default `25`. Use `587` for STARTTLS. |
+| `SMTPEnableSsl` | Enable TLS for the SMTP connection. Default `false`. When `true`, uses STARTTLS (must use a port other than 25 or 465). |
+| `SMTPUsername` | SMTP authentication username. Leave empty for anonymous relays. |
+| `SMTPPassword` | SMTP authentication password. Stored in plain text in `App.config`. |
 
 ### CI / production
 
