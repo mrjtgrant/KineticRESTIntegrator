@@ -35,6 +35,21 @@ namespace RESTServices
         /// </summary>
         public string ApiKeyHeaderName { get; set; } = "X-API-Key";
 
+        /// <summary>
+        /// OAuth 2.0 bearer token. When set, the transport sends it as an
+        /// <c>Authorization: Bearer {token}</c> header. You supply the token —
+        /// Keri does not acquire or refresh it; obtain it from your identity
+        /// provider and assign it here. A bearer token typically expires after
+        /// a short period, so a long-lived session may need a fresh one.
+        /// <para>
+        /// Bearer and Basic authentication both use the <c>Authorization</c>
+        /// header and cannot be combined: when <see cref="BearerToken"/> is set,
+        /// it takes that header and Basic credentials are not sent. An API key
+        /// (a separate header) may still be sent alongside a bearer token.
+        /// </para>
+        /// </summary>
+        public string BearerToken { get; set; } = "";
+
         /// <summary>URL modifier used when <see cref="KeyType"/> is "basic". Typically "api/v1/".</summary>
         public string DynamicURLModifier_Basic { get; set; } = "";
 

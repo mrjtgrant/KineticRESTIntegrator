@@ -30,15 +30,23 @@ namespace RESTServices
         {
             sesh = seshkey;
 
+            // No BaseAddress: RESTCallAsync builds a full absolute URL via
+            // BuildResourceUrl, so HttpClient has nothing to resolve against.
             _client = new HttpClient
             {
-                BaseAddress = new Uri(sesh.Environment.TrimEnd('/') + "/"),
                 Timeout = sesh.Timeout
             };
 
-            // Always set Basic auth when credentials are present
-            if (!string.IsNullOrEmpty(sesh.AuthObject.Username) &&
-                !string.IsNullOrEmpty(sesh.AuthObject.Userkey))
+            // Authorization header: Bearer token wins over Basic. The two
+            // cannot coexist (same header), so a bearer token, when present,
+            // takes the Authorization header and Basic credentials are skipped.
+            if (!string.IsNullOrEmpty(sesh.AuthObject.BearerToken))
+            {
+                _client.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", sesh.AuthObject.BearerToken);
+            }
+            else if (!string.IsNullOrEmpty(sesh.AuthObject.Username) &&
+                     !string.IsNullOrEmpty(sesh.AuthObject.Userkey))
             {
                 var raw = $"{sesh.AuthObject.Username}:{sesh.AuthObject.Userkey}";
                 var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
@@ -67,6 +75,27 @@ namespace RESTServices
             return string.IsNullOrWhiteSpace(auth?.ApiKeyHeaderName)
                 ? "X-API-Key"
                 : auth.ApiKeyHeaderName.Trim();
+        }
+
+        /// <summary>
+        /// Joins the environment base, the auth-mode URL modifier, and the
+        /// service path into one absolute URL. Each seam is normalized to a
+        /// single "/" — the method is tolerant of a stray trailing slash on
+        /// the environment (a common copy-paste artifact), of leading or
+        /// trailing slashes on the modifier, and of a leading slash on the
+        /// service path. An empty modifier or service path is simply omitted,
+        /// so the environment base on its own is a valid result.
+        /// </summary>
+        internal static string BuildResourceUrl(string environment, string modifier, string svc)
+        {
+            string baseUrl = (environment ?? "").TrimEnd('/');
+            string mid     = (modifier ?? "").Trim('/');
+            string tail    = (svc ?? "").TrimStart('/');
+
+            var sb = new StringBuilder(baseUrl);
+            if (mid.Length > 0) sb.Append('/').Append(mid);
+            if (tail.Length > 0) sb.Append('/').Append(tail);
+            return sb.ToString();
         }
 
         /// <summary>
@@ -183,9 +212,10 @@ namespace RESTServices
             JObject payload = null,
             CancellationToken ct = default)
         {
-            // HttpClient.BaseAddress already includes the environment, so the resource
-            // is just the dynamic modifier + svc. Relative URI.
-            string resource = $"{sesh.Environment}{sesh.AuthObject.DynamicURLModifier}{svc}";
+            // Build one absolute URL from environment + modifier + svc,
+            // tolerant of stray or missing slashes at each seam.
+            string resource = BuildResourceUrl(
+                sesh.Environment, sesh.AuthObject.DynamicURLModifier, svc);
 
             JObject result = await RESTTransactionAsync(resource, payload, ct).ConfigureAwait(false);
 

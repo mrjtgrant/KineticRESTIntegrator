@@ -18,7 +18,12 @@ namespace RESTServices
         /// </summary>
         public string EnvironmentKey;
 
-        /// <summary>Epicor company ID. Required for API-key auth (used in the URL); also used in some BO calls.</summary>
+        /// <summary>
+        /// Epicor company ID. This is an Epicor-specific concept: it is used
+        /// only by the Epicor service layer (<c>EpicorSvc</c>), which substitutes
+        /// it into the v2 OData URL. It has no meaning for a non-Epicor REST API —
+        /// leave it unset when using the transport directly against another service.
+        /// </summary>
         public string Company { get; set; }
 
         /// <summary>

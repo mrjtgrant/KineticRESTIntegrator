@@ -13,37 +13,41 @@ This document covers that use. For Epicor-specific examples, see
 ## What the transport can and cannot do
 
 Be clear-eyed about scope before you reach for this. The transport is a
-**JSON REST client with Basic or key-header authentication** — it was built for
-Epicor and carries some of Epicor's shape. It is a good fit for many internal
-and enterprise APIs, and not a fit for others.
+**JSON REST client with Basic, bearer-token, or key-header authentication** —
+it was built for Epicor and carries some of Epicor's shape. It is a good fit for
+many internal and enterprise APIs, and not a fit for others.
 
 **It works well for an API that:**
 
 - Speaks JSON for both requests and responses.
-- Authenticates with **HTTP Basic** (username + password), or with an
-  **API key sent in a header**.
+- Authenticates with **HTTP Basic** (username + password), an
+  **OAuth 2.0 bearer token**, or an **API key sent in a header**.
 - Returns either a JSON object, or a JSON array (the transport wraps a bare
   top-level array as `{"value": [ ... ]}` so the result is always a `JObject`).
 
 **It is not currently a fit for an API that requires:**
 
-- **Bearer tokens / OAuth 2.0** — there is no hook to set an
-  `Authorization: Bearer ...` header. Only Basic and the API-key header are
-  applied.
 - **Non-JSON payloads or responses** — form-encoded bodies, XML, plain text,
   binary downloads. A non-JSON response is surfaced as an error.
 - **Custom per-request headers** beyond what the session applies once at
   construction.
 
-If your target API needs any of those, the transport is not the right tool as
-it stands today.
+One thing to note on OAuth 2.0: the transport sends a bearer token you supply,
+but it does not *obtain* or *refresh* one — there is no token-endpoint call or
+expiry handling. See the [bearer-token section](#oauth-20-bearer-token-authentication)
+below for what that means in practice.
+
+If your target API needs a payload format other than JSON, the transport is not
+the right tool as it stands today.
 
 ---
 
 ## A GET request
 
 Construct a `RESTConnect` with a `RESTSessionKey`. For a non-Epicor API, set
-`Environment` to the API's base URL and leave the Epicor-specific fields alone:
+`Environment` to the API's base URL. Leave `Company` unset — it is an
+Epicor-only concept (it feeds the Epicor v2 OData URL) and has no meaning for
+another service:
 
 ```csharp
 using RESTServices;
@@ -133,6 +137,58 @@ var session = new RESTSessionKey
 The transport applies HTTP Basic when a username and passkey are present, and
 the API-key header when an API key is present — independently. Set whichever
 the target API requires; you can set both if an API wants both.
+
+---
+
+## OAuth 2.0 bearer-token authentication
+
+When the target API authenticates with an OAuth 2.0 bearer token, set
+`BearerToken`. The transport sends it as an `Authorization: Bearer {token}`
+header:
+
+```csharp
+// You obtain the token yourself — from your identity provider's token
+// endpoint, a client-credentials exchange, an auth-code flow, a secret
+// store, wherever it comes from in your environment.
+string token = await GetTokenFromYourIdentityProvider();
+
+var session = new RESTSessionKey
+{
+    Environment = "https://api.example.com/",
+    AuthObject  = new RESTAuthenticationObject
+    {
+        BearerToken = token
+    }
+};
+
+using (var rest = new RESTConnect(session))
+{
+    JObject result = await rest.RESTCallAsync("v1/widgets");
+    // ...
+}
+```
+
+**What "supported" means here — and what it does not.** Keri *sends* a bearer
+token; it does not *manage* one. There is no call to a token endpoint, no
+client-ID/secret exchange, and no refresh logic. You obtain the token, and you
+assign it. This is deliberate — a full OAuth 2.0 client (grant types, refresh,
+caching) is a larger feature; sending a token you already hold covers the
+common case without it.
+
+The practical consequence is **expiry**. A bearer token is typically valid for
+a short window (often an hour). The transport applies whatever token was on the
+`RESTAuthenticationObject` when the `RESTConnect` was constructed. If a single
+`RESTConnect` is kept alive longer than the token's lifetime, its later calls
+will start failing with HTTP 401. For a long-running process, obtain a fresh
+token and construct a new `RESTConnect` with it before the old token expires —
+or simply construct the connection per unit of work rather than holding one
+open.
+
+Bearer and Basic both use the `Authorization` header, so they cannot be
+combined: when `BearerToken` is set, it takes the `Authorization` header and
+Basic credentials (`Username` / `Userkey`) are not sent. An API key — a
+separate header — may still be sent alongside a bearer token if the API expects
+both.
 
 ---
 

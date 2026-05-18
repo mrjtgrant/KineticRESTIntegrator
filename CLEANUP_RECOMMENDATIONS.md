@@ -11,7 +11,13 @@ Severity legend:
 
 ## Future work
 
-### 1. CI setup — GitHub Actions: build + test on push and PR
+### 1. `RESTSessionKey.Company` is an Epicor concept on a vendor-agnostic type
+
+**🩹 Smell.** `Company` lives on `RESTSessionKey`, in the `RESTServices` project — the vendor-agnostic transport layer — but "company" is a purely Epicor concept. The only code that reads it is the `EpicorSvc` constructor, which substitutes it into the v2 OData URL modifier. A non-Epicor caller using the transport directly carries a property that has no meaning for them. The lower layer knows something about the upper layer's domain.
+
+**Fix.** Move `Company` off `RESTSessionKey` and into the Epicor layer (e.g. onto something the `EpicorSvc` constructor owns), leaving `RESTServices` genuinely vendor-neutral. This is a **breaking API change** — `RESTSessionKey` is public and callers construct it with `Company` set — so it belongs in a deliberate `0.2.0` release with a changelog "breaking changes" note, not a patch. For now, `Company` is documented as Epicor-only on the property itself.
+
+### 2. CI setup — GitHub Actions: build + test on push and PR
 
 **🔭 Future.** Once the repo is public, a basic CI workflow would catch regressions before they land on `main` and give external contributors confidence that their PRs are sane.
 
