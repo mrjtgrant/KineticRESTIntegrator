@@ -1,8 +1,8 @@
-# Kinetic REST Integrator
+# Keri — Kinetic REST Integrator
 
-A C# library for integrating with **Epicor Kinetic** (formerly Epicor ERP 10/11) over its REST API. Wraps Epicor's Business Objects (BOs) and Business Activity Queries (BAQs) in async, strongly-typed C# classes, and adds Excel export and SMTP email helpers on top.
+**Keri** is a C# library for integrating with **Epicor Kinetic** (formerly Epicor ERP 10/11) over its REST API. It wraps Epicor's Business Objects (BOs) and Business Activity Queries (BAQs) in async, strongly-typed C# classes, and adds Excel export and SMTP email helpers on top.
 
-Sometimes called **Keri** for short. Multi-targets **.NET Framework 4.8** and **.NET 8.0**.
+Multi-targets **.NET Framework 4.8** and **.NET 8.0**.
 
 ```csharp
 using (var client = new EpicorClient("pilot"))

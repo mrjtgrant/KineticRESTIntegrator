@@ -37,20 +37,6 @@ This is the one item in this document that isn't repairing existing code but add
 
 ---
 
-## Notes for contributors
-
-### OneDrive paths + spaces in path are a real foot-gun
-
-Early development happened with the repo under `C:\Users\<user>\OneDrive - <Org>\Documents\Visual Studio 2022\KineticRESTIntegrator`. Three characteristics of that location caused real time loss:
-
-- **Path contains spaces** (`Visual Studio 2022`, `OneDrive - <Org>`). PowerShell quoting and `dotnet` argument handling both work fine *if* quoted correctly, but it's an easy source of subtle errors.
-- **OneDrive's "Files On-Demand"** can leave a file present in Explorer but offline on disk, in which case `Get-Item` and `Select-String` report "not found" even though the file is right there.
-- **OneDrive timestamp staleness** can cause `dotnet restore` to skip updating `obj/project.assets.json` even when the csproj has changed. Symptom: `NETSDK1005 Assets file ... doesn't have a target for 'net8.0'` after editing a multi-target csproj. Workaround: `dotnet restore <project>.csproj --force`, or delete `bin/` and `obj/` and restore fresh.
-
-Clone the repo **outside OneDrive** — somewhere like `C:\src\KineticRESTIntegrator`. The build doesn't care where it lives, and command-line tooling is dramatically less hostile. This isn't a defect in Keri — it's a tooling-and-environment note worth knowing.
-
----
-
 ## Recently addressed (kept here briefly as project history)
 
 - **`Menu.cs` DTO column name** — was `Seq`, now `Sequence` (matches Epicor's actual column; the `Seq` version silently zero-bound on `GetRowsAsync<Menu>`).
