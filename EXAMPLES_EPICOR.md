@@ -161,10 +161,12 @@ without it. Name the table, and confirm it, before the call:
 
 ```csharp
 // A single row — the table is required and explicit.
-var one = await client.UDX.DeleteByIDAsync(row, "UD22");
+// UDXX is a placeholder — replace it with your real UD table name.
+var one = await client.UDX.DeleteByIDAsync(row, "UDXX");
 
 // Every row of a table — also requires explicit confirmation.
-var all = await client.UDX.DeleteAllAsync("UD22", confirmDeleteAllRows: true);
+// UDXX is a placeholder — replace it with your real UD table name.
+var all = await client.UDX.DeleteAllAsync("UDXX", confirmDeleteAllRows: true);
 
 if (all.IsFailure)
     Console.WriteLine($"Delete failed: {all.ErrorMessage}");
