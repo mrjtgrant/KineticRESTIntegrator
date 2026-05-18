@@ -307,6 +307,8 @@ set KERI_POC_ALLOW_WRITES=true
 dotnet run --project EpicorSvcPOCs
 ```
 
+For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md) — calling un-wrapped Epicor endpoints directly, writing UD-table rows, and the UD-row conventions. To use Keri's transport layer against a non-Epicor REST API, see [EXAMPLES_RESTAPI.md](EXAMPLES_RESTAPI.md).
+
 ---
 
 ## Project layout
@@ -317,6 +319,8 @@ KineticRESTIntegrator/
 ├── LICENSE                          Apache License 2.0
 ├── NOTICE                           Apache 2.0 attribution
 ├── README.md                        (this file)
+├── EXAMPLES_EPICOR.md                Worked Epicor examples
+├── EXAMPLES_RESTAPI.md               Using the transport for non-Epicor APIs
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── CLEANUP_RECOMMENDATIONS.md
