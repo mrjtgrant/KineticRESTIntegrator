@@ -277,8 +277,6 @@ This split keeps the public API surface small and consistent: every public metho
 
 ### Worked examples
 
-For per-service worked examples — running BAQs with parameters, creating orders, the `UDRow` column-legend convention, the `GetRowsAsync<T>` projection pattern for typed BO list calls — see [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md).
-
 For runnable examples, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDX, SalesOrder, MenuTree):
 
 ```
@@ -302,15 +300,14 @@ KineticRESTIntegrator/
 ├── LICENSE                          Apache License 2.0
 ├── NOTICE                           Apache 2.0 attribution
 ├── README.md                        (this file)
-├── EXAMPLES_EPICOR.md               Per-service worked examples
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── CLEANUP_RECOMMENDATIONS.md
 ├── .gitignore
 │
 ├── RESTServices/                    Low-level REST transport
-│   ├── Authentication/              RESTSessionKey, RESTAuthenticationObject
-│   ├── Transport/                   RESTConnect (HttpClient-based)
+│   ├── Authentication/              RESTSessionKey, RESTAuthenticationObject, RESTEnvironments
+│   ├── Transport/                   RESTHttpClient, RESTConnect
 │   └── RESTServices.csproj
 │
 ├── EpicorSvcs/                      Business Object wrappers
@@ -318,7 +315,7 @@ KineticRESTIntegrator/
 │   ├── EpicorSvc.cs                 (base class — credential validation)
 │   ├── EpicorClient.cs              (the disposable facade)
 │   ├── OperationResult.cs           (the standard return type)
-│   ├── Dtos/                        ~40 typed DTOs
+│   ├── Dtos/                        ~30 typed DTOs
 │   ├── Sales/                       QuoteSvc, SalesOrderSvc
 │   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
 │   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
@@ -326,11 +323,15 @@ KineticRESTIntegrator/
 │   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDXSvc, UserCodesSvc
 │   ├── AR/                          PayMethodSvc, PaymentEntrySvc
 │   └── EpicorSvcs.csproj
+│       Services with multi-step operations have a companion
+│       *.Workflows.cs partial-class file holding the orchestrators.
 │
 ├── FileHandling/                    Excel, CSV, email
 │   ├── App.config.template          ← copy to App.config and edit
-│   ├── ExcelParser.cs
-│   ├── Emailer.cs
+│   ├── Dtos/                        EmailSpecs, EMailMeta, SmtpSettings
+│   ├── ExcelReader.cs               worksheet → DataTable / JArray
+│   ├── ExcelWriter.cs               DataTable → .xlsx
+│   ├── Emailer.cs                   dual-path SMTP (System.Net.Mail / MailKit)
 │   ├── FileProcessing.cs
 │   └── FileHandling.csproj
 │
@@ -341,10 +342,13 @@ KineticRESTIntegrator/
 ├── EpicorSvcPOCs/                   Per-service runnable examples
 │   ├── Program.cs
 │   ├── PocConfig.cs                 (the write-gate)
-│   ├── UserCodesPoc.cs, PartPoc.cs, UdxPoc.cs, SalesOrderPoc.cs
+│   ├── PocBanner.cs
+│   ├── UserCodesPoc.cs, PartPoc.cs, UdxPoc.cs, SalesOrderPoc.cs, MenuTreePoc.cs
 │   └── EpicorSvcPOCs.csproj
 │
 └── KineticRESTIntegrator.Tests/     xUnit unit tests (offline, deterministic)
+    ├── ColumnLegendTests.cs, OperationResultTests.cs,
+    │   OperationResultExtensionsTests.cs, UDRowSerializationTests.cs
     └── KineticRESTIntegrator.Tests.csproj
 ```
 
