@@ -142,11 +142,33 @@ if (rows.IsSuccess)
 ### A note on deletion
 
 `UDXSvc` also exposes `DeleteByIDAsync` (one row, by its keys) and
-`DeleteAllAsync` (every row of a table). They are deliberately not given a
-copy-paste example here: `DeleteAllAsync` removes **all** rows of the target
-table, and a delete snippet pasted against the wrong `UDTableDefault` is an
-easy and unrecoverable mistake. If you delete, set the target table
-explicitly, and confirm it, before the call.
+`DeleteAllAsync` (every row of a table). Both are destructive, and a delete
+pointed at the wrong table is an easy and unrecoverable mistake — so the
+methods are built to make that mistake hard. Each requires its target table to
+be named explicitly, and `DeleteAllAsync` additionally requires an explicit
+confirmation flag before it will clear a table. The example below shows the
+safe shape of each call.
+
+Unlike the read methods, the delete methods do **not** fall back to
+`UDTableDefault`. The `UDTable` argument is required and must be named on every
+call; passing null, empty, or whitespace throws `ArgumentException` before any
+rows are touched — a missing table name fails fast rather than silently
+deleting from whichever table the default happens to point at.
+
+`DeleteAllAsync` carries the extra guard: because it clears an entire table, it
+requires a `confirmDeleteAllRows: true` argument and throws `ArgumentException`
+without it. Name the table, and confirm it, before the call:
+
+```csharp
+// A single row — the table is required and explicit.
+var one = await client.UDX.DeleteByIDAsync(row, "UD22");
+
+// Every row of a table — also requires explicit confirmation.
+var all = await client.UDX.DeleteAllAsync("UD22", confirmDeleteAllRows: true);
+
+if (all.IsFailure)
+    Console.WriteLine($"Delete failed: {all.ErrorMessage}");
+```
 
 ---
 

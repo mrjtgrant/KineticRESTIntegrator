@@ -56,6 +56,21 @@ namespace EpicorSvcs
             return table;
         }
 
+        // Resolves the table for a destructive call. Unlike ResolveTable, this
+        // never falls back to UDTableDefault: a delete must act on exactly the
+        // table the caller named. A null, empty, or whitespace argument is a
+        // hard error rather than a silent default — deleting against the wrong
+        // table is unrecoverable, so the call fails before it can do harm.
+        private static string ResolveTableForDelete(string udTable, string paramName)
+        {
+            if (string.IsNullOrWhiteSpace(udTable))
+                throw new ArgumentException(
+                    "A UD table must be named explicitly for a delete — " +
+                    "this operation does not fall back to UDTableDefault.",
+                    paramName);
+            return udTable.Trim();
+        }
+
         // All UD columns supported by the generic upsert / select logic below.
         private static readonly List<string> udcols = new List<string>
         {
@@ -177,10 +192,21 @@ namespace EpicorSvcs
         /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor (or
         /// <c>DeleteByID</c> when <paramref name="delete"/> is true).
         /// </summary>
+        /// <remarks>
+        /// When <paramref name="delete"/> is true the call is destructive and
+        /// <paramref name="UDTable"/> becomes required: the delete path does
+        /// <b>not</b> fall back to <see cref="UDTableDefault"/>, and a null,
+        /// empty, or whitespace table throws <see cref="ArgumentException"/>.
+        /// The upsert path (the default) still falls back to
+        /// <see cref="UDTableDefault"/> when <paramref name="UDTable"/> is null.
+        /// </remarks>
         /// <param name="udrow">The UD-column values to write.</param>
         /// <param name="UDTable">
-        /// The target UD table. When null (the default),
-        /// <see cref="UDTableDefault"/> is used.
+        /// The target UD table. For an upsert, null falls back to
+        /// <see cref="UDTableDefault"/>. For a delete
+        /// (<paramref name="delete"/> true) this is required and must be a
+        /// non-blank table name — there is no default, and null, empty, or
+        /// whitespace throws <see cref="ArgumentException"/>.
         /// </param>
         /// <param name="delete">When true, deletes the row instead of upserting.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -188,16 +214,26 @@ namespace EpicorSvcs
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
         /// response. On failure, <c>ErrorMessage</c> describes what went wrong.
         /// </returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="delete"/> is true and <paramref name="UDTable"/> is
+        /// null, empty, or whitespace.
+        /// </exception>
         public async Task<OperationResult<JObject>> UpdateAsync(
             UDRow udrow,
             string UDTable = null,
             bool delete = false,
             CancellationToken ct = default)
         {
-            string table = ResolveTable(UDTable);
-
+            // The delete branch is destructive: it requires an explicit table
+            // and does not fall back to UDTableDefault. The upsert branch keeps
+            // the lenient fallback.
             if (delete)
-                return await DeleteByIDAsync(udrow, table, ct).ConfigureAwait(false);
+            {
+                string deleteTable = ResolveTableForDelete(UDTable, nameof(UDTable));
+                return await DeleteByIDAsync(udrow, deleteTable, ct).ConfigureAwait(false);
+            }
+
+            string table = ResolveTable(UDTable);
 
             string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
             JObject lineObject = JObject.FromObject(udrow);
@@ -272,20 +308,57 @@ namespace EpicorSvcs
         /// Deletes every row of a UD table, one row at a time. Calls
         /// <c>GetAll</c> then <c>DeleteByID</c> for each row.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This operation is destructive and removes <b>all</b> rows of the
+        /// named table. <paramref name="UDTable"/> is required and must be
+        /// supplied explicitly — unlike the read methods, this method does
+        /// <b>not</b> fall back to <see cref="UDTableDefault"/>. A null, empty,
+        /// or whitespace value throws <see cref="ArgumentException"/> rather
+        /// than defaulting, so a missing table name fails fast instead of
+        /// silently clearing whichever table the default happens to point at.
+        /// </para>
+        /// <para>
+        /// Because clearing an entire table is unrecoverable, the call is
+        /// gated: <paramref name="confirmDeleteAllRows"/> must be explicitly
+        /// set to <c>true</c>, otherwise the method throws
+        /// <see cref="ArgumentException"/> and deletes nothing. Pass it as a
+        /// named argument — <c>confirmDeleteAllRows: true</c> — so the intent
+        /// is visible at the call site and the operation cannot be invoked by
+        /// reflex or autocomplete.
+        /// </para>
+        /// </remarks>
         /// <param name="UDTable">
-        /// The target UD table. When null (the default),
-        /// <see cref="UDTableDefault"/> is used.
+        /// The target UD table whose rows are deleted. Required; must be a
+        /// non-blank table name. There is no default — passing null, empty,
+        /// or whitespace throws <see cref="ArgumentException"/>.
+        /// </param>
+        /// <param name="confirmDeleteAllRows">
+        /// Must be <c>true</c> to confirm that every row of
+        /// <paramref name="UDTable"/> should be deleted. Any other value
+        /// throws <see cref="ArgumentException"/> and no rows are touched.
         /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the number of rows
         /// deleted. Fails if the initial <c>GetAll</c> fails.
         /// </returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="UDTable"/> is null, empty, or whitespace, or
+        /// <paramref name="confirmDeleteAllRows"/> is not <c>true</c>.
+        /// </exception>
         public async Task<OperationResult<int>> DeleteAllAsync(
-            string UDTable = null,
+            string UDTable,
+            bool confirmDeleteAllRows,
             CancellationToken ct = default)
         {
-            string table = ResolveTable(UDTable);
+            string table = ResolveTableForDelete(UDTable, nameof(UDTable));
+
+            if (!confirmDeleteAllRows)
+                throw new ArgumentException(
+                    "Deleting all rows of '" + table + "' must be confirmed — " +
+                    "pass confirmDeleteAllRows: true to proceed.",
+                    nameof(confirmDeleteAllRows));
 
             var all = await GetAllAsync(null, table, 5000, ct).ConfigureAwait(false);
             if (all.IsFailure)
@@ -359,21 +432,34 @@ namespace EpicorSvcs
         /// Deletes a single UD-table row by its Key1–Key5. Calls
         /// <c>Ice.BO.{UDTable}Svc/DeleteByID</c> in Epicor.
         /// </summary>
+        /// <remarks>
+        /// This operation is destructive. <paramref name="UDTable"/> is
+        /// required and must be supplied explicitly — unlike the read methods,
+        /// this method does <b>not</b> fall back to <see cref="UDTableDefault"/>.
+        /// A null, empty, or whitespace value throws
+        /// <see cref="ArgumentException"/> rather than defaulting, so a missing
+        /// table name fails fast instead of silently deleting from whichever
+        /// table the default happens to point at.
+        /// </remarks>
         /// <param name="udrow">The row whose Key1–Key5 identify the record to delete.</param>
         /// <param name="UDTable">
-        /// The target UD table. When null (the default),
-        /// <see cref="UDTableDefault"/> is used.
+        /// The target UD table the row is deleted from. Required; must be a
+        /// non-blank table name. There is no default — passing null, empty,
+        /// or whitespace throws <see cref="ArgumentException"/>.
         /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.
         /// </returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="UDTable"/> is null, empty, or whitespace.
+        /// </exception>
         public async Task<OperationResult<JObject>> DeleteByIDAsync(
             UDRow udrow,
-            string UDTable = null,
+            string UDTable,
             CancellationToken ct = default)
         {
-            string table = ResolveTable(UDTable);
+            string table = ResolveTableForDelete(UDTable, nameof(UDTable));
             string svc = String.Format("Ice.BO.{0}Svc/DeleteByID", table);
             JObject payload = new JObject {
                 new JProperty("key1", udrow.Key1),
