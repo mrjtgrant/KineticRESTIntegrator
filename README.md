@@ -7,19 +7,30 @@ Multi-targets **.NET Framework 4.8** and **.NET 8.0**.
 ```csharp
 using (var client = new EpicorClient("pilot"))
 {
-    var result = await client.BAQ.BAQResultsAsync("MyOpenOrders_BAQ");
+    // BAQ parameters are passed as a name/value dictionary.
+    // Values are object, so strings and numbers both work.
+    var parameters = new Dictionary<string, object>
+    {
+        { "OrderNum", "12345" },
+        { "OpenOnly", 1 }
+    };
+
+    // BAQ rows are returned as JObject — a BAQ's columns can change
+    // whenever the query is edited, so results aren't bound to a DTO.
+    var result = await client.BAQ.BAQResultsAsync<JObject>("MyOpenOrders_BAQ", parameters);
     if (result.IsFailure)
     {
         Console.WriteLine($"BAQ failed: {result.ErrorMessage}");
         return;
     }
 
+    // BAQ columns follow Epicor's TableName_FieldName convention.
     foreach (var row in result.Value)
-        Console.WriteLine($"{row["OrderNum"]}  {row["CustID"]}");
+        Console.WriteLine($"{row["OrderHed_OrderNum"]}  {row["Customer_CustID"]}");
 }
 ```
 
-That snippet is the whole shape. Construct a client, await an async call, check `IsFailure`, use `Value`. Every service in the library follows that pattern.
+That snippet is the whole shape: construct a client, await an async call, check `IsFailure`, then use `Value`. Every service in the library works this way.
 
 ---
 
