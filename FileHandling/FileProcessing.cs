@@ -122,6 +122,8 @@ namespace FileHandling
 
         public static string ConvertJArrayToCSV(JArray data, Dictionary<string, string> HeaderMap = null) 
         {
+            if (data == null || data.Count == 0) return string.Empty;
+
             List<string> Columns = GetPropertyNames(JObject.FromObject(data[0]), HeaderMap);
             StringBuilder csv = new StringBuilder();
             csv.AppendLine(String.Join(",", Columns)); 

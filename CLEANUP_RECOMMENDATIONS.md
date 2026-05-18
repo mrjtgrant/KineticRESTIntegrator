@@ -9,19 +9,9 @@ Severity legend:
 
 ---
 
-## Library bugs
-
-### 1. `FileHandling.ConvertJArrayToHTMLTable` / `ConvertJArrayToCSV` — `data[0]` throws on empty
-
-**🐛 Bug.** Both methods in `FileHandling/FileProcessing.cs` access `data[0]` to read column names from the first row. On an empty `JArray`, this throws `ArgumentOutOfRangeException`. (`ConvertJArrayToHTMLTable` is now guarded; `ConvertJArrayToCSV` is not — it still has the bug.) Same class of bug as the `ExtractDto` empty-array bug found by the test project.
-
-**Fix.** Guard with `if (data == null || data.Count == 0) return string.Empty;` at the top of each method. Callers handling "report had no data" already exist in `EmailReport` — the standard pattern is a null `FileAddress` on `EmailSpecs`, which `Emailer.Send` treats as "no attachment." These methods should behave consistently with that contract.
-
----
-
 ## Future work
 
-### 2. CI setup — GitHub Actions: build + test on push and PR
+### 1. CI setup — GitHub Actions: build + test on push and PR
 
 **🔭 Future.** Once the repo is public, a basic CI workflow would catch regressions before they land on `main` and give external contributors confidence that their PRs are sane.
 
@@ -38,6 +28,8 @@ This is the one item in this document that isn't repairing existing code but add
 ---
 
 ## Recently addressed (kept here briefly as project history)
+
+- **`ConvertJArrayToCSV` empty-array bug fixed** — `FileHandling.ConvertJArrayToCSV` read column names from `data[0]` without guarding for an empty `JArray`, throwing `ArgumentOutOfRangeException`. It now returns an empty string for null or empty input, matching the already-guarded `ConvertJArrayToHTMLTable`.
 
 - **`Menu.cs` DTO column name** — was `Seq`, now `Sequence` (matches Epicor's actual column; the `Seq` version silently zero-bound on `GetRowsAsync<Menu>`).
 - **`UDRow.Date20` nullability** — was non-nullable `DateTime`, now `DateTime?`, accommodating legacy rows in Epicor that pre-date the always-stamp convention.
