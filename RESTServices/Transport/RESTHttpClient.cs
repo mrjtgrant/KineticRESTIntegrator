@@ -46,12 +46,27 @@ namespace RESTServices
                     new AuthenticationHeaderValue("Basic", creds);
             }
 
-            // Always set API key when present
+            // Always set API key when present. The header name is
+            // configurable via RESTAuthenticationObject.ApiKeyHeaderName
+            // (defaults to "X-API-Key" for Epicor v2 OData).
             if (!string.IsNullOrEmpty(sesh.AuthObject.ApiKey))
             {
-                _client.DefaultRequestHeaders.Add("X-API-Key", sesh.AuthObject.ApiKey);
+                _client.DefaultRequestHeaders.Add(
+                    ResolveApiKeyHeaderName(sesh.AuthObject), sesh.AuthObject.ApiKey);
             }
 
+        }
+
+        /// <summary>
+        /// Resolves the HTTP header name the API key is sent under: the
+        /// caller-configured <see cref="RESTAuthenticationObject.ApiKeyHeaderName"/>,
+        /// or "X-API-Key" when that is null, empty, or whitespace.
+        /// </summary>
+        internal static string ResolveApiKeyHeaderName(RESTAuthenticationObject auth)
+        {
+            return string.IsNullOrWhiteSpace(auth?.ApiKeyHeaderName)
+                ? "X-API-Key"
+                : auth.ApiKeyHeaderName.Trim();
         }
 
         /// <summary>

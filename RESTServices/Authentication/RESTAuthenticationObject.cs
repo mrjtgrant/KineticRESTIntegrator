@@ -26,6 +26,15 @@ namespace RESTServices
         /// <summary>API key for v2 OData / X-API-Key authentication. Leave empty to use Basic.</summary>
         public string ApiKey { get; set; } = "";
 
+        /// <summary>
+        /// HTTP header name the <see cref="ApiKey"/> is sent under. Defaults to
+        /// "X-API-Key" — the header Epicor's v2 OData endpoint expects. Override
+        /// only when targeting a REST API that expects a differently-named
+        /// header (e.g. "apikey", "Ocp-Apim-Subscription-Key"). If left blank,
+        /// the transport falls back to "X-API-Key".
+        /// </summary>
+        public string ApiKeyHeaderName { get; set; } = "X-API-Key";
+
         /// <summary>URL modifier used when <see cref="KeyType"/> is "basic". Typically "api/v1/".</summary>
         public string DynamicURLModifier_Basic { get; set; } = "";
 

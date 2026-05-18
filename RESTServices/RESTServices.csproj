@@ -33,6 +33,11 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
+  <!-- Expose internal members (e.g. ResolveApiKeyHeaderName) to the test project. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" />
+  </ItemGroup>
+
   <!-- System.Net.Http is a built-in assembly on .NET Framework 4.8 but is not
        auto-referenced by the SDK — needs an explicit Reference. On .NET 6+,
        HttpClient is part of the BCL and auto-referenced; no Reference needed. -->
