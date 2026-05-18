@@ -61,7 +61,7 @@ The one place where target framework matters internally is `FileHandling.Emailer
 - Windows, Visual Studio 2022 (or `dotnet` CLI / `msbuild`)
 - **One of:** .NET Framework 4.8 developer pack, or the .NET 8.0 SDK (or any newer SDK that can target net8.0)
 - Network access to your Epicor Kinetic application server
-- An Epicor account with REST access (Basic auth) **or** an Epicor API key (v2 OData)
+- An Epicor account with REST access — plus an Epicor API key if you authenticate via v2 OData
 
 ### Setup
 
@@ -120,14 +120,14 @@ These sources stack — you don't pick *one*. A programmatic session, if supplie
 |---|---|---|---|
 | `DefaultUser` | `EPICOR_USER` | Epicor username for Basic auth. | `your_epicor_user` |
 | `DefaultPasskey` | `EPICOR_PASS` | Password for that account. | (secret) |
-| `DefaultApiKey` | `EPICOR_APIKEY` | API key (v2 OData). Alternative to user+pass. | (secret) |
+| `DefaultApiKey` | `EPICOR_APIKEY` | API key for v2 OData auth. Set in addition to user+passkey. | (secret) |
 | `DefaultCompany` | `EPICOR_COMPANY` | Epicor company ID. | `EPIC01` |
 | `DefaultEnvironment` | `EPICOR_ENV` | Default env: `prod`/`live`, `pilot`, `test`/`third`, or a literal URL. | `pilot` |
 | `EnvLive` | `EPICOR_ENV_LIVE` | Production app server URL. | `https://company-live.example.com/server` |
 | `EnvPilot` | `EPICOR_ENV_PILOT` | Pilot app server URL. | `https://company-pilot.example.com/server` |
 | `EnvTest` | `EPICOR_ENV_TEST` | Test/dev app server URL. | `https://company-test.example.com/server` |
 
-You need **either** `DefaultUser` + `DefaultPasskey` (Basic auth) **or** `DefaultApiKey` (API-key auth). The framework auto-detects which based on whether an API key is set.
+`DefaultUser` and `DefaultPasskey` are always required. For API-key (v2 OData) authentication, also set `DefaultApiKey` — it is an addition to the username and passkey, not a replacement for them.
 
 For the `Env*` URLs: use the URL shown in the upper-right corner of your Epicor client. The framework treats it as an opaque string — copy it as-is, including the protocol and trailing path.
 
@@ -275,9 +275,15 @@ The user-facing entry point for any multi-step operation is the **orchestrator**
 
 This split keeps the public API surface small and consistent: every public method either returns data, requests a template, or persists a write — there are no half-step operations sitting next to whole-step ones to confuse new readers.
 
-### Worked examples
+### Practical Examples
 
-For runnable examples, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDX, SalesOrder, MenuTree):
+The fastest way to see Keri working is `EpicorSvcDemo` — an end-to-end sample where a single run exercises the whole library: it executes a BAQ, turns the result into a formatted Excel workbook (using a column header map to control which fields appear and how they're labeled), and emails it as an attachment. Run this first to confirm your configuration works and to see how the pieces fit together:
+
+```
+dotnet run --project EpicorSvcDemo
+```
+
+For per-service detail, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDX, SalesOrder, MenuTree):
 
 ```
 dotnet run --project EpicorSvcPOCs
