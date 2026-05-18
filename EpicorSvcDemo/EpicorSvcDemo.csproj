@@ -12,7 +12,7 @@
     <AssemblyTitle>EpicorSvcDemo</AssemblyTitle>
     <Description>End-to-end example of the Kinetic REST Integrator: runs a BAQ, builds an Excel report, and emails it.</Description>
     <Company></Company>
-    <Copyright>Copyright © 2026</Copyright>
+    <Copyright></Copyright>
     <Version>1.0.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
