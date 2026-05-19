@@ -42,7 +42,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public InvTransferSvc(RESTSessionKey env) : base(env) { }
+        public InvTransferSvc(EpicorRESTSessionKey env) : base(env) { }
 
         // Inner service for serial-number handling. Constructed lazily so it
         // shares this service's session — important for callers that pass a
@@ -50,7 +50,7 @@ namespace EpicorSvcs
         // Disposed in Dispose(bool) below.
         private SelectedSerialNumbersSvc _selectedSerialNumbersSvc;
         private SelectedSerialNumbersSvc SelectedSerialNumbersSvc =>
-            _selectedSerialNumbersSvc ?? (_selectedSerialNumbersSvc = new SelectedSerialNumbersSvc(sesh));
+            _selectedSerialNumbersSvc ?? (_selectedSerialNumbersSvc = new SelectedSerialNumbersSvc(EpicorSession));
 
         // ---------------------------------------------------------------
         // Public API — the one true primitive

@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using EpicorSvcs.Dtos;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 
@@ -22,7 +23,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public BomSearchSvc(RESTSessionKey env) : base(env) { }
+        public BomSearchSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// Retrieves the BOM tree dataset for a part, with part validation.

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using RESTServices;
 using EpicorSvcs.Dtos;
 
 namespace EpicorSvcs
@@ -24,7 +23,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public SalesRepSvc(RESTSessionKey env) : base(env) { }
+        public SalesRepSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// Retrieves a single sales rep by code. Calls

@@ -21,9 +21,9 @@ namespace EpicorSvcDemo
             //
             // To connect programmatically instead — e.g. when credentials come
             // from a web interface or are chosen at runtime — pass a configured
-            // RESTSessionKey:
+            // EpicorRESTSessionKey:
             //
-            //   new EpicorClient(new RESTSessionKey
+            //   new EpicorClient(new EpicorRESTSessionKey
             //   {
             //       Company     = "YOUR_COMPANY",
             //       Environment = "https://your-epicor-host/your-app",

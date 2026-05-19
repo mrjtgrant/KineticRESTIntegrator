@@ -22,7 +22,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public SerialNoSvc(RESTSessionKey env) : base(env) { }
+        public SerialNoSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// Retrieves a serial-number record for a given part. Calls

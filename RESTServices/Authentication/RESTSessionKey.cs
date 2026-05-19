@@ -19,14 +19,6 @@ namespace RESTServices
         public string EnvironmentKey;
 
         /// <summary>
-        /// Epicor company ID. This is an Epicor-specific concept: it is used
-        /// only by the Epicor service layer (<c>EpicorSvc</c>), which substitutes
-        /// it into the v2 OData URL. It has no meaning for a non-Epicor REST API —
-        /// leave it unset when using the transport directly against another service.
-        /// </summary>
-        public string Company { get; set; }
-
-        /// <summary>
         /// Pre-configured environment URLs for the legacy three-environment lookup
         /// (Live / Pilot / Development). Optional — callers may set <see cref="Environment"/>
         /// to a literal URL instead.

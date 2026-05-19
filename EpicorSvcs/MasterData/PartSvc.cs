@@ -30,7 +30,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public PartSvc(RESTSessionKey env) : base(env) { }
+        public PartSvc(EpicorRESTSessionKey env) : base(env) { }
 
         // A practical default $select for Parts queries — chosen to populate
         // the core columns of the Part DTO so a default call returns a
@@ -228,7 +228,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.PartSvc/PartAttches";
             JObject payload = new JObject {
-                new JProperty("Company", sesh.Company),
+                new JProperty("Company", EpicorSession.Company),
                 new JProperty("PartNum", attch.GenericItemNum),
                 new JProperty("DrawDesc", attch.FileDesc),
                 new JProperty("FileName", attch.FileName),

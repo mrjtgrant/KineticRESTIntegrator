@@ -31,7 +31,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public GenxDataSvc(RESTSessionKey env) : base(env) { }
+        public GenxDataSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// Queries the <c>GenXData</c> table. Calls

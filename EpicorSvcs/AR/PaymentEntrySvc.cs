@@ -23,7 +23,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public PaymentEntrySvc(RESTSessionKey env) : base(env) { }
+        public PaymentEntrySvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// Retrieves an AP payment record by its head number. Calls

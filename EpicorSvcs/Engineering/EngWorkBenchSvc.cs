@@ -45,14 +45,14 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public EngWorkBenchSvc(RESTSessionKey env) : base(env) { }
+        public EngWorkBenchSvc(EpicorRESTSessionKey env) : base(env) { }
 
         // Inner service for BOM lookups. Constructed lazily so it shares this
         // service's session — important for callers that pass a programmatic
         // RESTSessionKey rather than relying on app.config. Disposed below.
         private BomSearchSvc _bomSearchSvc;
         private BomSearchSvc BomSearchSvc =>
-            _bomSearchSvc ?? (_bomSearchSvc = new BomSearchSvc(sesh));
+            _bomSearchSvc ?? (_bomSearchSvc = new BomSearchSvc(EpicorSession));
 
         // Properties to skip when copying operations from a source BOM into a
         // new ECO. Static readonly because the list never changes per-instance.

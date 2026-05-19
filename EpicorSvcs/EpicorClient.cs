@@ -1,5 +1,6 @@
 ﻿using System;
 using RESTServices;
+using EpicorSvcs.Dtos;
 
 namespace EpicorSvcs
 {
@@ -42,7 +43,7 @@ namespace EpicorSvcs
     /// </remarks>
     public class EpicorClient : IDisposable
     {
-        private readonly RESTSessionKey _session;
+        private readonly EpicorRESTSessionKey _session;
         private bool _disposed;
 
         // Backing fields for lazy-constructed services.
@@ -76,7 +77,7 @@ namespace EpicorSvcs
         /// A fully-configured <see cref="RESTSessionKey"/> with company,
         /// environment URL, and authentication.
         /// </param>
-        public EpicorClient(RESTSessionKey session)
+        public EpicorClient(EpicorRESTSessionKey session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
         }
@@ -100,7 +101,7 @@ namespace EpicorSvcs
             // in EpicorSvc's base.
             using (var probe = new BAQSvc(env))
             {
-                _session = probe.sesh;
+                _session = (EpicorRESTSessionKey)probe.sesh;
             }
         }
 
@@ -108,7 +109,7 @@ namespace EpicorSvcs
         /// The session this client is using. Read-only; create a new client
         /// to switch sessions.
         /// </summary>
-        public RESTSessionKey Session => _session;
+        public EpicorRESTSessionKey Session => _session;
 
         /// <summary>True after <see cref="Dispose"/> has been called.</summary>
         public bool IsDisposed => _disposed;

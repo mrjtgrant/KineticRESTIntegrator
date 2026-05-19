@@ -40,7 +40,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public QuoteSvc(RESTSessionKey env) : base(env) { }
+        public QuoteSvc(EpicorRESTSessionKey env) : base(env) { }
 
         // ---------------------------------------------------------------
         // Public API — generic primitives

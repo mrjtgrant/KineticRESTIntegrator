@@ -31,7 +31,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public UDXSvc(RESTSessionKey env) : base(env) { }
+        public UDXSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// The UD table every method on this service targets when its
@@ -239,7 +239,7 @@ namespace EpicorSvcs
             JObject lineObject = JObject.FromObject(udrow);
             JObject ds = new JObject
             {
-                new JProperty("Company", sesh.Company),
+                new JProperty("Company", EpicorSession.Company),
                 new JProperty("Key1", udrow.Key1),
                 new JProperty("Key2", udrow.Key2),
                 new JProperty("Key3", udrow.Key3),

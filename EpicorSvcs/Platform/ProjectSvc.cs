@@ -41,7 +41,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public ProjectSvc(RESTSessionKey env) : base(env) { }
+        public ProjectSvc(EpicorRESTSessionKey env) : base(env) { }
 
         // ---------------------------------------------------------------
         // Public API — reads and writes

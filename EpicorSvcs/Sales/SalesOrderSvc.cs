@@ -43,7 +43,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public SalesOrderSvc(RESTSessionKey env) : base(env) { }
+        public SalesOrderSvc(EpicorRESTSessionKey env) : base(env) { }
 
         // ---------------------------------------------------------------
         // Public API — reads, template-fetchers, and the write primitive

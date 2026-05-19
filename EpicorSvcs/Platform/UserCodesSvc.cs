@@ -35,7 +35,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public UserCodesSvc(RESTSessionKey env) : base(env) { }
+        public UserCodesSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// Retrieves all UD codes belonging to a code type. Calls

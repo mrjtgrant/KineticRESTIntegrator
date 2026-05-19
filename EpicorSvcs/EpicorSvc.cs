@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using RESTServices;
+using EpicorSvcs.Dtos;
 
 namespace EpicorSvcs
 {
@@ -44,19 +45,30 @@ namespace EpicorSvcs
         /// object before use.
         /// </summary>
         /// <param name="env">A fully-configured session.</param>
-        public EpicorSvc(RESTSessionKey env) : base(env)
+        public EpicorSvc(EpicorRESTSessionKey env) : base(env)
         {
             env.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
             env.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", env.Company);
         }
 
+        /// <summary>
+        /// The session as its Epicor-specific type. The transport stores the
+        /// session as a base RESTSessionKey; every session this library
+        /// constructs is in fact an EpicorRESTSessionKey, so this cast is safe
+        /// and gives the Epicor service layer typed access to Company.
+        /// </summary>
+        protected EpicorRESTSessionKey EpicorSession
+        {
+            get { return (EpicorRESTSessionKey)sesh; }
+        }
 
-        // Builds a RESTSessionKey from app.config / env vars, validating first.
-        private static RESTSessionKey BuildSessionFromSettings(string env)
+
+        // Builds an EpicorRESTSessionKey from app.config / env vars, validating first.
+        private static EpicorRESTSessionKey BuildSessionFromSettings(string env)
         {
             ValidateSettings();   // throws if app.config / env vars are not configured
 
-            return new RESTSessionKey
+            return new EpicorRESTSessionKey
             {
                 Company = Setting("EPICOR_COMPANY", Properties.Settings.Default.DefaultCompany),
                 AuthObject = new RESTAuthenticationObject

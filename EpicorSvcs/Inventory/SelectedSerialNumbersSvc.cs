@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EpicorSvcs.Dtos;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 
@@ -37,7 +38,7 @@ namespace EpicorSvcs
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public SelectedSerialNumbersSvc(RESTSessionKey env) : base(env) { }
+        public SelectedSerialNumbersSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// Retrieves the serial numbers available for a transaction. Calls
