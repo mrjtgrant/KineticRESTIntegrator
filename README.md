@@ -119,7 +119,7 @@ The framework supports three ways to provide credentials, and the right choice d
 
 | Source | Best for | Why |
 |---|---|---|
-| **Programmatic session** — `new EpicorClient(new RESTSessionKey { ... })` | User-facing applications: web portals, desktop apps with sign-in, multi-tenant services. | Credentials come from a user action (a login form, a vault lookup, a token exchange) and exist only for the lifetime of that session. They never touch any config file or environment variable. The caller fully owns the credential lifecycle. |
+| **Programmatic session** — `new EpicorClient(new EpicorRESTSessionKey { ... })` | User-facing applications: web portals, desktop apps with sign-in, multi-tenant services. | Credentials come from a user action (a login form, a vault lookup, a token exchange) and exist only for the lifetime of that session. They never touch any config file or environment variable. The caller fully owns the credential lifecycle. |
 | **`App.config`** | Per-developer local setup. One developer working on one machine. | The file is gitignored, sits next to the binaries, and survives across runs without further action. Easy to set up, easy to edit, easy to switch environments by editing one line. Not appropriate for shared/production machines — a config file is a credential left on disk. |
 | **Environment variables** | Automated processes: scheduled jobs, services, CI builds, containers. | The credentials live in the surrounding system's secret store (a scheduler vault, a CI runner's secret manager, a container orchestrator) and reach the process only at startup. No secret-bearing file in the source tree, no secret-bearing file on disk. |
 
@@ -229,7 +229,9 @@ Direct service construction (`new BAQSvc()`, etc.) still works for one-off, shor
 For advanced scenarios (multi-tenant servers, sessions from a vault, programmatic credentials) construct a session yourself and hand it to the client:
 
 ```csharp
-var session = new RESTSessionKey
+using EpicorSvcs.Dtos;
+
+var session = new EpicorRESTSessionKey
 {
     Company = "EPIC01",
     Environment = "https://company-pilot.example.com/server",

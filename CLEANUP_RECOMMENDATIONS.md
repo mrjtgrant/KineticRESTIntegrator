@@ -11,13 +11,7 @@ Severity legend:
 
 ## Future work
 
-### 1. `RESTSessionKey.Company` is an Epicor concept on a vendor-agnostic type
-
-**🩹 Smell.** `Company` lives on `RESTSessionKey`, in the `RESTServices` project — the vendor-agnostic transport layer — but "company" is a purely Epicor concept. The only code that reads it is the `EpicorSvc` constructor, which substitutes it into the v2 OData URL modifier. A non-Epicor caller using the transport directly carries a property that has no meaning for them. The lower layer knows something about the upper layer's domain.
-
-**Fix.** Move `Company` off `RESTSessionKey` and into the Epicor layer (e.g. onto something the `EpicorSvc` constructor owns), leaving `RESTServices` genuinely vendor-neutral. This is a **breaking API change** — `RESTSessionKey` is public and callers construct it with `Company` set — so it belongs in a deliberate `0.2.0` release with a changelog "breaking changes" note, not a patch. For now, `Company` is documented as Epicor-only on the property itself.
-
-### 2. CI setup — GitHub Actions: build + test on push and PR
+### 1. CI setup — GitHub Actions: build + test on push and PR
 
 **🔭 Future.** Once the repo is public, a basic CI workflow would catch regressions before they land on `main` and give external contributors confidence that their PRs are sane.
 
@@ -34,6 +28,12 @@ This is the one item in this document that isn't repairing existing code but add
 ---
 
 ## Recently addressed (kept here briefly as project history)
+
+- **`Company` moved off `RESTSessionKey` and into `EpicorRESTSessionKey`** — the vendor-agnostic transport layer no longer carries an Epicor concept. `Company` lives on a new `EpicorRESTSessionKey` subclass in `EpicorSvcs.Dtos`, `RESTServices` is now genuinely vendor-neutral, and the Epicor service and client constructors take the subclass. A note on versioning: this is a breaking API change and the original recommendation was to hold it for a deliberate `0.2.0`. In practice it landed in `0.1.1` with a `### Changed` changelog entry, because `0.1.1` was still unreleased and contained other breaking changes already (the UDX delete-method hardening below), so a single coordinated breaking pre-1.0 patch was the cheaper path than carrying two breakage milestones.
+
+- **`UDXSvc` delete-method risk-mitigation** — the destructive paths previously fell back to `UDTableDefault` when no table was named, so a delete with a missing argument silently acted on whichever table the default pointed at. Fixed across the three delete paths: `DeleteByIDAsync` lost its `UDTable = null` default and is now required; `DeleteAllAsync` already required the table but now resolves it strictly with no `UDTableDefault` fallback; `UpdateAsync(..., delete: true)` now also resolves strictly. A null/empty/whitespace table throws `ArgumentException` before any rows are touched. `DeleteAllAsync` additionally gained a required `confirmDeleteAllRows` parameter, gating whole-table clears behind explicit, named-argument intent.
+
+- **Deletion examples in `EXAMPLES_EPICOR.md` use a placeholder table name** — the deletion code block previously used `"UD22"`, a real Epicor UD table; a reader copy-pasting straight from the docs could have run a delete against their actual `UD22`. Changed to `"UDXX"`, with an inline comment marking it as a placeholder. The upsert example (line 96) still uses `"UD22"` since it's a legitimate "here's how you target a table" demonstration and a stray paste-and-run is non-destructive there.
 
 - **`ConvertJArrayToCSV` empty-array bug fixed** — `FileHandling.ConvertJArrayToCSV` read column names from `data[0]` without guarding for an empty `JArray`, throwing `ArgumentOutOfRangeException`. It now returns an empty string for null or empty input, matching the already-guarded `ConvertJArrayToHTMLTable`.
 

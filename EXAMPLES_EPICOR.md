@@ -28,14 +28,16 @@ can call it through the transport layer directly — no need to wait for a
 wrapper or fork the library.
 
 Every service in `EpicorSvcs` derives from `RESTConnect` (in the `RESTServices`
-project), which is itself a public, usable class. Construct one with a
-`RESTSessionKey` and call `RESTCallAsync` with a raw service path:
+project), which is itself a public, usable class. Construct one with an
+`EpicorRESTSessionKey` (the Epicor-specific session subclass — it carries
+`Company`) and call `RESTCallAsync` with a raw service path:
 
 ```csharp
 using RESTServices;
+using EpicorSvcs.Dtos;
 using Newtonsoft.Json.Linq;
 
-var session = new RESTSessionKey
+var session = new EpicorRESTSessionKey
 {
     Company     = "YOUR_COMPANY",
     Environment = "https://your-epicor-host/your-app",

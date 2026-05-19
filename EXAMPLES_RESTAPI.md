@@ -45,9 +45,7 @@ the right tool as it stands today.
 ## A GET request
 
 Construct a `RESTConnect` with a `RESTSessionKey`. For a non-Epicor API, set
-`Environment` to the API's base URL. Leave `Company` unset — it is an
-Epicor-only concept (it feeds the Epicor v2 OData URL) and has no meaning for
-another service:
+`Environment` to the API's base URL:
 
 ```csharp
 using RESTServices;
