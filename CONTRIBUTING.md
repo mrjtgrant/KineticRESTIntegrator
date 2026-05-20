@@ -38,6 +38,16 @@ If you accidentally commit any of the above, a force-push to overwrite the commi
 
 The library is internally consistent on a few patterns. New code should match.
 
+### Naming
+
+When adding a new service or method, the names follow Epicor's. A reader who knows the Epicor BO and method should be able to predict the Keri class and method without searching — and vice versa.
+
+- **The class name matches the last segment of the Epicor service path.** `Erp.BO.PartSvc` → `PartSvc`. `Erp.BO.SalesOrderSvc` → `SalesOrderSvc`. No prefix, no suffix.
+- **A direct method wrapper matches the Epicor method name, with `Async` appended.** `Erp.BO.PartSvc/GetByID` → `PartSvc.GetByIDAsync`. `Erp.BO.PartSvc/DuplicatePart` → `PartSvc.DuplicatePartAsync`. The OData entity-set pattern works the same way — `Erp.BO.PartSvc/Parts` → `PartSvc.PartsAsync`.
+- **Orchestrators are named for what they accomplish.** A method in `*Svc.Workflows.cs` composes multiple BO calls and has no single Epicor counterpart, so there is no name to mirror. Use a verb-phrase name that reads as the intent: `ChangePartUnitPriceAsync`, `GetNewPartRevAsync`, `AddMtlsAsync`. A reader should know roughly what the method does without opening it.
+
+The single documented exception is `UDXSvc`, which parameterizes over Epicor's per-table UD services (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`, etc.) rather than wrapping each as its own class. Don't generalize like this for any new service without discussion — `UDXSvc` exists because the UD-table interface is uniform across 30+ services, which is a special case. See [EXAMPLES_EPICOR.md — Finding your way around `EpicorSvcs`](EXAMPLES_EPICOR.md#1-finding-your-way-around-epicorsvcs) for the user-facing version of these rules, including the worked mapping tables.
+
 ### Async + `OperationResult<T>`
 
 Every service method:
@@ -59,7 +69,7 @@ Each service is split into two partial-class files:
 
 Both files declare `public partial class XxxSvc`. The split is for contributors; callers don't see it.
 
-When in doubt: if the method calls Epicor once, it's a wrapper. If it composes multiple wrappers, it's an orchestrator.
+Whether a new method belongs in `*Svc.cs` or `*Svc.Workflows.cs` follows from its naming (above): a method named after an Epicor BO method belongs in `*Svc.cs`; a method named for an intent (and composing multiple BO calls) belongs in `*Svc.Workflows.cs`.
 
 ### DTOs
 
