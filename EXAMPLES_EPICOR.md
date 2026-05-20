@@ -7,72 +7,130 @@ match the shipped code.
 For runnable versions of the read/write scenarios, see the `EpicorSvcPOCs`
 project; this document explains the patterns behind them.
 
-For calling **non-Epicor** REST APIs through the same transport, see
+For calling **non-Epicor** REST APIs through the same transport, or for
+calling an Epicor endpoint Keri doesn't wrap, see
 [EXAMPLES_RESTAPI.md](EXAMPLES_RESTAPI.md).
 
 ---
 
 ## Contents
 
-1. [Calling an un-wrapped Epicor endpoint directly](#1-calling-an-un-wrapped-epicor-endpoint-directly)
+1. [Using a single service directly](#1-using-a-single-service-directly)
 2. [Writing data into Epicor (UD-row upsert)](#2-writing-data-into-epicor-ud-row-upsert)
 3. [UD-row conventions](#3-ud-row-conventions)
 
 ---
 
-## 1. Calling an un-wrapped Epicor endpoint directly
+## 1. Using a single service directly
 
-Keri wraps a large set of Epicor Business Objects, but not every BO or every
-method. When you need an endpoint Keri doesn't expose a typed wrapper for, you
-can call it through the transport layer directly — no need to wait for a
-wrapper or fork the library.
+Every Epicor service can be constructed and used on its own. You do not have
+to reach for `EpicorClient` to get work done — a single service is a complete,
+disposable unit. Open a `using` block, make as many calls on that service as
+the workflow needs, and let it dispose at the end. For workflows that span
+several services, stack `using` blocks and share one session across them.
 
-Every service in `EpicorSvcs` derives from `RESTConnect` (in the `RESTServices`
-project), which is itself a public, usable class. Construct one with an
-`EpicorRESTSessionKey` (the Epicor-specific session subclass — it carries
-`Company`) and call `RESTCallAsync` with a raw service path:
+This is the natural construction pattern. `EpicorClient` is a convenience over
+this same pattern — it bundles all the services on one shared session and
+lazy-constructs each on first access. Both paths use identical service code;
+choose whichever fits the shape of the code you are writing.
+
+### One service, multiple calls
+
+Each service constructor takes either an environment selector (string) or a
+fully-configured `EpicorRESTSessionKey`. The environment selector is the
+common case — `"live"`, `"pilot"`, `"test"`, or a literal URL — and pulls the
+rest of the configuration from `App.config` / environment variables.
 
 ```csharp
-using RESTServices;
+using EpicorSvcs;
 using EpicorSvcs.Dtos;
-using Newtonsoft.Json.Linq;
 
-var session = new EpicorRESTSessionKey
+using (var part = new PartSvc("pilot"))
 {
-    Company     = "YOUR_COMPANY",
-    Environment = "https://your-epicor-host/your-app",
-    AuthObject  = new RESTAuthenticationObject
+    var matches = await part.BySearchWordAsync("WIDGET");
+    if (matches.IsFailure)
     {
-        Username = "YOUR_USER",
-        Userkey  = "YOUR_PASSWORD"
-    }
-};
-
-using (var rest = new RESTConnect(session))
-{
-    // GET — pass null (or omit) the payload.
-    JObject result = await rest.RESTCallAsync("Erp.BO.PartSvc/Parts?$top=5");
-
-    if (result["ErrorMessage"] != null)
-    {
-        Console.WriteLine($"Call failed: {result["ErrorMessage"]}");
+        Console.WriteLine($"Search failed: {matches.ErrorMessage}");
         return;
     }
 
-    // The response is a JObject — read it however you need.
-    foreach (var part in result["value"])
-        Console.WriteLine(part["PartNum"]);
+    foreach (var hit in matches.Value)
+    {
+        var details = await part.GetByIDAsync(hit.PartNum);
+        if (details.IsSuccess)
+            Console.WriteLine($"{hit.PartNum} — {hit.PartDescription}");
+    }
 }
 ```
 
-`RESTCallAsync(svc, payload, ct)` does a **GET** when `payload` is null and a
-**POST** when a `JObject` payload is supplied. Errors are never thrown — a
-failed call returns a `JObject` carrying an `ErrorMessage` property, so check
-for it rather than wrapping the call in a `try/catch`.
+For a programmatic session — a credential pulled from a vault, a multi-tenant
+context, an explicit override — construct an `EpicorRESTSessionKey` and pass it
+instead:
 
-`RESTConnect` is shaped for Epicor's REST conventions — JSON request and
-response bodies, Epicor's `{"value": [...]}` list wrapping, and its
-`ErrorMessage` error shape. It works well for any Epicor endpoint.
+```csharp
+using EpicorSvcs;
+using EpicorSvcs.Dtos;
+
+var session = new EpicorRESTSessionKey
+{
+    Company     = "EPIC01",
+    Environment = "https://company-pilot.example.com/server",
+    AuthObject  = new RESTAuthenticationObject
+    {
+        Username = "...",
+        Userkey  = "..."
+    }
+};
+
+using (var part = new PartSvc(session))
+{
+    var matches = await part.BySearchWordAsync("WIDGET");
+    // ...
+}
+```
+
+### Multiple services, one session
+
+When a workflow needs more than one service, construct the session once and
+hand the same instance to each. Stack the `using` blocks; the services live
+only for the block that needs them.
+
+```csharp
+using EpicorSvcs;
+using EpicorSvcs.Dtos;
+
+var session = new EpicorRESTSessionKey { /* ... */ };
+
+using (var part = new PartSvc(session))
+using (var udx  = new UDXSvc(session))
+{
+    var parts = await part.PartsAsync(
+        filters: new List<string> { "NonStock eq false" }, top: 10);
+    if (parts.IsFailure) return;
+
+    foreach (var p in parts.Value)
+    {
+        var meta = await udx.GetByIDAsync(
+            new UDRow { Key1 = "PART_META", Key2 = p.PartNum }, "UD22");
+        // ...
+    }
+}
+```
+
+The session carries credentials, environment, and authentication — there is no
+reason to build it twice. Sharing one instance across services is identical to
+what `EpicorClient` does internally.
+
+### When to reach for `EpicorClient` instead
+
+`EpicorClient` is documented in [README.md](README.md#the-epicorclient-facade)
+as the recommended entry point for code that touches several services
+together. It wraps the pattern above: holds one session, lazy-constructs each
+service on first access, and disposes them all when the client itself is
+disposed. Reach for it when the stack-of-`using`-blocks shape is showing up
+repeatedly, or when an orchestrator wants every service available without
+naming them up front. For everything else — scripts, focused workflows, code
+that touches one or two services — direct construction is the simpler shape.
 
 ---
 

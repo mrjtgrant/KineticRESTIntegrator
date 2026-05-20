@@ -78,10 +78,11 @@ using (var rest = new RESTConnect(session))
 }
 ```
 
-**How the URL is built:** the request URL is `Environment` concatenated
-directly with the path you pass to `RESTCallAsync`. There is no slash inserted
-between them — include a trailing `/` on `Environment` or a leading `/` on the
-path, but not both, so you don't end up with a missing or doubled slash.
+**How the URL is built:** the request URL is `Environment` joined to the path
+you pass to `RESTCallAsync`. The seam between them is normalized to a single
+`/` — a trailing slash on `Environment`, a leading slash on the path, both, or
+neither all produce the same correct URL, so you don't have to babysit the
+slashes.
 
 ---
 
@@ -187,6 +188,110 @@ combined: when `BearerToken` is set, it takes the `Authorization` header and
 Basic credentials (`Username` / `Userkey`) are not sent. An API key — a
 separate header — may still be sent alongside a bearer token if the API expects
 both.
+
+---
+
+## Calling an un-wrapped Epicor endpoint
+
+The transport-direct path also works against Epicor itself, for the rare case
+of an endpoint `EpicorSvcs` does not wrap. This is the corner case: if you are
+working with Epicor, prefer the typed services in `EpicorSvcs` (see
+[EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md)). Reach for `RESTConnect` against
+Epicor only when there is no wrapper for what you need.
+
+Epicor's REST endpoints live under one of two URL shapes, depending on which
+API version you call:
+
+- **v1, Basic auth** — `{Environment}/api/v1/{service-path}`
+- **v2 OData, API-key auth** — `{Environment}/api/v2/odata/{Company}/{service-path}`
+
+When you go through `EpicorSvc` (or any service that derives from it), the
+constructor populates the two URL-modifier fields on the auth object for you:
+
+```csharp
+env.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
+env.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", env.Company);
+```
+
+…and the transport picks between them automatically: when `ApiKey` is empty
+it uses `DynamicURLModifier_Basic`, otherwise `DynamicURLModifier_OAuth`. This
+is the work the wrapper saves you. Going through `RESTConnect` directly, you
+populate those fields yourself, and the same pick-by-`ApiKey` logic applies.
+
+### v1 + Basic auth
+
+`ApiKey` empty, `DynamicURLModifier_Basic` set, `Username` and `Userkey`
+populated. The request URL becomes `{Environment}/api/v1/{path}`.
+
+```csharp
+using RESTServices;
+using Newtonsoft.Json.Linq;
+
+var session = new RESTSessionKey
+{
+    Environment = "https://company-pilot.example.com/server",
+    AuthObject  = new RESTAuthenticationObject
+    {
+        Username                 = "YOUR_USER",
+        Userkey                  = "YOUR_PASSWORD",
+        DynamicURLModifier_Basic = "/api/v1/"
+    }
+};
+
+using (var rest = new RESTConnect(session))
+{
+    JObject result = await rest.RESTCallAsync(
+        "Erp.BO.SalesOrderSvc/GetByID?orderNum=12345");
+
+    if (result["ErrorMessage"] != null)
+        Console.WriteLine($"Call failed: {result["ErrorMessage"]}");
+    else
+        Console.WriteLine(result);
+}
+```
+
+### v2 OData + API key
+
+`ApiKey` set, `DynamicURLModifier_OAuth` set with the company substituted in.
+The request URL becomes `{Environment}/api/v2/odata/{Company}/{path}`. This is
+the path Epicor's `Company` segment lives in — going direct, you interpolate
+your company into the modifier yourself (the wrapper does the same thing,
+using `EpicorRESTSessionKey.Company` as the source).
+
+```csharp
+using RESTServices;
+using Newtonsoft.Json.Linq;
+
+var session = new RESTSessionKey
+{
+    Environment = "https://company-pilot.example.com/server",
+    AuthObject  = new RESTAuthenticationObject
+    {
+        ApiKey                   = "YOUR_API_KEY",
+        DynamicURLModifier_OAuth = "/api/v2/odata/EPIC01/"
+    }
+};
+
+using (var rest = new RESTConnect(session))
+{
+    JObject result = await rest.RESTCallAsync(
+        "Erp.BO.SalesOrderSvc/GetByID?orderNum=12345");
+
+    // ...
+}
+```
+
+OAuth 2.0 bearer-token auth is independent of which URL shape you use. Set
+`BearerToken` for the `Authorization: Bearer {token}` header, and let `ApiKey`
+control which modifier the transport picks: leave `ApiKey` empty for the v1
+path, or set it (alongside the bearer token, since they use different
+headers) for the v2 path.
+
+The choice between the two URL shapes is a deployment decision about which
+Epicor API version you're targeting, not a property of the endpoint you're
+calling — the same business object is reachable under either. v2 OData is
+Epicor's current direction and is what `EpicorSvcs` defaults to when an
+`ApiKey` is configured.
 
 ---
 
