@@ -15,13 +15,183 @@ calling an Epicor endpoint Keri doesn't wrap, see
 
 ## Contents
 
-1. [Using a single service directly](#1-using-a-single-service-directly)
-2. [Writing data into Epicor (UD-row upsert)](#2-writing-data-into-epicor-ud-row-upsert)
-3. [UD-row conventions](#3-ud-row-conventions)
+1. [Finding your way around `EpicorSvcs`](#1-finding-your-way-around-epicorsvcs)
+2. [Using a single service directly](#2-using-a-single-service-directly)
+3. [Writing data into Epicor (UD-row upsert)](#3-writing-data-into-epicor-ud-row-upsert)
+4. [UD-row conventions](#4-ud-row-conventions)
 
 ---
 
-## 1. Using a single service directly
+## 1. Finding your way around `EpicorSvcs`
+
+`EpicorSvcs` wraps a large surface of Epicor business objects, but it follows
+a small, consistent shape that lets you predict where any given wrapper
+lives — or, if you're looking at a wrapper, what Epicor BO call it ultimately
+makes. If you know the Epicor BO and method name, you know the Keri class and
+method name.
+
+### The naming convention
+
+The rule has two parts.
+
+**The class name matches the Epicor service name.** Take the last segment of
+the Epicor service path:
+
+| Epicor service | Keri class |
+|---|---|
+| `Erp.BO.PartSvc` | `PartSvc` |
+| `Erp.BO.SalesOrderSvc` | `SalesOrderSvc` |
+| `Erp.BO.BomSearchSvc` | `BomSearchSvc` |
+
+**Direct method wrappers match the Epicor method name, with `Async`
+appended.** A method on `*Svc.cs` (the BO wrapper file, not `*Svc.Workflows.cs`)
+is named for the Epicor method it calls:
+
+| Epicor call | Keri method |
+|---|---|
+| `Erp.BO.PartSvc/GetByID` | `PartSvc.GetByIDAsync` |
+| `Erp.BO.PartSvc/DuplicatePart` | `PartSvc.DuplicatePartAsync` |
+| `Erp.BO.PartSvc/Update` | `PartSvc.UpdateAsync` |
+| `Erp.BO.PartSvc/UpdateExt` | `PartSvc.UpdateExtAsync` |
+| `Erp.BO.PartSvc/Parts` | `PartSvc.PartsAsync` |
+
+The last row is the OData entity-set pattern: `Parts` is Epicor's OData
+collection for the `PartSvc` business object. The convention still holds —
+the Keri method name matches the Epicor endpoint segment — it's just that
+some segments name a method and others name a collection.
+
+**Orchestrator methods don't follow this.** They live in
+`*Svc.Workflows.cs` and compose multiple BO calls into a single operation that
+has no single Epicor counterpart, so they don't have a name to mirror. They
+are named for what they accomplish: `ChangePartUnitPriceAsync` (composes three
+calls), `GetNewPartRevAsync` (creates a new revision and persists it),
+`AddMtlsAsync` on `EngWorkBenchSvc` (a long ECO workflow). The intent is
+readable from the name; the composition is the implementation detail.
+
+**One generalization to be aware of: `UDXSvc`.** Epicor has a separate
+service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`,
+`Ice.BO.UDCodesSvc`, and so on — 30+ in total). Wrapping each one as its own
+Keri class would be tedious and unhelpful since they share an interface.
+`UDXSvc` instead parameterizes over the table — `client.UDX.GetAllAsync(top: 25, udTable: "UD22")` —
+so one Keri class covers the family. The class-matches-Svc-name rule is
+deliberately broken here to keep the surface manageable.
+
+### Using a wrapped call: append a filter, pass a payload
+
+Once you've found the wrapper, calling it is the standard shape. A read takes
+optional OData fragments — filter, select, top — and an in-context cancellation
+token; a write takes the `JObject` payload. The wrapper handles URL
+composition, auth, error shape, and dataset normalization — you write the BO
+name and the parameters that matter to you, and nothing else.
+
+```csharp
+using (var part = new PartSvc("pilot"))
+{
+    var parts = await part.PartsAsync(
+        filters: new List<string> { "NonStock eq true", "InActive eq false" },
+        select:  new List<string> { "PartNum", "PartDescription", "ClassID" },
+        top:     50);
+}
+```
+
+For a BO method that Keri does not wrap, the same shape is available through
+`RESTConnect` directly — see
+[EXAMPLES_RESTAPI.md — Calling an un-wrapped Epicor endpoint](EXAMPLES_RESTAPI.md#calling-an-un-wrapped-epicor-endpoint).
+
+### `NewDS`: the empty dataset for `GetNew*` calls
+
+Epicor's `GetNew*` methods (`GetNewPart`, `GetNewPartRev`, `GetNewECOGroup`,
+`GetNewECOMtl`, and so on) all expect the same starting payload: an empty
+dataset, `{"ds": {}}`. They return that dataset filled in with default values
+for a new row, ready for the caller to populate and persist.
+
+Rather than constructing that literal `JObject` at each call site, every
+service inherits a public `NewDS` field on `EpicorSvc` that holds it:
+
+```csharp
+public JObject NewDS = new JObject { new JProperty("ds", new JObject()) };
+```
+
+Use it as the starting payload for any `GetNew*` call:
+
+```csharp
+var newPart = await part.GetNewPartAsync();   // sends NewDS internally
+```
+
+For a `GetNew*` call that takes additional parameters, **copy `NewDS` into a
+fresh `JObject` before adding to it** — do not add properties to `NewDS`
+itself, since it is a shared field on the service instance and mutating it
+would pollute subsequent calls. The orchestrator code follows this pattern:
+
+```csharp
+JObject newpartrev = new JObject(NewDS);                   // fresh copy
+newpartrev.Add(new JProperty("partNum", partNum));
+newpartrev.Add(new JProperty("revisionNum", ""));
+newpartrev.Add(new JProperty("altMethod", ""));
+
+JObject ds = HandleResponse(await RESTCallAsync(svc, newpartrev, ct).ConfigureAwait(false));
+```
+
+`new JObject(NewDS)` is a deep copy via the `JObject(JToken)` constructor —
+exactly what you want here.
+
+### How orchestrators thread the dataset
+
+When an Epicor workflow needs more than one BO call, the same dataset
+typically flows through every step: each call returns a dataset, the
+orchestrator mutates or reassigns it, then hands it to the next call. The
+final step persists the result. The orchestrator is not doing anything
+magical — it's doing what a developer would do by hand to compose the calls,
+with the dataset as the carrier.
+
+`PartSvc.ChangePartUnitPriceAsync` is the short example:
+
+```csharp
+// 1. ChangePartUnitPrice returns a modified dataset, wrapped under
+//    "parameters" — unwrap it.
+JObject changed = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+JObject payload = JObject.FromObject(changed["parameters"]);
+
+// 2. CheckPartChanges takes that dataset and returns advisory messages.
+var check = await CheckPartChangesAsync(payload, ct).ConfigureAwait(false);
+
+// 3. UpdateExt persists the dataset that came out of step 1.
+var updated = await UpdateExtAsync(payload, false, true, ct).ConfigureAwait(false);
+```
+
+Three BO calls, one dataset (`payload`) threaded through all three. The
+`check` step doesn't modify the dataset — it returns messages that the
+orchestrator attaches to the final result for the caller's benefit. The
+dataset that gets persisted is the one that came out of the price change.
+
+`EngWorkBenchSvc.AddMtlsAsync` is the longer example, and shows the same
+pattern at full size. The workflow:
+
+1. `GetByID` — does the ECO group exist?
+2. If not, `GenerateGroup` (itself an orchestrator: `GetNewECOGroup` →
+   `Update`) and use the new dataset; if so, use the existing one.
+3. `CheckOut` — lock the parent part to the group.
+4. `GetECOGroupAndECORev` — get the dataset to mutate. Reassign `ds` to it.
+5. For each material in the input list: `GetNewECOMtl` (reassigns `ds`),
+   then populate fields directly on `ds["ds"]["ECOMtl"][activeMtlIndex]`.
+6. `GroupUnLock` — release the group lock (best-effort).
+7. `Update` — persist `ds`.
+
+Reading the source, the same `JObject ds` variable carries through the entire
+sequence: reassigned where Epicor returns a fresh dataset (steps 2, 4, 5),
+mutated in place where the workflow populates rows (step 5). Workflow logic
+sits *between* the BO calls — choosing whether to generate the group,
+sequencing material rows by 10, recording an error flag to skip the final
+`Update` — but the dataset itself is the through-line.
+
+This is the pattern to follow when composing your own multi-step workflows.
+Get the dataset from the first call, mutate or reassign it at each step,
+persist at the end. The orchestrators in `*Svc.Workflows.cs` are not a closed
+system; they are worked examples of the pattern you would write yourself.
+
+---
+
+## 2. Using a single service directly
 
 Every Epicor service can be constructed and used on its own. You do not have
 to reach for `EpicorClient` to get work done — a single service is a complete,
@@ -134,7 +304,7 @@ that touches one or two services — direct construction is the simpler shape.
 
 ---
 
-## 2. Writing data into Epicor (UD-row upsert)
+## 3. Writing data into Epicor (UD-row upsert)
 
 Most examples in the README read data. This one writes it — pushing a row into
 an Epicor user-defined (UD) table through `UDXSvc`.
@@ -234,7 +404,7 @@ if (all.IsFailure)
 
 ---
 
-## 3. UD-row conventions
+## 4. UD-row conventions
 
 A UD table's columns are generic — `ShortChar01`, `Number05`, `CheckBox02`,
 `Date10`, and so on — with no built-in meaning. To keep UD data legible, Keri
