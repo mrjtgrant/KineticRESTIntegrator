@@ -275,7 +275,7 @@ A few conventions hold across the library:
 - **Every public call is async.** Methods end in `Async` and return `Task<OperationResult<T>>`. Always `await` them.
 - **Services are split into two files.** `*Svc.cs` holds thin wrappers around individual Epicor BO calls. `*Svc.Workflows.cs` holds orchestrators — methods that compose multiple BO calls into one operation (e.g. `SalesOrderSvc.NewOrderAsync` calls `GetNewOrderHed` → `ChangeOrderHedCustomerCustID` → `MasterUpdate`). You don't have to know which file a method lives in to use it; the split is for contributors. Both files declare the same `public partial class`.
 - **DTO naming reflects what the DTO is.** A class named after an Epicor table (`Customer`, `Part`, `OrderHed`) corresponds to that real table. A class with the `Dataset` suffix (`InvTransferDataset`, `GroupUnLockDataset`) faithfully mirrors an Epicor transaction-input shape that spans tables. A class with the `Input` suffix (`QuoteInput`, `MiscShipLineInput`, `ECOMtlInput`) is a caller-facing convenience shape — a reshaped subset for one of the orchestrators.
-- **`_c` columns are stripped.** Default DTOs contain only standard Epicor columns. Per-installation custom columns (Epicor's `_c` suffix convention) are not modeled — they're installation-specific by definition and don't belong in a shared library DTO. The standard user-defined columns (`Character01`, `ShortChar01`, `Number01`, `CheckBox01`, etc.) are retained, since they exist on every install. If you need access to a `_c` column, use `result.RawResponse`.
+- **`_c` columns flow through `ExtraData`.** Default DTOs model only standard Epicor columns — per-installation custom columns (Epicor's `_c` suffix convention) aren't typed because they're installation-specific by definition. They are however preserved: every Epicor-table DTO carries an `ExtraData` dictionary that captures any JSON property the typed properties don't consume, both on the way in and on the way out. To read a custom column: `part.ExtraData["WarrantyPeriod_c"]`. To write one: `part.ExtraData["WarrantyPeriod_c"] = 12;` — the value rides along when the DTO is serialized. The standard user-defined columns (`Character01`, `ShortChar01`, `Number01`, `CheckBox01`, etc.) remain typed since they exist on every install. `RawResponse` is still available for data that isn't on a row at all — nested child tables in a multi-table response, or the wide `GetByID` dataset.
 
 ### Public methods vs internal helpers
 
@@ -412,7 +412,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
 
 1. **Never commit `App.config`** — it has credentials. Use `App.config.template` for any new settings.
 2. **Never commit secrets, internal URLs, real email addresses, or customer-specific data** in source files, tests, or examples.
-3. **Match the existing code style.** Async-with-`Async`-suffix, `OperationResult<T>` returns, XML doc comments on every public method, no `_c` columns in default DTOs.
+3. **Match the existing code style.** Async-with-`Async`-suffix, `OperationResult<T>` returns, XML doc comments on every public method, no `_c` columns in default DTOs (custom columns flow through `ExtraData`).
 
 ---
 

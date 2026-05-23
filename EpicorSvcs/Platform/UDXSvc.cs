@@ -71,27 +71,17 @@ namespace EpicorSvcs
             return udTable.Trim();
         }
 
-        // All UD columns supported by the generic upsert / select logic below.
-        private static readonly List<string> udcols = new List<string>
+        // Properties on UDRow that are not UD-table columns and must be
+        // excluded when iterating its serialized form to build a payload or
+        // $select clause. The key columns are emitted explicitly by each
+        // caller; RowMod is set by the operation (e.g. "U" for an update);
+        // Company comes from the session; ExtraData is the [JsonExtensionData]
+        // pass-through, whose contents are lifted by Newtonsoft to top-level
+        // siblings and so are already iterated alongside the typed columns.
+        private static readonly HashSet<string> nonColumnProperties = new HashSet<string>
         {
-            "Character01", "Character02", "Character03", "Character04", "Character05",
-            "Character06", "Character07", "Character08", "Character09", "Character10",
-            "Number01", "Number02", "Number03", "Number04", "Number05",
-            "Number06", "Number07", "Number08", "Number09", "Number10",
-            "Number11", "Number12", "Number13", "Number14", "Number15",
-            "Number16", "Number17", "Number18", "Number19", "Number20",
-            "Date01", "Date02", "Date03", "Date04", "Date05",
-            "Date06", "Date07", "Date08", "Date09", "Date10",
-            "Date11", "Date12", "Date13", "Date14", "Date15",
-            "Date16", "Date17", "Date18", "Date19", "Date20",
-            "CheckBox01", "CheckBox02", "CheckBox03", "CheckBox04", "CheckBox05",
-            "CheckBox06", "CheckBox07", "CheckBox08", "CheckBox09", "CheckBox10",
-            "CheckBox11", "CheckBox12", "CheckBox13", "CheckBox14", "CheckBox15",
-            "CheckBox16", "CheckBox17", "CheckBox18", "CheckBox19", "CheckBox20",
-            "ShortChar01", "ShortChar02", "ShortChar03", "ShortChar04", "ShortChar05",
-            "ShortChar06", "ShortChar07", "ShortChar08", "ShortChar09", "ShortChar10",
-            "ShortChar11", "ShortChar12", "ShortChar13", "ShortChar14", "ShortChar15",
-            "ShortChar16", "ShortChar17", "ShortChar18", "ShortChar19", "ShortChar20"
+            "Key1", "Key2", "Key3", "Key4", "Key5",
+            "RowMod", "Company", "ExtraData",
         };
 
         // Separators for the Character10 column-legend convention.
@@ -248,10 +238,11 @@ namespace EpicorSvcs
                 new JProperty("RowMod", "U")
             };
 
-            foreach (string col in udcols)
+            foreach (var prop in lineObject.Properties())
             {
-                if (lineObject.ContainsKey(col))
-                    ds.Add(new JProperty(col, lineObject[col].ToString()));
+                if (nonColumnProperties.Contains(prop.Name))
+                    continue;
+                ds.Add(new JProperty(prop.Name, prop.Value.ToString()));
             }
 
             JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
@@ -291,10 +282,11 @@ namespace EpicorSvcs
             {
                 JObject lineObject = JObject.FromObject(udrow);
                 List<string> selectedcols = new List<string>();
-                foreach (string col in udcols)
+                foreach (var prop in lineObject.Properties())
                 {
-                    if (lineObject.ContainsKey(col))
-                        selectedcols.Add(col);
+                    if (nonColumnProperties.Contains(prop.Name))
+                        continue;
+                    selectedcols.Add(prop.Name);
                 }
                 if (selectedcols.Count > 0)
                     svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
@@ -403,10 +395,11 @@ namespace EpicorSvcs
 
             // Only the UD columns this row actually populates.
             List<string> selectedcols = new List<string>();
-            foreach (string col in udcols)
+            foreach (var prop in lineObject.Properties())
             {
-                if (lineObject.ContainsKey(col))
-                    selectedcols.Add(col);
+                if (nonColumnProperties.Contains(prop.Name))
+                    continue;
+                selectedcols.Add(prop.Name);
             }
 
             // Build the key filter as a List<string> joined by " and ".

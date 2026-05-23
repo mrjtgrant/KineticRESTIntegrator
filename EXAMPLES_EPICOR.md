@@ -135,6 +135,85 @@ JObject ds = HandleResponse(await RESTCallAsync(svc, newpartrev, ct).ConfigureAw
 `new JObject(NewDS)` is a deep copy via the `JObject(JToken)` constructor —
 exactly what you want here.
 
+### `ExtraData`: install-specific columns (`_c` fields)
+
+The DTOs ship with the columns every Epicor install has. Real installs
+inevitably add more — Epicor's `_c`-suffixed custom columns — and a library
+that silently dropped those would be a non-starter for any real deployment.
+Every Epicor-table DTO carries an `ExtraData` dictionary that captures any
+JSON property the typed properties don't consume, both on the way in and the
+way out:
+
+```csharp
+[JsonExtensionData]
+public IDictionary<string, JToken> ExtraData { get; set; }
+    = new Dictionary<string, JToken>();
+```
+
+That's [Newtonsoft's `JsonExtensionData`](https://www.newtonsoft.com/json/help/html/T_Newtonsoft_Json_JsonExtensionDataAttribute.htm)
+attribute doing the work: on deserialization, any field the DTO doesn't have a
+typed property for lands here; on serialization, the dictionary's entries are
+emitted as top-level siblings of the typed properties.
+
+**Reading custom columns** — they're available on the DTO without any extra
+plumbing:
+
+```csharp
+using (var part = new PartSvc("pilot"))
+{
+    var result = await part.PartsAsync(top: 1);
+    var p = result.Value.First();
+
+    Console.WriteLine(p.PartNum);                                  // typed
+    Console.WriteLine(p.ExtraData["WarrantyPeriod_c"]);            // custom
+    Console.WriteLine(p.ExtraData["ProductLine_c"]?.ToString());   // custom
+}
+```
+
+The dictionary's value type is `JToken`, so cast or convert to whatever shape
+the column actually holds — `ToString()` for strings, `ToObject<int>()` for
+numbers, and so on.
+
+**Writing custom columns** — set the entry, then serialize the DTO into the
+payload the write method expects:
+
+```csharp
+using (var part = new PartSvc("pilot"))
+{
+    var getResult = await part.GetByIDAsync("WIDGET-001");
+    JObject ds = getResult.Value;
+
+    // Mutate the Part row directly. _c columns sit alongside the typed
+    // columns in the dataset; you can read or write them by key without
+    // a DTO at all if it's more convenient.
+    ds["ds"]["Part"][0]["WarrantyPeriod_c"] = 24;
+
+    await part.UpdateAsync(ds);
+}
+```
+
+Or, if you've materialized a DTO and want to write through it:
+
+```csharp
+var p = await something.That.Returns.A.Part();
+p.ExtraData["WarrantyPeriod_c"] = 24;
+
+// Serialize the DTO into the JObject payload UpdateAsync expects.
+// ExtraData entries are lifted to top-level siblings automatically.
+JObject payload = JObject.FromObject(p);
+await part.UpdateAsync(BuildDatasetWith(payload));
+```
+
+For `UDXSvc` specifically, the same applies — `UDRow.ExtraData` captures custom
+columns on UD tables, and `UpdateAsync`/`GetAllAsync`/`GetByIDAsync` send and
+select them automatically.
+
+`ExtraData` is for *columns on this row* that the DTO doesn't model.
+`OperationResult<T>.RawResponse` is still the escape hatch for data that
+isn't on the row at all — other tables in a multi-table response, the wide
+`GetByID` dataset, or anything outside the `ds.{TableName}[0]` shape the DTO
+projects from.
+
 ### How orchestrators thread the dataset
 
 When an Epicor workflow needs more than one BO call, the same dataset

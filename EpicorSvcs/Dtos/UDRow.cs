@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace EpicorSvcs.Dtos
 {
@@ -576,5 +577,17 @@ namespace EpicorSvcs.Dtos
         }
 
         #endregion
+
+        /// <summary>
+        /// Unmodeled columns on this row, including installation-specific
+        /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
+        /// on deserialization with any JSON property the typed DTO does not
+        /// have a field for; serialized back out as siblings of the typed
+        /// properties. Read or write a custom column by key —
+        /// e.g. <c>dto.ExtraData["MyField_c"] = "value"</c>.
+        /// </summary>
+        [JsonExtensionData]
+        public IDictionary<string, JToken> ExtraData { get; set; }
+            = new Dictionary<string, JToken>();
     }
 }

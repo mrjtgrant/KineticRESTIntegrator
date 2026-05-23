@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace EpicorSvcs.Dtos
 {
@@ -16,15 +19,22 @@ namespace EpicorSvcs.Dtos
     /// and the standard user-defined columns.
     /// </para>
     /// <para>
-    /// For any column not modeled here, or for the nested child tables, use
+    /// For columns on this row not modeled here, including
+    /// installation-specific <c>_c</c> columns, use the
+    /// <see cref="ExtraData"/> dictionary. For data not on this row
+    /// — nested child tables, the wide <c>GetByID</c> dataset — use
     /// the <c>OperationResult&lt;T&gt;.RawResponse</c> escape hatch.
     /// </para>
     /// <para>
-    /// Installation-specific custom columns (Epicor <c>_c</c> fields) are
-    /// intentionally excluded — they are not part of a standard Epicor
-    /// installation and do not belong in a shared library DTO. The standard
-    /// user-defined columns (<c>Character01</c>, <c>ShortChar01</c>, etc.)
-    /// are retained, as they exist on every Epicor installation.
+    /// Installation-specific custom columns (Epicor <c>_c</c> fields)
+    /// are not modeled as typed properties — they are not part of a
+    /// standard Epicor installation and do not belong in a shared
+    /// library DTO. They remain readable and writable via the
+    /// <see cref="ExtraData"/> dictionary on this DTO, which captures
+    /// any JSON property the typed properties do not consume. The
+    /// standard user-defined columns (<c>Character01</c>,
+    /// <c>ShortChar01</c>, etc.) are typed because they exist on every
+    /// Epicor installation.
     /// </para>
     /// </remarks>
     public class Part
@@ -189,5 +199,17 @@ namespace EpicorSvcs.Dtos
         /// <c>"U"</c> = updated, <c>""</c> = unchanged.
         /// </summary>
         public string RowMod { get; set; }
+
+        /// <summary>
+        /// Unmodeled columns on this row, including installation-specific
+        /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
+        /// on deserialization with any JSON property the typed DTO does not
+        /// have a field for; serialized back out as siblings of the typed
+        /// properties. Read or write a custom column by key —
+        /// e.g. <c>dto.ExtraData["MyField_c"] = "value"</c>.
+        /// </summary>
+        [JsonExtensionData]
+        public IDictionary<string, JToken> ExtraData { get; set; }
+            = new Dictionary<string, JToken>();
     }
 }
