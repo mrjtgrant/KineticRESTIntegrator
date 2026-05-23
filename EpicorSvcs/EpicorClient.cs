@@ -6,7 +6,7 @@ namespace EpicorSvcs
 {
     /// <summary>
     /// A convenience facade for working with multiple Epicor services that
-    /// share the same session. Holds one configured <see cref="RESTSessionKey"/>
+    /// share the same session. Holds one configured <see cref="EpicorRESTSessionKey"/>
     /// and lazy-constructs each service on first access — pay only for what
     /// you use.
     /// </summary>
@@ -30,7 +30,7 @@ namespace EpicorSvcs
     /// <example>
     /// <code>
     /// // Programmatic session (e.g. from a vault or saved connection)
-    /// var session = new RESTSessionKey { /* ... */ };
+    /// var session = new EpicorRESTSessionKey { /* ... */ };
     ///
     /// using (var epicor = new EpicorClient(session))
     /// {
@@ -74,7 +74,7 @@ namespace EpicorSvcs
         /// any <c>App.config</c> / environment variable lookup.
         /// </summary>
         /// <param name="session">
-        /// A fully-configured <see cref="RESTSessionKey"/> with company,
+        /// A fully-configured <see cref="EpicorRESTSessionKey"/> with company,
         /// environment URL, and authentication.
         /// </param>
         public EpicorClient(EpicorRESTSessionKey session)

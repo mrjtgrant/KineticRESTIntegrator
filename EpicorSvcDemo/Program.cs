@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using EpicorSvcs;
+using EpicorSvcs.Dtos;
 using FileHandling;
 using FileHandling.Dtos;
 using Newtonsoft.Json.Linq;
@@ -33,7 +34,7 @@ namespace EpicorSvcDemo
             //           Userkey  = "YOUR_PASSWORD",
             //           ApiKey   = ""   // set ApiKey instead for v2 OData auth
             //       }
-            //   })
+            //   });
             //
             // EpicorClient owns an HttpClient and must be disposed.
             using (var epicor = new EpicorClient())
