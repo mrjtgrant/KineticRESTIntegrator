@@ -45,8 +45,10 @@ namespace EpicorSvcs
         /// </remarks>
         public string UDTableDefault { get; set; } = "UD22";
 
-        // Resolves the table for a call: the per-call argument if supplied,
-        // otherwise the instance default. Throws if neither yields a value.
+        /// <summary>
+        /// Resolves the table for a call: the per-call argument if supplied,
+        /// otherwise the instance default. Throws if neither yields a value.
+        /// </summary>
         private string ResolveTable(string udTable)
         {
             string table = udTable ?? UDTableDefault;
@@ -56,11 +58,17 @@ namespace EpicorSvcs
             return table;
         }
 
-        // Resolves the table for a destructive call. Unlike ResolveTable, this
-        // never falls back to UDTableDefault: a delete must act on exactly the
-        // table the caller named. A null, empty, or whitespace argument is a
-        // hard error rather than a silent default — deleting against the wrong
-        // table is unrecoverable, so the call fails before it can do harm.
+        /// <summary>
+        /// Resolves the table for a destructive call. Unlike
+        /// <see cref="ResolveTable"/>, this never falls back to
+        /// <see cref="UDTableDefault"/>: a delete must act on exactly the
+        /// table the caller named.
+        /// </summary>
+        /// <remarks>
+        /// A null, empty, or whitespace argument is a hard error rather than
+        /// a silent default — deleting against the wrong table is
+        /// unrecoverable, so the call fails before it can do harm.
+        /// </remarks>
         private static string ResolveTableForDelete(string udTable, string paramName)
         {
             if (string.IsNullOrWhiteSpace(udTable))
@@ -71,25 +79,48 @@ namespace EpicorSvcs
             return udTable.Trim();
         }
 
-        // Properties on UDRow that are not UD-table columns and must be
-        // excluded when iterating its serialized form to build a payload or
-        // $select clause. The key columns are emitted explicitly by each
-        // caller; RowMod is set by the operation (e.g. "U" for an update);
-        // Company comes from the session; ExtraData is the [JsonExtensionData]
-        // pass-through, whose contents are lifted by Newtonsoft to top-level
-        // siblings and so are already iterated alongside the typed columns.
+        /// <summary>
+        /// Properties on <see cref="UDRow"/> that are not UD-table columns
+        /// and must be excluded when iterating its serialized form to build a
+        /// payload or <c>$select</c> clause.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>RowMod</c> is set by each operation (e.g. <c>"U"</c> for an
+        /// update); <c>Company</c> comes from the session (and should not
+        /// appear on <see cref="UDRow"/>, but is excluded defensively);
+        /// <c>ExtraData</c> is the <c>[JsonExtensionData]</c> container
+        /// itself — its contents are already lifted to top-level siblings by
+        /// Newtonsoft, so the dictionary property itself must not be
+        /// re-emitted.
+        /// </para>
+        /// <para>
+        /// <c>Key1</c>–<c>Key5</c> are NOT in this set: they are genuine
+        /// columns on every UD table, and they must appear in both write
+        /// payloads and read <c>$select</c> clauses. The iteration is the
+        /// single source of truth for which columns flow through.
+        /// </para>
+        /// </remarks>
         private static readonly HashSet<string> nonColumnProperties = new HashSet<string>
         {
-            "Key1", "Key2", "Key3", "Key4", "Key5",
             "RowMod", "Company", "ExtraData",
         };
 
-        // Separators for the Character10 column-legend convention.
-        // Fixed by design: '|' between pairs, ':' between a generic column
-        // name and its caller-defined meaning. A caller who wants different
-        // separators is off the convention and should parse the field
-        // themselves — see UDRow.Character10 and UDRow.ToMappedValues().
+        /// <summary>
+        /// Separator between <c>column:meaning</c> pairs in the
+        /// <c>Character10</c> column-legend convention. Fixed by design.
+        /// A caller who wants a different separator is off the convention
+        /// and should parse the field themselves — see
+        /// <see cref="UDRow.Character10"/> and
+        /// <see cref="UDRow.ToMappedValues"/>.
+        /// </summary>
         private const char LegendPairSeparator = '|';
+
+        /// <summary>
+        /// Separator between a generic column name and its caller-defined
+        /// meaning within a pair of the <c>Character10</c> column-legend
+        /// convention. Fixed by design.
+        /// </summary>
         private const char LegendKeyValueSeparator = ':';
 
         /// <summary>
@@ -227,14 +258,14 @@ namespace EpicorSvcs
 
             string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
             JObject lineObject = JObject.FromObject(udrow);
+
+            // The single iteration over the serialized DTO drives the
+            // payload. Key1–Key5 flow through it like every other column;
+            // Company (session-sourced) and RowMod (operation-sourced) are
+            // the only properties set explicitly here.
             JObject ds = new JObject
             {
                 new JProperty("Company", EpicorSession.Company),
-                new JProperty("Key1", udrow.Key1),
-                new JProperty("Key2", udrow.Key2),
-                new JProperty("Key3", udrow.Key3),
-                new JProperty("Key4", udrow.Key4),
-                new JProperty("Key5", udrow.Key5),
                 new JProperty("RowMod", "U")
             };
 
