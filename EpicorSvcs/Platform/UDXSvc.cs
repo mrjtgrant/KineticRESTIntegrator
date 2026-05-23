@@ -59,6 +59,26 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Resolves the company for a UD-row write: the row's
+        /// <see cref="UDRow.Company"/> if set, otherwise the session's
+        /// <see cref="Dtos.EpicorRESTSessionKey.Company"/>.
+        /// </summary>
+        /// <remarks>
+        /// Mirrors the per-call-wins-over-default pattern that
+        /// <see cref="ResolveTable"/> uses for the table name. The everyday
+        /// single-company case leaves <see cref="UDRow.Company"/> at its
+        /// empty-string default and the session's company is used invisibly;
+        /// the multi-company case sets <see cref="UDRow.Company"/> on the row
+        /// to target a different tenant.
+        /// </remarks>
+        private string ResolveCompany(UDRow udrow)
+        {
+            return string.IsNullOrWhiteSpace(udrow.Company)
+                ? EpicorSession.Company
+                : udrow.Company;
+        }
+
+        /// <summary>
         /// Resolves the table for a destructive call. Unlike
         /// <see cref="ResolveTable"/>, this never falls back to
         /// <see cref="UDTableDefault"/>: a delete must act on exactly the
@@ -80,15 +100,23 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Properties on <see cref="UDRow"/> that are not UD-table columns
-        /// and must be excluded when iterating its serialized form to build a
-        /// payload or <c>$select</c> clause.
+        /// Properties on <see cref="UDRow"/> that are not iterated when
+        /// building a write payload or a read <c>$select</c> clause.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <c>RowMod</c> is set by each operation (e.g. <c>"U"</c> for an
-        /// update); <c>Company</c> comes from the session (and should not
-        /// appear on <see cref="UDRow"/>, but is excluded defensively);
+        /// <c>RowMod</c> is operation-controlled — each method sets it
+        /// explicitly (e.g. <c>"U"</c> for an update); iterating it would
+        /// risk overriding the operation's intent with whatever stale value
+        /// the caller may have left on the row.
+        /// </para>
+        /// <para>
+        /// <c>Company</c> is set explicitly in the write payload via
+        /// <see cref="ResolveCompany"/>, which picks the row's value if set
+        /// and falls back to the session's company otherwise. Excluding it
+        /// from the iteration prevents a duplicate emission.
+        /// </para>
+        /// <para>
         /// <c>ExtraData</c> is the <c>[JsonExtensionData]</c> container
         /// itself — its contents are already lifted to top-level siblings by
         /// Newtonsoft, so the dictionary property itself must not be
@@ -261,11 +289,11 @@ namespace EpicorSvcs
 
             // The single iteration over the serialized DTO drives the
             // payload. Key1–Key5 flow through it like every other column;
-            // Company (session-sourced) and RowMod (operation-sourced) are
-            // the only properties set explicitly here.
+            // Company (caller-or-session-sourced) and RowMod
+            // (operation-sourced) are the only properties set explicitly here.
             JObject ds = new JObject
             {
-                new JProperty("Company", EpicorSession.Company),
+                new JProperty("Company", ResolveCompany(udrow)),
                 new JProperty("RowMod", "U")
             };
 

@@ -19,7 +19,10 @@ namespace EpicorSvcs.Dtos
     /// <c>UDTable</c> argument that selects which Epicor UD table is being
     /// targeted. It exposes the full standard UD column set: 5 key columns,
     /// 10 <c>Character</c>, 20 <c>ShortChar</c>, 20 <c>Number</c>, 20
-    /// <c>Date</c>, and 20 <c>CheckBox</c> columns.
+    /// <c>Date</c>, and 20 <c>CheckBox</c> columns. <see cref="Company"/>
+    /// identifies the Epicor tenant — leave it empty to use the session's
+    /// company (the single-company common case), or set it to write to a
+    /// different company.
     /// </para>
     /// <para>
     /// <b>Column length limits (Epicor).</b> <c>ShortChar</c> columns hold up
@@ -98,6 +101,33 @@ namespace EpicorSvcs.Dtos
     /// </remarks>
     public class UDRow
     {
+        #region Tenant
+
+        /// <summary>
+        /// The Epicor company this row belongs to.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Leave unset (the default — an empty string) and the empty default
+        /// resolves to the session's
+        /// <see cref="Dtos.EpicorRESTSessionKey.Company"/> at call time. The
+        /// empty default does <b>not</b> mean "write an empty <c>Company</c>
+        /// to Epicor" — it means "use the session's company." This matches
+        /// the everyday single-company case, where the session and the row's
+        /// tenant are the same and the caller never thinks about it.
+        /// </para>
+        /// <para>
+        /// Set this explicitly only when writing a row in a <i>different</i>
+        /// company than the session's default — the multi-company case. A
+        /// non-empty value here wins over the session's company, exactly as a
+        /// per-call <c>UDTable</c> argument wins over
+        /// <see cref="UDXSvc.UDTableDefault"/>.
+        /// </para>
+        /// </remarks>
+        public string Company { get; set; } = "";
+
+        #endregion
+
         #region Key columns
 
         /// <summary>
