@@ -66,6 +66,7 @@ namespace EpicorSvcs
         private InvTransferSvc _invTransfer;
         private BomSearchSvc _bomSearch;
         private EngWorkBenchSvc _engWorkBench;
+        private JobEntrySvc _jobEntry;
         private QuoteSvc _quote;
         private SalesOrderSvc _salesOrder;
 
@@ -246,6 +247,16 @@ namespace EpicorSvcs
         }
 
         // ---------------------------------------------------------------------
+        // Production services
+        // ---------------------------------------------------------------------
+
+        /// <summary>Manufacturing job header reads and creation.</summary>
+        public JobEntrySvc JobEntry
+        {
+            get { ThrowIfDisposed(); return _jobEntry ?? (_jobEntry = new JobEntrySvc(_session)); }
+        }
+
+        // ---------------------------------------------------------------------
         // Sales services
         // ---------------------------------------------------------------------
 
@@ -301,6 +312,7 @@ namespace EpicorSvcs
             _invTransfer?.Dispose();
             _bomSearch?.Dispose();
             _engWorkBench?.Dispose();
+            _jobEntry?.Dispose();
             _quote?.Dispose();
             _salesOrder?.Dispose();
 
