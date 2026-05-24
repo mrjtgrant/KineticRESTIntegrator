@@ -338,6 +338,7 @@ KineticRESTIntegrator/
 │   ├── EpicorSvc.cs                 (base class — credential validation)
 │   ├── EpicorClient.cs              (the disposable facade)
 │   ├── OperationResult.cs           (the standard return type)
+│   ├── EpicorRESTSessionKey.cs      (in Dtos/ — programmatic-session DTO)
 │   ├── Dtos/                        ~40 typed DTOs
 │   ├── Sales/                       QuoteSvc, SalesOrderSvc
 │   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
