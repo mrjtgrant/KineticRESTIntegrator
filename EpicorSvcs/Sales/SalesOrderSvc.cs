@@ -49,6 +49,58 @@ namespace EpicorSvcs
         // Public API — reads, template-fetchers, and the write primitive
         // ---------------------------------------------------------------
 
+        // A practical default $select for SalesOrders queries — chosen to
+        // populate the core columns for tracking/projection use cases so a
+        // default call returns a usefully-filled object rather than just an
+        // order number.
+        private static readonly List<string> defaultSalesOrderSelect = new List<string>
+        {
+            "OrderNum", "OrderDate", "PONum", "CustNum", "CustomerCustID",
+            "CustomerName", "OrderHeld", "OpenOrder", "RequestDate",
+            "NeedByDate", "DocOrderAmt", "OrderAmt", "Currency_CurrencyID"
+        };
+
+        /// <summary>
+        /// Queries sales-order header records via OData. Calls
+        /// <c>Erp.BO.SalesOrderSvc/SalesOrders</c> in Epicor.
+        /// </summary>
+        /// <param name="filters">
+        /// Optional OData filter clauses, combined with <c>and</c>. Each entry
+        /// is a single condition, e.g. <c>"OrderDate ge 2025-08-01"</c>.
+        /// </param>
+        /// <param name="select">
+        /// Optional list of columns for the OData <c>$select</c>. When null, a
+        /// practical default set is used that populates the core columns of
+        /// the <see cref="OrderHed"/> DTO. Pass an explicit list to widen or
+        /// narrow the projection.
+        /// </param>
+        /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="OrderHed"/> rows.
+        /// </returns>
+        public async Task<OperationResult<List<OrderHed>>> SalesOrdersAsync(
+            List<string> filters = null,
+            List<string> select = null,
+            int top = 500,
+            CancellationToken ct = default)
+        {
+            if (select == null)
+                select = defaultSalesOrderSelect;
+
+            string svc = "Erp.BO.SalesOrderSvc/SalesOrders";
+            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "&$top=" + top.ToString();
+
+            if (filters != null && filters.Count > 0)
+                svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<OrderHed>());
+        }
+
+
         /// <summary>
         /// Retrieves a full sales order by its order number. Calls
         /// <c>Erp.BO.SalesOrderSvc/GetByID</c> in Epicor.
