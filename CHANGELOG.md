@@ -82,6 +82,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`VendorSvc.VendCntsAsync` — `$filter` clause was built without URL encoding.** The clause `VendorNum eq {n}` was assembled by `String.Format` and concatenated directly onto the URL, while every other entity-set wrapper in the library runs its filter through `UrlEncode`. The space and `eq` happened to pass through cleanly with an integer value on the right-hand side, so the bug was latent — but a future contributor changing the filter to use a string value or a more complex predicate would have hit a malformed-URL failure mode that the rest of the library doesn't have. The clause now goes through `UrlEncode`, matching `CustomersAsync` and `VendorsAsync` and the rest of the OData wrappers.
+
 - **`FileHandling.ConvertJArrayToCSV` — `data[0]` threw on an empty `JArray`.** The method read column names from the first row without guarding for an empty array, throwing `ArgumentOutOfRangeException`. It now returns an empty string for null or empty input, matching the already-guarded `ConvertJArrayToHTMLTable`.
 
 - **Request-URL building is now tolerant of stray slashes.** The transport built the request URL by concatenating the environment, URL modifier, and service path directly, so a missing or doubled slash at any seam produced a malformed URL. URL building now normalizes each seam to a single `/`, tolerating a stray trailing slash on the environment (a common copy-paste artifact) and leading/trailing slashes on the modifier and service path.

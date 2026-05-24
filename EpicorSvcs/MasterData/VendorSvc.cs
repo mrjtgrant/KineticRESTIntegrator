@@ -134,7 +134,8 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.VendorSvc/VendCnts";
-            svc += String.Format("?$top={0}&$filter=VendorNum eq {1}", top, vendorNum);
+            svc += "?$top=" + top.ToString();
+            svc += "&$filter=" + UrlEncode(String.Format("VendorNum eq {0}", vendorNum));
 
             JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r.ExtractValueList<VendCnt>());
