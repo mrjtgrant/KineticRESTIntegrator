@@ -36,7 +36,7 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**v0.1.0 — pre-1.0, API may change.** All twenty-one Epicor service wrappers are converted, fifty-two unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
+**v0.1.0 — pre-1.0, API may change.** All twenty-two Epicor service wrappers are converted, fifty-two unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
 
 ---
 
@@ -57,7 +57,7 @@ The one place where target framework matters internally is `FileHandling.Emailer
 | Project | Output | Purpose |
 |---|---|---|
 | `RESTServices` | `RESTServices.dll` | Low-level REST client. Owns auth, session, URL building, and JSON error handling. |
-| `EpicorSvcs` | `EpicorSvcs.dll` | Async wrappers for 21 Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
+| `EpicorSvcs` | `EpicorSvcs.dll` | Async wrappers for 22 Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
 | `FileHandling` | `FileHandling.dll` | Excel generation (ClosedXML), CSV writer, and SMTP email sender. |
 | `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
@@ -222,7 +222,7 @@ using (var client = new EpicorClient("pilot"))      // env override; null/omitte
 }
 ```
 
-Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDX`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `Quote`, `SalesOrder`.
+Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDX`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Quote`, `SalesOrder`.
 
 Direct service construction (`new BAQSvc(...)`, etc.) is the underlying pattern — `EpicorClient` is a convenience wrapper over it, not a replacement. Each service is its own complete, disposable unit: open a `using` block and call as many methods on it as the workflow needs, or stack `using` blocks across several services when you want explicit control over scope. Reach for `EpicorClient` when an orchestrator touches several services together and the stack-of-`using`-blocks shape is getting repetitive; reach for direct construction otherwise. See [EXAMPLES_EPICOR.md — Using a single service directly](EXAMPLES_EPICOR.md#2-using-a-single-service-directly) for the patterns.
 
@@ -339,10 +339,11 @@ KineticRESTIntegrator/
 │   ├── EpicorClient.cs              (the disposable facade)
 │   ├── OperationResult.cs           (the standard return type)
 │   ├── EpicorRESTSessionKey.cs      (in Dtos/ — programmatic-session DTO)
-│   ├── Dtos/                        ~40 typed DTOs
+│   ├── Dtos/                        ~45 typed DTOs
 │   ├── Sales/                       QuoteSvc, SalesOrderSvc
 │   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
 │   ├── Production/                  JobEntrySvc
+│   ├── Purchasing/                  POSvc
 │   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
 │   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
 │   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDXSvc, UserCodesSvc
