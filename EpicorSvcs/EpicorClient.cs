@@ -67,6 +67,7 @@ namespace EpicorSvcs
         private BomSearchSvc _bomSearch;
         private EngWorkBenchSvc _engWorkBench;
         private JobEntrySvc _jobEntry;
+        private POSvc _po;
         private QuoteSvc _quote;
         private SalesOrderSvc _salesOrder;
 
@@ -257,6 +258,16 @@ namespace EpicorSvcs
         }
 
         // ---------------------------------------------------------------------
+        // Purchasing services
+        // ---------------------------------------------------------------------
+
+        /// <summary>Purchase order header / line / release reads and creation.</summary>
+        public POSvc PO
+        {
+            get { ThrowIfDisposed(); return _po ?? (_po = new POSvc(_session)); }
+        }
+
+        // ---------------------------------------------------------------------
         // Sales services
         // ---------------------------------------------------------------------
 
@@ -313,6 +324,7 @@ namespace EpicorSvcs
             _bomSearch?.Dispose();
             _engWorkBench?.Dispose();
             _jobEntry?.Dispose();
+            _po?.Dispose();
             _quote?.Dispose();
             _salesOrder?.Dispose();
 
