@@ -22,61 +22,91 @@ namespace EpicorSvcs
         /// </param>
         public CustomerSvc(string env = null) : base(env) { }
 
-        /// <summary>Construct with a programmatic session � bypasses config-file lookup.</summary>
+        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public CustomerSvc(EpicorRESTSessionKey env) : base(env) { }
 
+        // A practical default $select for Customers queries — chosen to
+        // populate the minimal Customer DTO's typed properties. Widen by
+        // passing an explicit select list.
+        private static readonly List<string> defaultCustomerSelect = new List<string>
+        {
+            "CustNum", "CustID", "Name"
+        };
+
         /// <summary>
-        /// Retrieves customer records. Calls
+        /// Queries customer records via OData. Calls
         /// <c>Erp.BO.CustomerSvc/Customers</c> in Epicor.
         /// </summary>
-        /// <param name="top">
-        /// Maximum number of records to return (OData <c>$top</c>).
-        /// Defaults to 30.
+        /// <param name="filters">
+        /// Optional OData filter clauses, combined with <c>and</c>. Each entry
+        /// is a single condition, e.g. <c>"CustID eq 'ACME01'"</c>. To find
+        /// a single customer by ID, pass a single-element list:
+        /// <c>new List&lt;string&gt; { "CustID eq 'ACME01'" }</c>.
         /// </param>
+        /// <param name="select">
+        /// Optional list of columns for the OData <c>$select</c>. When null, a
+        /// practical default set is used that populates the core columns of
+        /// the <see cref="Customer"/> DTO. Pass an explicit list to widen or
+        /// narrow the projection.
+        /// </param>
+        /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the list of
-        /// <see cref="Customer"/> records. On failure, <c>ErrorMessage</c>
-        /// describes what went wrong.
+        /// <see cref="Customer"/> rows.
         /// </returns>
         public async Task<OperationResult<List<Customer>>> CustomersAsync(
-            int top = 30,
+            List<string> filters = null,
+            List<string> select = null,
+            int top = 500,
             CancellationToken ct = default)
         {
+            if (select == null)
+                select = defaultCustomerSelect;
+
             string svc = "Erp.BO.CustomerSvc/Customers";
-            svc += "?$top=" + top;
+            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "&$top=" + top.ToString();
+
+            if (filters != null && filters.Count > 0)
+                svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
             JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r.ExtractValueList<Customer>());
         }
 
         /// <summary>
-        /// Retrieves the customer record(s) matching a customer ID. Calls
-        /// <c>Erp.BO.CustomerSvc/Customers</c> in Epicor with a
-        /// <c>CustID</c> filter.
+        /// Retrieves a full customer by its customer ID. Calls
+        /// <c>Erp.BO.CustomerSvc/GetByID</c> in Epicor.
         /// </summary>
         /// <remarks>
-        /// Returns a list because the underlying call is an OData filter
-        /// query, though a valid <c>CustID</c> normally matches exactly one
-        /// customer. Use <c>result.Value.FirstOrDefault()</c> to get the
-        /// single record.
+        /// The <c>GetByID</c> response is a wide, multi-table dataset — the
+        /// <c>Customer</c> header plus the related tables (addresses,
+        /// contacts, EntityGLC, tax exemptions, and more). It is returned
+        /// intact as a <c>JObject</c> rather than projected to a DTO,
+        /// because a customer record <i>is</i> its whole dataset. To work
+        /// with the header row, materialize it from <c>RawResponse</c>:
+        /// <c>result.Value["ds"]["Customer"][0].ToObject&lt;Customer&gt;()</c>.
+        /// When you only need the header row (no addresses or related
+        /// tables), prefer the narrower <see cref="CustomersAsync"/> with a
+        /// <c>CustID eq '...'</c> filter.
         /// </remarks>
-        /// <param name="CustID">The customer ID code (e.g. <c>"ACME01"</c>).</param>
+        /// <param name="custID">The customer ID to retrieve (e.g. <c>"ACME01"</c>).</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the matching
-        /// <see cref="Customer"/> records.
+        /// An <see cref="OperationResult{T}"/> wrapping the raw multi-table
+        /// customer dataset.
         /// </returns>
-        public async Task<OperationResult<List<Customer>>> _CustomerByCustIDAsync(
-            string CustID,
+        public async Task<OperationResult<JObject>> GetByIDAsync(
+            string custID,
             CancellationToken ct = default)
         {
-            string svc = "Erp.BO.CustomerSvc/Customers";
-            svc += "?$filter=" + UrlEncode(String.Format("CustID eq '{0}'", CustID));
+            string svc = "Erp.BO.CustomerSvc/GetByID";
+            svc += String.Format("?custID={0}", UrlEncode(custID));
 
-            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractValueList<Customer>());
+            JObject response = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
         }
     }
 }

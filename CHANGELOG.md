@@ -17,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   Naming follows the standard convention — class `JobEntrySvc` matches `Erp.BO.JobEntrySvc`, OData method names match Epicor's entity sets. `UDXSvc` remains the only documented naming exception. Orchestrators (release/close/complete/dispatch) and the wider job tables (`JobOper`, `JobProd`, `JobOpDtl`, etc.) are intentionally not in this first cut — they get added as specific needs surface, with the partial-class shape on `JobEntrySvc` ready to host a `JobEntrySvc.Workflows.cs` file.
 
+- **`CustomerSvc.GetByIDAsync(string custID)` — wide multi-table dataset reader.** Fills a primitive gap in the Customer surface: the existing `CustomersAsync` was a narrow OData read, and there was no way to fetch the full multi-table customer dataset (header plus addresses, contacts, GLC, tax exemptions, etc.) the way `SalesOrderSvc.GetByIDAsync` and `JobEntrySvc.GetByIDAsync` already did for their domains. The new method follows the same pattern: returns the raw `JObject` dataset; materialize individual rows off `Value["ds"][tableName]` as needed. For the narrower "just fetch the header for a known CustID" case, prefer `CustomersAsync` with a `CustID eq '...'` filter — `GetByIDAsync` does more work (wider response) than that case needs.
+
+- **`VendorSvc.VendorsAsync` and `VendorSvc.GetByIDAsync(int vendorNum)` — vendor-master reads, filling a gap.** Before this change, `VendorSvc` exposed only `VendCntsAsync` (vendor contacts) — there was no way to list vendors themselves or fetch a single vendor's full record through the service. `VendorsAsync` is an OData entity-set wrapper matching the recent `JobEntriesAsync` / `SalesOrdersAsync` shape (`filters` + `select` + `top` parameters with a practical-core default `$select`). `GetByIDAsync` is the wide multi-table dataset reader (vendor header plus `VendorPP` purchase points, `VendCnt` contacts, `VendBank` banking, `VendRemitTo`, `EntityGLC`, `TaxExempt`, and more). New `Vendor` DTO in `EpicorSvcs/Dtos/` models the practical-core vendor master columns — identifiers, primary address, contact info, terms/currency, status flags, and the standard `Number01`/`Number02`/`ShortChar01`/`ShortChar02` UD samples that the vendor schema exposes.
+
 - **Configurable API-key header name.** `RESTAuthenticationObject.ApiKeyHeaderName` controls the HTTP header the API key is sent under. It defaults to `X-API-Key` (what Epicor's v2 OData endpoint expects), so existing behavior is unchanged; callers targeting a REST API that expects a differently-named header (`apikey`, `Ocp-Apim-Subscription-Key`, etc.) can now override it. A blank value falls back to `X-API-Key`.
 
 - **OAuth 2.0 bearer-token authentication.** `RESTAuthenticationObject.BearerToken`, when set, is sent as an `Authorization: Bearer {token}` header. You supply the token; Keri does not acquire or refresh it. Bearer takes precedence over Basic (both use the `Authorization` header); an API key, a separate header, may still be sent alongside.
@@ -26,6 +30,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Multi-company UD-row writes via `UDRow.Company`.** `UDRow` gains a `Company` property for explicitly targeting a tenant when writing or upserting through `UDXSvc.UpdateAsync`. Leave it at the empty-string default and the session's company is used invisibly — the single-company case is unchanged. Set it to override per-row, e.g. `new UDRow { Key1 = "...", Company = "OTHER", /* ... */ }` — useful when a single session reads or writes across multiple Epicor companies. The resolution follows the same per-call-wins-over-default pattern as `UDTable` over `UDTableDefault`. Scope note: this addresses write paths; multi-company *reads* are not added in this change — the `$select` builder for `GetAllAsync` / `GetByIDAsync` continues to exclude `Company`, and reads still go through the session's company.
 
 ### Changed
+
+- **`CustomerSvc.CustomersAsync` signature widened to match the framework's OData entity-set convention.** *Breaking.* The method gained `filters` and `select` parameters and the default `top` changed from `30` to `500`, bringing it in line with `JobEntriesAsync` / `SalesOrdersAsync` / `PartsAsync`. The most consequential change is the new default `$select`: previously the method passed no `$select`, so Epicor returned every column on the row; now a default of `CustNum`/`CustID`/`Name` is applied. **Callers reading any other column off the returned DTOs (`Address1`, `City`, `CurrencyCode`, anything else) will see default values for those properties — no compiler error, just silently empty data.** Migration is one parameter:
+
+  ```csharp
+  // Before — returned every column on the row
+  var result = await client.Customer.CustomersAsync();
+
+  // After — pass an explicit select list for any columns beyond the default
+  var result = await client.Customer.CustomersAsync(
+      select: new List<string> { "CustNum", "CustID", "Name", "Address1", "City" });
+  ```
+
+  The same change subsumes the deleted `_CustomerByCustIDAsync` (see `### Removed`): `CustomersAsync(filters: new List<string> { "CustID eq 'ACME01'" })` is the direct replacement.
 
 - **`UDXSvc` delete operations now require an explicit table and no longer fall back to `UDTableDefault`.** *Breaking.* The destructive paths previously resolved a missing table through `UDTableDefault`, so a delete with no table named would silently act on whichever table that default pointed at. Deletes now resolve the table strictly: a null, empty, or whitespace table name throws `ArgumentException` before any rows are touched. The read methods are unchanged and still fall back to `UDTableDefault`.
   - `UDXSvc.DeleteByIDAsync` — the `UDTable` parameter lost its `= null` default and is now required. Callers relying on the implicit table must pass it explicitly.
@@ -47,6 +64,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   The `EpicorSvc` and `EpicorClient` programmatic constructors take `EpicorRESTSessionKey`; every service's `Svc(RESTSessionKey)` constructor likewise becomes `Svc(EpicorRESTSessionKey)`.
 
 - **`UDXSvc` no longer restricts UD rows to the standard column set.** Previously, `UpdateAsync`, `GetAllAsync`, and `GetByIDAsync` iterated a hardcoded allowlist of the standard UD columns (`Character01`–`Character10`, `Number01`–`Number20`, `Date01`–`Date20`, `CheckBox01`–`CheckBox20`, `ShortChar01`–`ShortChar20`) when building write payloads and `$select` clauses; columns outside the list were silently dropped. The allowlist existed to protect against typos when callers passed raw `JObject`s, but the typed `UDRow` DTO already provides that protection — and the allowlist also blocked installations that legitimately add custom `_c` columns to UD tables. The list has been replaced with an exclusion of non-column properties (`Key1`–`Key5`, `RowMod`, `Company`, `ExtraData`); every other property on the serialized `UDRow` — including `ExtraData` entries lifted to siblings by `[JsonExtensionData]` — now flows through to Epicor.
+
+### Removed
+
+- **`CustomerSvc._CustomerByCustIDAsync` deleted.** *Breaking.* The method had two problems: an underscore prefix that violated the naming convention (it was the last underscore-prefixed straggler from a prior cleanup pass), and a structural redundancy with `CustomersAsync` — both methods called the same `Erp.BO.CustomerSvc/Customers` OData endpoint, differing only in which query parameter they sent. The widened `CustomersAsync` (see `### Changed`) now subsumes both behaviors through its `filters` parameter. Migration:
+
+  ```csharp
+  // Before
+  var result = await client.Customer._CustomerByCustIDAsync("ACME01");
+
+  // After
+  var result = await client.Customer.CustomersAsync(
+      filters: new List<string> { "CustID eq 'ACME01'" });
+  ```
+
+  Note that `CustID eq '...'` normally matches exactly one customer; use `result.Value.FirstOrDefault()` to get the single row, same as before.
 
 ### Fixed
 
