@@ -25,25 +25,11 @@ No integration tests in CI — the existing tests are offline by design and that
 
 This is the one item in this document that isn't repairing existing code but adding new infrastructure, and it's "future" — not committed to.
 
-### 2. Add `JobEntrySvc`
-
-**🔭 Future.** Epicor's `Erp.BO.JobEntrySvc` is conspicuously missing from the 20 shipped services. Jobs are central to any manufacturing-floor workflow, and the absence is the kind of gap a user would notice immediately.
-
-**Naming follows the standard convention:** the class is `JobEntrySvc` (matching `Erp.BO.JobEntrySvc`), and the OData entity-set wrapper is `JobHeadsAsync` (matching the `JobHeads` entity set, which projects rows of `JobHead`). The names are awkward but consistent — `UDXSvc` remains the only documented naming exception, justified by its dynamic generalization across the 30+ UD tables; `JobEntrySvc` doesn't have that justification and should match Epicor's model the way every other service does.
-
-**Suggested first cut, mirroring `SalesOrderSvc`:**
-- `JobHead` DTO in `EpicorSvcs/Dtos/`, modeling the practical-core columns every install has, with the `[JsonExtensionData] ExtraData` property that every Epicor-table DTO now carries. Pick a `defaultJobHeadSelect` that returns useful columns for typical job-tracking use cases (`JobNum`, `PartNum`, `RevisionNum`, `JobReleased`, `JobClosed`, `JobComplete`, `ProdQty`, `QtyCompleted`, `DueDate`, `StartDate`, etc. — finalize against an actual Epicor install).
-- `JobEntrySvc.cs` with at minimum: `JobHeadsAsync` (OData entity-set wrapper following `PartSvc.PartsAsync` / `SalesOrderSvc.SalesOrdersAsync`), `GetByIDAsync` (single-job wide-dataset reader following `PartSvc.GetByIDAsync`), and `GetNewJobHeadAsync` (the standard new-row pattern).
-- `EpicorClient` integration: backing field, lazy-constructed property, dispose call. Place in the Engineering services region.
-- A `EpicorSvcPOCs` example, gated on `KERI_POC_ALLOW_WRITES` for any write operations, consistent with how the other POCs are shaped.
-- `CHANGELOG.md` entry under `[0.1.1] ### Added`.
-- `README.md` services list updated (the count goes from "20 services" to "21").
-
-**Not in scope for the first cut:** orchestrators (`JobEntrySvc.Workflows.cs`) for complex job operations (release, close, complete, dispatch). The native BO wrappers should land first; orchestrators added as specific needs surface.
-
 ---
 
 ## Recently addressed (kept here briefly as project history)
+
+- **`JobEntrySvc` shipped — fills the missing-jobs gap.** The 21st service wrapper, in `EpicorSvcs/Production/`, exposes four OData entity-set wrappers (`JobEntriesAsync`, `JobAsmblsAsync`, `JobMtlsAsync`, `JobPartsAsync`), three BO action wrappers (`GetByIDAsync`, `GetNewJobHeadAsync`, `GetNextJobNumAsync`), and four DTOs (`JobHead`, `JobAsmbl`, `JobMtl`, `JobPart`). The class is a partial declaration ready to host a `JobEntrySvc.Workflows.cs` file when orchestrators (release/close/complete) become necessary. The OData entity set is `JobEntries` (not `JobHeads`) per Epicor's REST help, and `JobHead` notably uses the `UserChar`/`UserDate`/`UserDecimal`/`UserInteger` UD column series rather than the `Character01`/`Number01`/`CheckBox01`/`ShortChar01` series used on most other Epicor tables. `JobAsmbl` and `JobMtl` deliberately omit the large `TLA`/`TLE`/`LLA`/`LLE` cost-rollup variants and `Carbon*` emissions-tracking variants — they remain accessible via `ExtraData` if needed. POC example deferred until the work can be verified against a real Epicor install.
 
 - **`Company` moved off `RESTSessionKey` and into `EpicorRESTSessionKey`** — the vendor-agnostic transport layer no longer carries an Epicor concept. `Company` lives on a new `EpicorRESTSessionKey` subclass in `EpicorSvcs.Dtos`, `RESTServices` is now genuinely vendor-neutral, and the Epicor service and client constructors take the subclass. A note on versioning: this is a breaking API change and the original recommendation was to hold it for a deliberate `0.2.0`. In practice it landed in `0.1.1` with a `### Changed` changelog entry, because `0.1.1` was still unreleased and contained other breaking changes already (the UDX delete-method hardening below), so a single coordinated breaking pre-1.0 patch was the cheaper path than carrying two breakage milestones.
 
