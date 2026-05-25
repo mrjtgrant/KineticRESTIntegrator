@@ -46,6 +46,18 @@
     <NoWarn>$(NoWarn);MSB3277;MSB3836</NoWarn>
   </PropertyGroup>
 
+  <!-- For net8.0 only: copy transitive NuGet package DLLs (ClosedXML,
+       MailKit, Newtonsoft.Json, and their transitives) into the output
+       folder. Default for library projects is to NOT copy them (consumers
+       resolve NuGet themselves), but this library is consumed by projects
+       that reference its DLLs directly from a local lib/ folder rather than
+       via NuGet — so the DLLs need to be alongside the library's own output.
+       Not applied to net48 to avoid disturbing the existing binding-redirect
+       and BCL-facade-conflict handling on that target. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
