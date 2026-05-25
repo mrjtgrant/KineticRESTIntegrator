@@ -343,7 +343,7 @@ KineticRESTIntegrator/
 │   ├── Sales/                       QuoteSvc, SalesOrderSvc
 │   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
 │   ├── Production/                  JobEntrySvc
-│   ├── Purchasing/                  POSvc
+│   ├── Purchasing/                  POSvc, ReceiptSvc
 │   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
 │   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
 │   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDXSvc, UserCodesSvc
