@@ -16,8 +16,8 @@ namespace EpicorSvcs
     /// <para>
     /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
     /// here in <c>SalesOrderSvc.cs</c>; the multi-call orchestrators
-    /// (<c>FindOrderByPONumAsync</c>, <c>NewOrderLineAsync</c>,
-    /// <c>NewOrderAsync</c>) live in <c>SalesOrderSvc.Workflows.cs</c>.
+    /// (<c>GetByPONumAsync</c>, <c>AddOrderLineAsync</c>,
+    /// <c>CreateOrderAsync</c>) live in <c>SalesOrderSvc.Workflows.cs</c>.
     /// </para>
     /// <para>
     /// Method visibility on this service follows the framework convention:
@@ -211,7 +211,7 @@ namespace EpicorSvcs
         // These methods mutate an in-flight order or order-detail dataset
         // and run Epicor's on-change logic. They are not part of the
         // framework's public surface; callers reach this functionality via
-        // NewOrderAsync or NewOrderLineAsync. They keep raw JObject returns
+        // CreateOrderAsync or AddOrderLineAsync. They keep raw JObject returns
         // because they are chained inside orchestrators where wrapping each
         // step in OperationResult would add ceremony without value.
         // ---------------------------------------------------------------

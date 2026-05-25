@@ -23,7 +23,7 @@ namespace EpicorSvcs.Dtos
     /// raw <c>JObject</c> rather than this DTO, because an order is its whole
     /// multi-table dataset. Use this DTO to materialize the header row off
     /// <c>RawResponse</c>, and use it directly as the element type of
-    /// <see cref="SalesOrderSvc.FindOrderByPONumAsync"/>'s result.
+    /// <see cref="SalesOrderSvc.SalesOrdersAsync"/>'s OData list result.
     /// </para>
     /// <para>
     /// Installation-specific custom columns (Epicor <c>_c</c> fields) are

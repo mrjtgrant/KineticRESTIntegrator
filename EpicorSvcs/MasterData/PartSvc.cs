@@ -32,6 +32,16 @@ namespace EpicorSvcs
         /// <param name="env">A fully-configured session.</param>
         public PartSvc(EpicorRESTSessionKey env) : base(env) { }
 
+        // ---------------------------------------------------------------
+        // OData entity-set wrappers
+        //
+        // PartsAsync queries the Parts entity set (header rows for the part
+        // master). PartAttchesAsync queries PartAttches (attachment metadata
+        // rows under a part). Both follow the standard OData wrapper shape:
+        // optional filters + select + top, with a practical-core default
+        // $select so a vanilla call returns a usefully-filled DTO.
+        // ---------------------------------------------------------------
+
         // A practical default $select for Parts queries — chosen to populate
         // the core columns of the Part DTO so a default call returns a
         // usefully-filled object rather than just a part number.
@@ -110,6 +120,10 @@ namespace EpicorSvcs
             JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
+
+        // ---------------------------------------------------------------
+        // BO action wrappers — reads, template-fetchers, and writes
+        // ---------------------------------------------------------------
 
         /// <summary>
         /// Retrieves a page of part records via Epicor's <c>GetList</c>. Calls

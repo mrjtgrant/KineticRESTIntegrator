@@ -26,6 +26,16 @@ namespace EpicorSvcs
         /// <param name="env">A fully-configured session.</param>
         public VendorSvc(EpicorRESTSessionKey env) : base(env) { }
 
+        // ---------------------------------------------------------------
+        // OData entity-set wrappers
+        //
+        // VendorsAsync queries the Vendors entity set (vendor master rows).
+        // VendCntsAsync queries VendCnts (per-vendor contact rows). Both
+        // follow the standard OData wrapper shape: optional filters +
+        // select + top, with a practical-core default $select on the
+        // primary entity set.
+        // ---------------------------------------------------------------
+
         // A practical default $select for Vendors queries — chosen to
         // populate the core columns for vendor-lookup use cases so a
         // default call returns a usefully-filled object rather than just a
@@ -81,6 +91,38 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Retrieves the contact people associated with a vendor. Calls
+        /// <c>Erp.BO.VendorSvc/VendCnts</c> in Epicor.
+        /// </summary>
+        /// <param name="vendorNum">The internal vendor number to look up contacts for.</param>
+        /// <param name="top">
+        /// Maximum number of contact records to return (OData <c>$top</c>).
+        /// Defaults to 100.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="VendCnt"/> contacts for the vendor. On failure,
+        /// <c>ErrorMessage</c> describes what went wrong.
+        /// </returns>
+        public async Task<OperationResult<List<VendCnt>>> VendCntsAsync(
+            int vendorNum,
+            int top = 100,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.VendorSvc/VendCnts";
+            svc += "?$top=" + top.ToString();
+            svc += "&$filter=" + UrlEncode(String.Format("VendorNum eq {0}", vendorNum));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<VendCnt>());
+        }
+
+        // ---------------------------------------------------------------
+        // BO action wrappers — single-record read and write
+        // ---------------------------------------------------------------
+
+        /// <summary>
         /// Retrieves a full vendor by its vendor number. Calls
         /// <c>Erp.BO.VendorSvc/GetByID</c> in Epicor.
         /// </summary>
@@ -111,34 +153,6 @@ namespace EpicorSvcs
 
             JObject response = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Retrieves the contact people associated with a vendor. Calls
-        /// <c>Erp.BO.VendorSvc/VendCnts</c> in Epicor.
-        /// </summary>
-        /// <param name="vendorNum">The internal vendor number to look up contacts for.</param>
-        /// <param name="top">
-        /// Maximum number of contact records to return (OData <c>$top</c>).
-        /// Defaults to 100.
-        /// </param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the list of
-        /// <see cref="VendCnt"/> contacts for the vendor. On failure,
-        /// <c>ErrorMessage</c> describes what went wrong.
-        /// </returns>
-        public async Task<OperationResult<List<VendCnt>>> VendCntsAsync(
-            int vendorNum,
-            int top = 100,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.VendorSvc/VendCnts";
-            svc += "?$top=" + top.ToString();
-            svc += "&$filter=" + UrlEncode(String.Format("VendorNum eq {0}", vendorNum));
-
-            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractValueList<VendCnt>());
         }
 
         /// <summary>

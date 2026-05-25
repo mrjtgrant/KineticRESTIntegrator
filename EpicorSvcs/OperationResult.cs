@@ -66,6 +66,14 @@ namespace EpicorSvcs
 
 
         /// <summary>Construct a successful result.</summary>
+        /// <param name="value">The successful payload — see <see cref="Value"/>.</param>
+        /// <param name="rawResponse">
+        /// Optional raw Epicor response — see <see cref="RawResponse"/>.
+        /// </param>
+        /// <param name="resourcePath">
+        /// Optional service path — see <see cref="ResourcePath"/>.
+        /// </param>
+        /// <returns>A success-flavored <see cref="OperationResult{T}"/>.</returns>
         public static OperationResult<T> Success(T value, JObject rawResponse = null, string resourcePath = null)
         {
             return new OperationResult<T>
@@ -78,6 +86,17 @@ namespace EpicorSvcs
         }
 
         /// <summary>Construct a failure from an Epicor-reported error.</summary>
+        /// <param name="errorMessage">Human-readable error description — see <see cref="ErrorMessage"/>.</param>
+        /// <param name="statusCode">
+        /// Optional HTTP status code from Epicor — see <see cref="StatusCode"/>.
+        /// </param>
+        /// <param name="resourcePath">
+        /// Optional service path — see <see cref="ResourcePath"/>.
+        /// </param>
+        /// <param name="rawResponse">
+        /// Optional raw Epicor response — see <see cref="RawResponse"/>.
+        /// </param>
+        /// <returns>A failure-flavored <see cref="OperationResult{T}"/>.</returns>
         public static OperationResult<T> Failure(
             string errorMessage,
             int? statusCode = null,
@@ -96,6 +115,16 @@ namespace EpicorSvcs
         }
 
         /// <summary>Construct a failure from a transport-level exception.</summary>
+        /// <param name="exception">
+        /// The underlying transport exception — see <see cref="Exception"/>.
+        /// Its <see cref="System.Exception.Message"/> is also copied into
+        /// <see cref="ErrorMessage"/> for callers that only consume the
+        /// message string.
+        /// </param>
+        /// <param name="resourcePath">
+        /// Optional service path — see <see cref="ResourcePath"/>.
+        /// </param>
+        /// <returns>A failure-flavored <see cref="OperationResult{T}"/>.</returns>
         public static OperationResult<T> Failure(
             Exception exception,
             string resourcePath = null)

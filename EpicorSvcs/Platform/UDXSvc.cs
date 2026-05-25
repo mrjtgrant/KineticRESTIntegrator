@@ -151,6 +151,15 @@ namespace EpicorSvcs
         /// </summary>
         private const char LegendKeyValueSeparator = ':';
 
+        // ---------------------------------------------------------------
+        // Public utility helpers — column-legend convenience methods
+        //
+        // Stateless string helpers for the Character10 column-legend
+        // convention. Exposed as static methods because they have no
+        // dependency on the session — callers can use them to parse legends
+        // off rows obtained from any source, not just this service.
+        // ---------------------------------------------------------------
+
         /// <summary>
         /// Parses a <see cref="UDRow"/> column legend — the <c>Character10</c>
         /// convention — into a dictionary of generic-column-name to
@@ -235,6 +244,10 @@ namespace EpicorSvcs
 
             return string.Join(LegendPairSeparator.ToString(), pairs);
         }
+
+        // ---------------------------------------------------------------
+        // BO action wrappers — reads, template-fetcher, and write
+        // ---------------------------------------------------------------
 
         /// <summary>
         /// Retrieves all rows of a UD table. Calls
@@ -430,6 +443,14 @@ namespace EpicorSvcs
             JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
+
+        // ---------------------------------------------------------------
+        // Destructive operations — bulk and single-row delete
+        //
+        // Separated from the BO action wrappers above because deletes
+        // remove data that may not be recoverable, and DeleteAllAsync in
+        // particular requires explicit opt-in via a named-argument boolean.
+        // ---------------------------------------------------------------
 
         /// <summary>
         /// Deletes every row of a UD table, one row at a time. Calls

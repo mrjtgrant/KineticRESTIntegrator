@@ -26,7 +26,7 @@ namespace EpicorSvcs
     /// The <c>OnChange*</c> dataset mutators that run Epicor's on-change
     /// logic are <c>internal</c> and return raw <see cref="JObject"/> —
     /// they are implementation details of the project-creation sequence,
-    /// reached through the <see cref="NewProjectAsync"/> orchestrator.
+    /// reached through the <see cref="CreateProjectAsync"/> orchestrator.
     /// </para>
     /// </remarks>
     public partial class ProjectSvc : EpicorSvc
@@ -123,7 +123,7 @@ namespace EpicorSvcs
         /// Useful as a primitive — for example, to inspect the defaults
         /// Epicor would assign to a new project, or as a starting point for
         /// custom workflows that need to construct a project dataset
-        /// differently from <see cref="NewProjectAsync"/>.
+        /// differently from <see cref="CreateProjectAsync"/>.
         /// </remarks>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The new project dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
@@ -153,7 +153,7 @@ namespace EpicorSvcs
         //
         // These methods mutate an in-flight project dataset and run Epicor's
         // on-change logic. They are not part of the framework's public
-        // surface; callers reach this functionality via NewProjectAsync.
+        // surface; callers reach this functionality via CreateProjectAsync.
         // They keep raw JObject returns because they are chained inside the
         // orchestrator where wrapping each step in OperationResult would
         // add ceremony without value.
