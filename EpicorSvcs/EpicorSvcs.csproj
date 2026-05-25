@@ -74,4 +74,9 @@
     <Error Text="App.config was just created from template. Edit it with your settings before continuing." />
   </Target>
 
+  <!-- Optional local-only extensions. Local.targets is gitignored — see
+       Local.targets.template in this folder for the shape and usage. -->
+  <Import Project="$(MSBuildThisFileDirectory)Local.targets"
+          Condition="Exists('$(MSBuildThisFileDirectory)Local.targets')" />
+
 </Project>

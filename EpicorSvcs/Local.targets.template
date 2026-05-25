@@ -1,0 +1,76 @@
+<Project>
+
+  <!-- =============================================================================
+       Local.targets.template — copy this to Local.targets and edit the paths.
+       
+       SETUP:
+         1. Copy this file to Local.targets in the same folder (EpicorSvcs/).
+         2. Edit the KeriCopyDest paths below to point at your consumer project
+            lib/ folders.
+         3. Build the project in Release configuration — the DLLs copy
+            automatically.
+       
+       Local.targets is gitignored. Each developer maintains their own list of
+       consumer destinations without committing local paths to the repo.
+       
+       WHAT IT DOES:
+       After a Release build of EpicorSvcs targeting net8.0, copy every DLL from:
+         - $(TargetDir)                                        (this project: EpicorSvcs + RESTServices + transitives)
+         - ..\FileHandling\bin\Release\net8.0\                 (sibling: FileHandling + ClosedXML + MailKit + transitives)
+       
+       to each consumer project's lib/ folder. The wildcard *.dll filters out
+       .pdb, .deps.json, .runtimeconfig.json, App.config files. Each consumer
+       gets the union of both source folders.
+       
+       Only Release / net8.0 triggers the copy. Debug builds and net48 builds
+       are silent. If your consumer projects target net48, change the
+       TargetFramework condition below.
+       
+       FILE LIFECYCLE NOTE:
+       Copy is "additive only" — if a NuGet dependency is removed from Keri,
+       its DLL will not be auto-deleted from consumer lib/ folders. Stale DLLs
+       must be cleaned up manually.
+       
+       For a full lib/ refresh after editing FileHandling, build the whole
+       solution in Release:
+           dotnet build KineticRESTIntegrator.sln -c Release
+       
+       The file is imported conditionally by EpicorSvcs.csproj via:
+       
+           <Import Project="$(MSBuildThisFileDirectory)Local.targets"
+                   Condition="Exists('$(MSBuildThisFileDirectory)Local.targets')" />
+       
+       so the public build is fine without this file — only developers who
+       have a Local.targets get the copy behavior.
+       ============================================================================= -->
+
+  <ItemGroup>
+    <!-- Each KeriCopyDest is a destination folder. Add as many as you need. -->
+    <KeriCopyDest Include="C:\path\to\consumer1\lib" />
+    <KeriCopyDest Include="C:\path\to\consumer2\lib" />
+  </ItemGroup>
+
+  <Target Name="CopyKeriDllsToConsumers"
+          AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net8.0'">
+
+    <ItemGroup>
+      <!-- All DLLs from this project's output dir (EpicorSvcs + RESTServices + transitives) -->
+      <KeriDll Include="$(TargetDir)*.dll" />
+
+      <!-- All DLLs from the sibling FileHandling output dir (FileHandling + ClosedXML
+           + MailKit + transitives). Silent no-op if FileHandling hasn't been built
+           in Release yet. -->
+      <KeriDll Include="$(MSBuildThisFileDirectory)..\FileHandling\bin\Release\net8.0\*.dll" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(KeriDll)"
+          DestinationFolder="%(KeriCopyDest.Identity)"
+          SkipUnchangedFiles="true" />
+
+    <Message Importance="high"
+             Text="Copied @(KeriDll->Count()) DLLs to %(KeriCopyDest.Identity)" />
+
+  </Target>
+
+</Project>
