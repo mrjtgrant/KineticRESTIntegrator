@@ -115,6 +115,22 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Gets a fresh, empty part dataset. Calls
+        /// <c>Erp.BO.PartSvc/GetNewPart</c> in Epicor.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw new-part
+        /// dataset.
+        /// </returns>
+        public async Task<OperationResult<JObject>> GetNewPartAsync(CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/GetNewPart";
+            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
         /// Retrieves a single part by its part number. Calls
         /// <c>Erp.BO.PartSvc/GetByID</c> in Epicor.
         /// </summary>
@@ -141,22 +157,6 @@ namespace EpicorSvcs
             svc += String.Format("?partNum={0}", UrlEncode(partNum));
 
             JObject response = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Gets a fresh, empty part dataset. Calls
-        /// <c>Erp.BO.PartSvc/GetNewPart</c> in Epicor.
-        /// </summary>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw new-part
-        /// dataset.
-        /// </returns>
-        public async Task<OperationResult<JObject>> GetNewPartAsync(CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/GetNewPart";
-            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
 
@@ -194,80 +194,21 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Asks Epicor to report any advisory messages arising from a pending
-        /// part change. Calls <c>Erp.BO.PartSvc/CheckPartChanges</c> in
-        /// Epicor.
-        /// </summary>
-        /// <remarks>
-        /// This call does not modify the dataset — it returns only message
-        /// strings under <c>parameters</c> (<c>cPartChangedMsgText</c> and
-        /// <c>cPartSNChangedMsgText</c>). It is consumed by
-        /// <see cref="ChangePartUnitPriceAsync"/>, which surfaces those
-        /// messages to the caller.
-        /// </remarks>
-        /// <param name="payload">The part dataset being changed.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
-        /// response — a message envelope, not a dataset.
-        /// </returns>
-        public async Task<OperationResult<JObject>> CheckPartChangesAsync(
-            JObject payload,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/CheckPartChanges";
-            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
         /// Persists a part dataset. Calls <c>Erp.BO.PartSvc/Update</c> in
         /// Epicor.
         /// </summary>
-        /// <param name="payload">The part dataset to persist.</param>
+        /// <param name="ds">The part dataset to persist.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
         /// response.
         /// </returns>
         public async Task<OperationResult<JObject>> UpdateAsync(
-            JObject payload,
+            JObject ds,
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/Update";
-            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Persists a part dataset through Epicor's extended-update entry
-        /// point. Calls <c>Erp.BO.PartSvc/UpdateExt</c> in Epicor.
-        /// </summary>
-        /// <param name="payload">The part dataset to persist.</param>
-        /// <param name="continueonerr">
-        /// When true, Epicor continues processing on a row error. Defaults to
-        /// false.
-        /// </param>
-        /// <param name="rollbackonerr">
-        /// When true, Epicor rolls the parent back on a child error. Defaults
-        /// to true.
-        /// </param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
-        /// response.
-        /// </returns>
-        public async Task<OperationResult<JObject>> UpdateExtAsync(
-            JObject payload,
-            bool continueonerr = false,
-            bool rollbackonerr = true,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/UpdateExt";
-            payload.Add(new JProperty("continueProcessingOnError", continueonerr));
-            payload.Add(new JProperty("rollbackParentOnChildError", rollbackonerr));
-
-            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
+            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
 
@@ -300,5 +241,63 @@ namespace EpicorSvcs
             return response.ToOperationResult(r => r);
         }
 
+        /// <summary>
+        /// Asks Epicor to report any advisory messages arising from a pending
+        /// part change. Calls <c>Erp.BO.PartSvc/CheckPartChanges</c> in
+        /// Epicor.
+        /// </summary>
+        /// <remarks>
+        /// This call does not modify the dataset — it returns only message
+        /// strings under <c>parameters</c> (<c>cPartChangedMsgText</c> and
+        /// <c>cPartSNChangedMsgText</c>). It is consumed by
+        /// <see cref="ChangePartUnitPriceAsync"/>, which surfaces those
+        /// messages to the caller.
+        /// </remarks>
+        /// <param name="ds">The part dataset being changed.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
+        /// response — a message envelope, not a dataset.
+        /// </returns>
+        public async Task<OperationResult<JObject>> CheckPartChangesAsync(
+            JObject ds,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/CheckPartChanges";
+            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Persists a part dataset through Epicor's extended-update entry
+        /// point. Calls <c>Erp.BO.PartSvc/UpdateExt</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The part dataset to persist.</param>
+        /// <param name="continueonerr">
+        /// When true, Epicor continues processing on a row error. Defaults to
+        /// false.
+        /// </param>
+        /// <param name="rollbackonerr">
+        /// When true, Epicor rolls the parent back on a child error. Defaults
+        /// to true.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
+        /// response.
+        /// </returns>
+        public async Task<OperationResult<JObject>> UpdateExtAsync(
+            JObject ds,
+            bool continueonerr = false,
+            bool rollbackonerr = true,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/UpdateExt";
+            ds.Add(new JProperty("continueProcessingOnError", continueonerr));
+            ds.Add(new JProperty("rollbackParentOnChildError", rollbackonerr));
+
+            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
     }
 }

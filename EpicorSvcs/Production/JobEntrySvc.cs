@@ -366,7 +366,7 @@ namespace EpicorSvcs
         /// <c>Erp.BO.JobEntrySvc/Update</c> in Epicor.
         /// </summary>
         /// <remarks>
-        /// The <paramref name="payload"/> is the full multi-table dataset
+        /// The <paramref name="ds"/> is the full multi-table dataset
         /// in the same shape returned by <see cref="GetByIDAsync"/>. The
         /// caller mutates rows in the dataset — setting <c>RowMod = "U"</c>
         /// on changed rows and <c>RowMod = "A"</c> on new rows — and posts
@@ -375,7 +375,7 @@ namespace EpicorSvcs
         /// number must be assigned beforehand via
         /// <see cref="GetNextJobNumAsync"/>.
         /// </remarks>
-        /// <param name="payload">The job dataset to persist.</param>
+        /// <param name="ds">The job dataset to persist.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
@@ -383,11 +383,11 @@ namespace EpicorSvcs
         /// (calculated columns) filled in.
         /// </returns>
         public async Task<OperationResult<JObject>> UpdateAsync(
-            JObject payload,
+            JObject ds,
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.JobEntrySvc/Update";
-            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
+            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
     }
