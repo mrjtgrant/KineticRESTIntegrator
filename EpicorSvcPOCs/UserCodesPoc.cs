@@ -71,9 +71,9 @@ namespace EpicorSvcPOCs
 
             // ---- 2) Single-value lookup convenience -------------------------
             //
-            // UDCodeLookUpAsync is an orchestrator wrapping a GetByID + a
-            // filter, returning just the description string. Useful when you
-            // know the code and just want its label.
+            // GetUDCodeDescriptionAsync is an orchestrator wrapping a GetByID
+            // + a filter, returning just the description string. Useful when
+            // you know the code and just want its label.
 
             if (allCodes.Value.Count == 0)
             {
@@ -88,7 +88,7 @@ namespace EpicorSvcPOCs
 
             // 'useLongDesc: false' returns CodeDesc; true returns LongDesc.
             var oneCode = await client.UserCodes
-                .UDCodeLookUpAsync(SampleCodeType, sampleCodeID, useLongDesc: false)
+                .GetUDCodeDescriptionAsync(SampleCodeType, sampleCodeID, useLongDesc: false)
                 .ConfigureAwait(false);
 
             if (oneCode.IsFailure)

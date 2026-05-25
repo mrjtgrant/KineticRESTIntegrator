@@ -40,7 +40,7 @@ namespace EpicorSvcs
         { }
 
         /// <summary>
-        /// Construct with a programmatic session — bypasses config-file
+        /// Construct with a programmatic session â€” bypasses config-file
         /// lookup. Sets the v1 / v2 URL modifiers on the session's auth
         /// object before use.
         /// </summary>
@@ -128,7 +128,7 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Debug helper — formats a flat JObject's top-level properties as a
+        /// Debug helper â€” formats a flat JObject's top-level properties as a
         /// readable name/value string.
         /// </summary>
         /// <param name="obj">The object to format.</param>

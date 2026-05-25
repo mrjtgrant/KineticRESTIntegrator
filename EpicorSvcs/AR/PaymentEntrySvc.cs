@@ -22,7 +22,7 @@ namespace EpicorSvcs
         /// </param>
         public PaymentEntrySvc(string env = null) : base(env) { }
 
-        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <summary>Construct with a programmatic session â€” bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public PaymentEntrySvc(EpicorRESTSessionKey env) : base(env) { }
 
@@ -89,7 +89,7 @@ namespace EpicorSvcs
         /// </summary>
         /// <remarks>
         /// Despite the service name "PaymentEntry", this returns the
-        /// <c>CheckHed</c> table — the accounts-payable disbursement header
+        /// <c>CheckHed</c> table â€” the accounts-payable disbursement header
         /// (vendor checks / electronic payments).
         /// </remarks>
         /// <param name="headNum">The payment head number to look up.</param>

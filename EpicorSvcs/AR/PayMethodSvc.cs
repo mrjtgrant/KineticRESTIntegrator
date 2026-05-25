@@ -21,7 +21,7 @@ namespace EpicorSvcs
         /// </param>
         public PayMethodSvc(string env = null) : base(env) { }
 
-        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <summary>Construct with a programmatic session â€” bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public PayMethodSvc(EpicorRESTSessionKey env) : base(env) { }
 

@@ -11,15 +11,7 @@ Severity legend:
 
 ## Future work
 
-### 1. Repo-wide UTF-8 encoding audit
-
-**🩹 Smell.** Twenty `.cs` files contain raw Windows-1252 bytes (0x80, 0x94, 0x97) where there should be proper UTF-8 em-dashes. These are em-dashes that got saved as single-byte 0x97 instead of the proper UTF-8 sequence (`\xE2\x80\x94`), likely accumulated from copy-pasting between editors with different encoding behaviors. The C# compiler tolerates this in comments and string literals, so the code builds and runs without issue — but it's an encoding inconsistency that compounds over time, and a tool that reads the files as strict UTF-8 (a linter, a documentation generator, certain code-review tools) will flag invalid byte sequences.
-
-**Files affected:** `EpicorSvc.cs`, `OperationResult.cs`, plus most service files: `JobEntrySvc.cs`, `ReceiptSvc.cs`, `POSvc.cs`, `VendorSvc.cs`, `PartSvc.cs` and `PartSvc.Workflows.cs`, `CustomerSvc.cs`, `SalesRepSvc.cs`, `QuoteSvc.cs` and `QuoteSvc.Workflows.cs`, `SalesOrderSvc.cs` and `SalesOrderSvc.Workflows.cs`, `GenxDataSvc.cs`, `ProjectSvc.cs` and `ProjectSvc.Workflows.cs`, `UDXSvc.cs`, `UserCodesSvc.cs` and `UserCodesSvc.Workflows.cs`.
-
-**Suggested scope:** one normalize-pass commit that reads each file, decodes Windows-1252 bytes to their Unicode equivalents, re-encodes as UTF-8, and writes back. The visible content of every file stays identical; only the byte representation of the em-dashes changes. Worth pairing with a `.editorconfig` rule that enforces UTF-8 going forward so the inconsistency doesn't reaccumulate.
-
-### 2. Section-comment standardization on medium-and-larger services
+### 1. Section-comment standardization on medium-and-larger services
 
 **🩹 Smell.** Five services have `// ---` divider blocks between method groups: `POSvc`, `SalesOrderSvc`, `EngWorkBenchSvc`, `JobEntrySvc`, `ReceiptSvc`. Seven medium-and-larger services don't have them and would benefit: `PartSvc`, `UDXSvc`, `MenuSvc`, `GenxDataSvc`, `BAQSvc`, `VendorSvc`, `CustomerSvc`. Dividers help navigation in a long class file by visually marking the "here's a group of related methods" boundary that the eye otherwise has to infer from indent and naming.
 
@@ -27,7 +19,7 @@ Severity legend:
 
 **Scope limit:** *don't* add dividers to services with 1–3 public methods (`SerialNoSvc`, `PaymentEntrySvc`, `PayMethodSvc`, `SalesRepSvc`, `BomSearchSvc`, `SelectedSerialNumbersSvc`). Dividers in those short files are noise — there's nothing to navigate between.
 
-### 3. CI setup — GitHub Actions: build + test on push and PR
+### 2. CI setup — GitHub Actions: build + test on push and PR
 
 **🔭 Future.** Once the repo is public, a basic CI workflow would catch regressions before they land on `main` and give external contributors confidence that their PRs are sane.
 
@@ -44,6 +36,10 @@ This is the one item in this document that isn't repairing existing code but add
 ---
 
 ## Recently addressed (kept here briefly as project history)
+
+- **Repo-wide UTF-8 encoding cleanup — scope corrected to six broken files.** A prior entry in this document claimed twenty `.cs` files contained Windows-1252-encoded em-dashes. A strict UTF-8 decode of every `.cs` file turned up only six actually-broken files (10 stray 0x97 bytes total): `EpicorSvc.cs`, `AR/PayMethodSvc.cs`, `AR/PaymentEntrySvc.cs`, `Inventory/SerialNoSvc.cs`, `MasterData/SalesRepSvc.cs`, `Platform/GenxDataSvc.cs`. The other fourteen files had byte 0x80 or 0x94 — but only as the valid middle and last bytes of the proper three-byte UTF-8 em-dash sequence `\xE2\x80\x94`. Not broken at all, just visually surprising in a hex dump. The scope-overstatement is worth owning; it traced to a grep pattern that matched any high-bit byte without checking whether the byte was part of a valid UTF-8 sequence. The genuine breakage in the six files (each 0x97 byte replaced by the proper UTF-8 em-dash) is now fixed; every `.cs` file in the repo decodes cleanly as UTF-8.
+
+- **OData entity-set wrappers — six new wrappers across five services, plus three DTOs.** `PayMethodsAsync` on `PayMethodSvc`, `PaymentEntriesAsync` on `PaymentEntrySvc`, `SerialNoesAsync` on `SerialNoSvc`, `MiscShipsAsync` on `MiscShipSvc`, and both `QuotesAsync` and `QuoteDtlsAsync` on `QuoteSvc`. All follow the standard shape (`filters` / `select` / `top` parameters with a practical-core default `$select`) and return `OperationResult<List<T>>` against the appropriate DTO. Entity-set names match Epicor's REST help exactly — `SerialNoes` (matching the `POes` pattern), `PaymentEntries` (matching `JobEntries`), `MiscShips` whose entity set returns `MscShpHd` rows (the header). Three DTOs landed alongside: the existing `QuoteHed` DTO expanded from 15 properties to ~50 (identity, dates, status flags, currency/terms, sales funnel, base-currency amounts on top of the existing write-side OTS fields); new `QuoteDtl` and `MscShpHd` DTOs with the same practical-core pattern. `InvTransferSvc` deliberately not included — its BO does not expose an OData entity-set wrapper.
 
 - **`ReceiptSvc` shipped — fills the missing-receipts gap, completes the purchasing-to-receiving picture.** The 23rd service wrapper, in `EpicorSvcs/Purchasing/` alongside `POSvc`, exposes three OData entity-set wrappers (`ReceiptsAsync`, `RcvDtlsAsync`, `RcvHeadAttchesAsync`), five BO action wrappers (`GetByIDAsync`, `GetNewRcvHeadAsync`, `GetNewRcvHeadWithPONumAsync`, `GetNewRcvDtlAsync`, `GetNewRcvHeadAttchAsync`), and three DTOs (`RcvHead`, `RcvDtl`, `RcvHeadAttch`). The class is a partial declaration ready to host a `ReceiptSvc.Workflows.cs` file. The compound key (`vendorNum`, `purPoint`, `packSlip`) is passed as query parameters on `GetByIDAsync`. POC example deferred until the work can be verified against a real Epicor install.
 

@@ -9,7 +9,7 @@ using EpicorSvcs.Dtos;
 namespace EpicorSvcs
 {
     /// <summary>
-    /// Reads and writes Epicor's <c>GenXData</c> table — a generic key/value
+    /// Reads and writes Epicor's <c>GenXData</c> table â€” a generic key/value
     /// store Epicor uses internally for many features (Kinetic customization
     /// layers, configuration blobs, and so on). Calls
     /// <c>Ice.BO.GenxDataSvc</c> in Epicor.
@@ -29,7 +29,7 @@ namespace EpicorSvcs
         /// </param>
         public GenxDataSvc(string env = null) : base(env) { }
 
-        /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
+        /// <summary>Construct with a programmatic session â€” bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public GenxDataSvc(EpicorRESTSessionKey env) : base(env) { }
 
@@ -47,7 +47,7 @@ namespace EpicorSvcs
         /// to filter on TypeCode only.
         /// </param>
         /// <param name="TypeCode">
-        /// The <c>TypeCode</c> to filter by — identifies which kind of
+        /// The <c>TypeCode</c> to filter by â€” identifies which kind of
         /// GenXData rows you want. Defaults to <c>"KNTCCustLayer"</c>.
         /// </param>
         /// <param name="ct">Cancellation token.</param>
