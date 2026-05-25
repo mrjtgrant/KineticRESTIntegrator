@@ -41,7 +41,7 @@ namespace EpicorSvcs
     /// </code>
     /// </example>
     /// </remarks>
-    public class EpicorClient : IDisposable
+    public sealed class EpicorClient : IDisposable
     {
         private readonly EpicorRESTSessionKey _session;
         private bool _disposed;
