@@ -27,11 +27,26 @@ namespace EpicorSvcs
         public CustomerSvc(EpicorRESTSessionKey env) : base(env) { }
 
         // A practical default $select for Customers queries — chosen to
-        // populate the minimal Customer DTO's typed properties. Widen by
+        // populate the typed properties on the Customer DTO. Widen by
         // passing an explicit select list.
         private static readonly List<string> defaultCustomerSelect = new List<string>
         {
-            "CustNum", "CustID", "Name"
+            // Identity
+            "Company", "CustNum", "CustID", "Name", "Inactive", "CustomerType",
+            // Sold-to address
+            "Address1", "Address2", "Address3", "City", "State", "Zip",
+            "Country", "CountryNum", "PhoneNum", "FaxNum", "EMailAddress", "CustURL",
+            // Bill-to address
+            "BTName", "BTAddress1", "BTAddress2", "BTAddress3", "BTCity",
+            "BTState", "BTZip", "BTCountry", "BTCountryNum", "BTPhoneNum", "BTFaxNum",
+            // Sales / shipping / terms defaults
+            "SalesRepCode", "TerritoryID", "GroupCode", "TermsCode", "ShipViaCode",
+            "DefaultFOB", "ShipToNum", "DiscountPercent", "CurrencyCode",
+            "ResaleID", "TaxExempt", "TaxRegionCode", "TaxAuthorityCode",
+            // Credit-control settings
+            "CreditLimit", "CustPILimit", "CreditHold", "CreditHoldDate",
+            "CreditHoldSource", "CreditHoldReason", "CreditHoldNote",
+            "CreditReviewDate", "CreditIncludeOrders", "CreditIncludePI", "FinCharges"
         };
 
         /// <summary>
