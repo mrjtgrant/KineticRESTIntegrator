@@ -51,5 +51,34 @@ namespace EpicorSvcs
                 await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r.ExtractDto<CheckHed>("CheckHed"));
         }
+
+        /// <summary>
+        /// Persists a payment-entry dataset. Calls
+        /// <c>Erp.BO.PaymentEntrySvc/Update</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// The <paramref name="payload"/> is the full multi-table dataset
+        /// in the same shape returned by <see cref="GetByIDAsync"/>. The
+        /// caller mutates rows in the dataset — setting <c>RowMod = "U"</c>
+        /// on changed rows and <c>RowMod = "A"</c> on new rows — and posts
+        /// the result here. Epicor applies the changes, runs business
+        /// logic (cash posting, GL transactions, AR application), and
+        /// returns the updated dataset.
+        /// </remarks>
+        /// <param name="payload">The payment-entry dataset to persist.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
+        /// response — the persisted dataset, with server-assigned values
+        /// (calculated columns) filled in.
+        /// </returns>
+        public async Task<OperationResult<JObject>> UpdateAsync(
+            JObject payload,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PaymentEntrySvc/Update";
+            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
     }
 }
