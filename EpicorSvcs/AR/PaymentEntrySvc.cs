@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -24,6 +25,63 @@ namespace EpicorSvcs
         /// <summary>Construct with a programmatic session � bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public PaymentEntrySvc(EpicorRESTSessionKey env) : base(env) { }
+
+        // A practical default $select for PaymentEntries queries — chosen to
+        // populate the core columns of the CheckHed DTO. Widen by passing
+        // an explicit select list.
+        private static readonly List<string> defaultPaymentEntrySelect = new List<string>
+        {
+            "Company", "HeadNum", "GroupID", "BankAcctID",
+            "CheckNum", "CheckDate", "CheckSrc",
+            "FiscalYear", "FiscalPeriod",
+            "Posted", "Voided"
+        };
+
+        /// <summary>
+        /// Queries AP payment records via OData. Calls
+        /// <c>Erp.BO.PaymentEntrySvc/PaymentEntries</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// Despite the service name "PaymentEntry", the OData entity set
+        /// returns rows from the <c>CheckHed</c> table — the accounts-payable
+        /// disbursement header (vendor checks / electronic payments), not
+        /// AR cash receipts.
+        /// </remarks>
+        /// <param name="filters">
+        /// Optional OData filter clauses, combined with <c>and</c>. Each entry
+        /// is a single condition, e.g. <c>"Posted eq false"</c>.
+        /// </param>
+        /// <param name="select">
+        /// Optional list of columns for the OData <c>$select</c>. When null, a
+        /// practical default set is used that populates the core columns of
+        /// the <see cref="CheckHed"/> DTO. Pass an explicit list to widen or
+        /// narrow the projection.
+        /// </param>
+        /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="CheckHed"/> rows.
+        /// </returns>
+        public async Task<OperationResult<List<CheckHed>>> PaymentEntriesAsync(
+            List<string> filters = null,
+            List<string> select = null,
+            int top = 500,
+            CancellationToken ct = default)
+        {
+            if (select == null)
+                select = defaultPaymentEntrySelect;
+
+            string svc = "Erp.BO.PaymentEntrySvc/PaymentEntries";
+            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "&$top=" + top.ToString();
+
+            if (filters != null && filters.Count > 0)
+                svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<CheckHed>());
+        }
 
         /// <summary>
         /// Retrieves an AP payment record by its head number. Calls

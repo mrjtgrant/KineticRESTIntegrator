@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -45,6 +46,113 @@ namespace EpicorSvcs
         // ---------------------------------------------------------------
         // Public API — generic primitives
         // ---------------------------------------------------------------
+
+        // A practical default $select for Quotes queries — chosen to populate
+        // the core columns of the QuoteHed DTO. Widen by passing an explicit
+        // select list.
+        private static readonly List<string> defaultQuoteSelect = new List<string>
+        {
+            "Company", "QuoteNum", "CustNum", "PONum",
+            "EntryDate", "DueDate", "DateQuoted", "ExpirationDate",
+            "Quoted", "QuoteClosed", "Ordered", "VoidQuote",
+            "CurrencyCode", "TermsCode", "ShipViaCode", "TerritoryID",
+            "EntryPerson", "SalesRepCode",
+            "ConfidencePct", "CurrentStage",
+            "QuoteAmt", "TotalQuote"
+        };
+
+        // A practical default $select for QuoteDtls queries — chosen to
+        // populate the core columns of the QuoteDtl DTO.
+        private static readonly List<string> defaultQuoteDtlSelect = new List<string>
+        {
+            "Company", "QuoteNum", "QuoteLine",
+            "PartNum", "RevisionNum", "LineDesc",
+            "OrderQty", "OrderUM",
+            "UnitPrice", "ListPrice", "DiscountPercent", "Discount", "ExtPriceDtl",
+            "Ordered", "Quoted", "Expired", "VoidLine",
+            "ReqShipDate", "ShipByDate", "NeedByDate",
+            "TaxCatID", "KitFlag"
+        };
+
+        /// <summary>
+        /// Queries quote-header records via OData. Calls
+        /// <c>Erp.BO.QuoteSvc/Quotes</c> in Epicor.
+        /// </summary>
+        /// <param name="filters">
+        /// Optional OData filter clauses, combined with <c>and</c>. Each entry
+        /// is a single condition, e.g. <c>"Quoted eq true"</c>.
+        /// </param>
+        /// <param name="select">
+        /// Optional list of columns for the OData <c>$select</c>. When null, a
+        /// practical default set is used that populates the core columns of
+        /// the <see cref="QuoteHed"/> DTO. Pass an explicit list to widen or
+        /// narrow the projection.
+        /// </param>
+        /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="QuoteHed"/> rows.
+        /// </returns>
+        public async Task<OperationResult<List<QuoteHed>>> QuotesAsync(
+            List<string> filters = null,
+            List<string> select = null,
+            int top = 500,
+            CancellationToken ct = default)
+        {
+            if (select == null)
+                select = defaultQuoteSelect;
+
+            string svc = "Erp.BO.QuoteSvc/Quotes";
+            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "&$top=" + top.ToString();
+
+            if (filters != null && filters.Count > 0)
+                svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<QuoteHed>());
+        }
+
+        /// <summary>
+        /// Queries quote-line records via OData. Calls
+        /// <c>Erp.BO.QuoteSvc/QuoteDtls</c> in Epicor.
+        /// </summary>
+        /// <param name="filters">
+        /// Optional OData filter clauses, combined with <c>and</c>. Each entry
+        /// is a single condition, e.g. <c>"QuoteNum eq 12345"</c>.
+        /// </param>
+        /// <param name="select">
+        /// Optional list of columns for the OData <c>$select</c>. When null, a
+        /// practical default set is used that populates the core columns of
+        /// the <see cref="QuoteDtl"/> DTO. Pass an explicit list to widen or
+        /// narrow the projection.
+        /// </param>
+        /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="QuoteDtl"/> rows.
+        /// </returns>
+        public async Task<OperationResult<List<QuoteDtl>>> QuoteDtlsAsync(
+            List<string> filters = null,
+            List<string> select = null,
+            int top = 500,
+            CancellationToken ct = default)
+        {
+            if (select == null)
+                select = defaultQuoteDtlSelect;
+
+            string svc = "Erp.BO.QuoteSvc/QuoteDtls";
+            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "&$top=" + top.ToString();
+
+            if (filters != null && filters.Count > 0)
+                svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<QuoteDtl>());
+        }
 
         /// <summary>
         /// Retrieves a full quote by its quote number. Calls

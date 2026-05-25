@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -44,6 +45,67 @@ namespace EpicorSvcs
         // ---------------------------------------------------------------
         // Public API — generic primitives
         // ---------------------------------------------------------------
+
+        // A practical default $select for MiscShips queries — chosen to
+        // populate the core columns of the MscShpHd DTO. Widen by passing
+        // an explicit select list.
+        private static readonly List<string> defaultMiscShipSelect = new List<string>
+        {
+            "Company", "PackNum", "Plant", "ShipDate", "ShipStatus",
+            "OrderNum", "PONum", "JobNum", "RMANum", "DMRNum", "BOLNum",
+            "CustNum", "ShipToNum", "VendorNum", "PurPoint",
+            "Name", "City", "State", "Country",
+            "ShipViaCode", "TrackingNumber",
+            "Hazmat", "DocOnly", "IntrntlShip",
+            "Weight", "WeightUOM",
+            "EntryPerson"
+        };
+
+        /// <summary>
+        /// Queries miscellaneous-shipment records via OData. Calls
+        /// <c>Erp.BO.MiscShipSvc/MiscShips</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// The OData entity set returns rows from the <c>MscShpHd</c> table
+        /// (header). The companion line table is <c>MscShpDt</c>, accessed
+        /// through the wider dataset returned by orchestrators or via the
+        /// related entity sets on Epicor.
+        /// </remarks>
+        /// <param name="filters">
+        /// Optional OData filter clauses, combined with <c>and</c>. Each entry
+        /// is a single condition, e.g. <c>"ShipStatus eq 'OPEN'"</c>.
+        /// </param>
+        /// <param name="select">
+        /// Optional list of columns for the OData <c>$select</c>. When null, a
+        /// practical default set is used that populates the core columns of
+        /// the <see cref="MscShpHd"/> DTO. Pass an explicit list to widen or
+        /// narrow the projection.
+        /// </param>
+        /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="MscShpHd"/> rows.
+        /// </returns>
+        public async Task<OperationResult<List<MscShpHd>>> MiscShipsAsync(
+            List<string> filters = null,
+            List<string> select = null,
+            int top = 500,
+            CancellationToken ct = default)
+        {
+            if (select == null)
+                select = defaultMiscShipSelect;
+
+            string svc = "Erp.BO.MiscShipSvc/MiscShips";
+            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "&$top=" + top.ToString();
+
+            if (filters != null && filters.Count > 0)
+                svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<MscShpHd>());
+        }
 
         /// <summary>
         /// Gets a fresh, empty miscellaneous-shipment-line dataset for a pack.
