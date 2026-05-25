@@ -26,28 +26,6 @@ namespace EpicorSvcs
         public SalesRepSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
-        /// Retrieves a single sales rep by code. Calls
-        /// <c>Erp.BO.SalesRepSvc/GetByID</c> in Epicor.
-        /// </summary>
-        /// <param name="salesRepCode">The sales rep code to look up.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the matching
-        /// <see cref="SalesRep"/>. <c>Value</c> is null if no rep matches.
-        /// </returns>
-        public async Task<OperationResult<SalesRep>> GetByIDAsync(
-            string salesRepCode,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.SalesRepSvc/GetByID";
-            svc += "?salesRepCode=" + salesRepCode;
-
-            JObject response = HandleResponse(
-                await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r.ExtractDto<SalesRep>("SalesRep"));
-        }
-
-        /// <summary>
         /// Retrieves all active sales reps. Calls
         /// <c>Erp.BO.SalesRepSvc/SalesReps</c> in Epicor, filtered to
         /// <c>InActive eq false</c>.
@@ -71,6 +49,28 @@ namespace EpicorSvcs
             JObject response = HandleResponse(
                 await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r.ExtractValueList<SalesRep>());
+        }
+
+        /// <summary>
+        /// Retrieves a single sales rep by code. Calls
+        /// <c>Erp.BO.SalesRepSvc/GetByID</c> in Epicor.
+        /// </summary>
+        /// <param name="salesRepCode">The sales rep code to look up.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the matching
+        /// <see cref="SalesRep"/>. <c>Value</c> is null if no rep matches.
+        /// </returns>
+        public async Task<OperationResult<SalesRep>> GetByIDAsync(
+            string salesRepCode,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.SalesRepSvc/GetByID";
+            svc += "?salesRepCode=" + salesRepCode;
+
+            JObject response = HandleResponse(
+                await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r.ExtractDto<SalesRep>("SalesRep"));
         }
     }
 }

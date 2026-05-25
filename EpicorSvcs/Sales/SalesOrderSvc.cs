@@ -135,6 +135,19 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Gets a fresh, empty order-header dataset. Calls
+        /// <c>Erp.BO.SalesOrderSvc/GetNewOrderHed</c> in Epicor.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The new order-header dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> GetNewOrderHedAsync(CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.SalesOrderSvc/GetNewOrderHed";
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
         /// Gets a fresh, empty order-detail row for an existing order. Calls
         /// <c>Erp.BO.SalesOrderSvc/GetNewOrderDtl</c> in Epicor.
         /// </summary>
@@ -149,19 +162,6 @@ namespace EpicorSvcs
             newOrderDtl.Add(new JProperty("orderNum", ordernum));
 
             JObject response = HandleResponse(await RESTCallAsync(svc, newOrderDtl, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Gets a fresh, empty order-header dataset. Calls
-        /// <c>Erp.BO.SalesOrderSvc/GetNewOrderHed</c> in Epicor.
-        /// </summary>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The new order-header dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
-        public async Task<OperationResult<JObject>> GetNewOrderHedAsync(CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.SalesOrderSvc/GetNewOrderHed";
-            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
         }
 

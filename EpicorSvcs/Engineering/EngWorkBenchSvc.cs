@@ -83,48 +83,6 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Gets a fresh, empty ECO material row dataset. Calls
-        /// <c>Erp.BO.EngWorkBenchSvc/GetNewECOMtl</c> in Epicor.
-        /// </summary>
-        /// <param name="ds">The current ECO dataset to derive context from.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The ECO dataset with a new ECOMtl row appended, wrapped in an <see cref="OperationResult{T}"/>.</returns>
-        public async Task<OperationResult<JObject>> GetNewECOMtlAsync(JObject ds, CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.EngWorkBenchSvc/GetNewECOMtl";
-            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Pushes an ECO dataset back to Epicor. Calls
-        /// <c>Erp.BO.EngWorkBenchSvc/Update</c> in Epicor.
-        /// </summary>
-        /// <param name="ds">The ECO dataset to save.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The updated ECO dataset echoed back by Epicor, wrapped in an <see cref="OperationResult{T}"/>.</returns>
-        public async Task<OperationResult<JObject>> UpdateAsync(JObject ds, CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.EngWorkBenchSvc/Update";
-            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Retrieves the ECO materials rows for a given dataset context. Calls
-        /// <c>Erp.BO.EngWorkBenchSvc/ECOMtls</c> in Epicor.
-        /// </summary>
-        /// <param name="ds">The ECO dataset context.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The dataset with ECOMtl rows populated, wrapped in an <see cref="OperationResult{T}"/>.</returns>
-        public async Task<OperationResult<JObject>> ECOMtlsAsync(JObject ds, CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.EngWorkBenchSvc/ECOMtls";
-            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
         /// Gets a fresh, empty ECO group dataset. Calls
         /// <c>Erp.BO.EngWorkBenchSvc/GetNewECOGroup</c> in Epicor.
         /// </summary>
@@ -162,6 +120,20 @@ namespace EpicorSvcs
             ds.Add(new JProperty("revisionNum", RevNum));
             ds.Add(new JProperty("altMethod", ""));
 
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Gets a fresh, empty ECO material row dataset. Calls
+        /// <c>Erp.BO.EngWorkBenchSvc/GetNewECOMtl</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The current ECO dataset to derive context from.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The ECO dataset with a new ECOMtl row appended, wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> GetNewECOMtlAsync(JObject ds, CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.EngWorkBenchSvc/GetNewECOMtl";
             JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
         }
@@ -215,6 +187,34 @@ namespace EpicorSvcs
                 new JProperty("ipCheckOutStatus", true),
                 new JProperty("CheckUpdateLock", true)
             }, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Pushes an ECO dataset back to Epicor. Calls
+        /// <c>Erp.BO.EngWorkBenchSvc/Update</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The ECO dataset to save.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The updated ECO dataset echoed back by Epicor, wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> UpdateAsync(JObject ds, CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.EngWorkBenchSvc/Update";
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Retrieves the ECO materials rows for a given dataset context. Calls
+        /// <c>Erp.BO.EngWorkBenchSvc/ECOMtls</c> in Epicor.
+        /// </summary>
+        /// <param name="ds">The ECO dataset context.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The dataset with ECOMtl rows populated, wrapped in an <see cref="OperationResult{T}"/>.</returns>
+        public async Task<OperationResult<JObject>> ECOMtlsAsync(JObject ds, CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.EngWorkBenchSvc/ECOMtls";
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
         }
 

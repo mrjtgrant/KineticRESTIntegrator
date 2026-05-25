@@ -237,6 +237,129 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Retrieves all rows of a UD table. Calls
+        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor.
+        /// </summary>
+        /// <param name="udrow">
+        /// Optional template row. When supplied, the OData <c>$select</c> is
+        /// limited to the UD columns this row populates; when null, all
+        /// columns are returned.
+        /// </param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
+        /// <param name="top">Maximum number of rows to return. Defaults to 5000.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the list of
+        /// <see cref="UDRow"/> rows.
+        /// </returns>
+        public async Task<OperationResult<List<UDRow>>> GetAllAsync(
+            UDRow udrow = null,
+            string UDTable = null,
+            int top = 5000,
+            CancellationToken ct = default)
+        {
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
+            svc += "?$top=" + top;
+
+            if (udrow != null)
+            {
+                JObject lineObject = JObject.FromObject(udrow);
+                List<string> selectedcols = new List<string>();
+                foreach (var prop in lineObject.Properties())
+                {
+                    if (nonColumnProperties.Contains(prop.Name))
+                        continue;
+                    selectedcols.Add(prop.Name);
+                }
+                if (selectedcols.Count > 0)
+                    svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
+            }
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<UDRow>());
+        }
+
+        /// <summary>
+        /// Retrieves the UD-table rows matching a row's Key1–Key5. Calls
+        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor with a key filter.
+        /// </summary>
+        /// <param name="udrow">
+        /// The row whose Key1–Key5 form the filter, and whose populated UD
+        /// columns determine the OData <c>$select</c>.
+        /// </param>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the matching
+        /// <see cref="UDRow"/> rows.
+        /// </returns>
+        public async Task<OperationResult<List<UDRow>>> GetByIDAsync(
+            UDRow udrow,
+            string UDTable = null,
+            CancellationToken ct = default)
+        {
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
+            JObject lineObject = JObject.FromObject(udrow);
+
+            // Only the UD columns this row actually populates.
+            List<string> selectedcols = new List<string>();
+            foreach (var prop in lineObject.Properties())
+            {
+                if (nonColumnProperties.Contains(prop.Name))
+                    continue;
+                selectedcols.Add(prop.Name);
+            }
+
+            // Build the key filter as a List<string> joined by " and ".
+            List<string> filterItems = new List<string>
+            {
+                String.Format("Key1 eq '{0}'", udrow.Key1),
+                String.Format("Key2 eq '{0}'", udrow.Key2),
+                String.Format("Key3 eq '{0}'", udrow.Key3),
+                String.Format("Key4 eq '{0}'", udrow.Key4),
+                String.Format("Key5 eq '{0}'", udrow.Key5)
+            };
+
+            svc += "?$filter=" + UrlEncode(string.Join(" and ", filterItems));
+
+            if (selectedcols.Count > 0)
+                svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r.ExtractValueList<UDRow>());
+        }
+
+        /// <summary>
+        /// Gets a fresh, empty row for a UD table. Calls
+        /// <c>Ice.BO.{UDTable}Svc/GetaNew{UDTable}</c> in Epicor.
+        /// </summary>
+        /// <param name="UDTable">
+        /// The target UD table. When null (the default),
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.
+        /// </returns>
+        public async Task<OperationResult<JObject>> GetaNewUDAsync(
+            string UDTable = null,
+            CancellationToken ct = default)
+        {
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/GetaNew{0}", table);
+            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
         /// Upserts a single UD-table row. Calls
         /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor (or
         /// <c>DeleteByID</c> when <paramref name="delete"/> is true).
@@ -306,53 +429,6 @@ namespace EpicorSvcs
 
             JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Retrieves all rows of a UD table. Calls
-        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor.
-        /// </summary>
-        /// <param name="udrow">
-        /// Optional template row. When supplied, the OData <c>$select</c> is
-        /// limited to the UD columns this row populates; when null, all
-        /// columns are returned.
-        /// </param>
-        /// <param name="UDTable">
-        /// The target UD table. When null (the default),
-        /// <see cref="UDTableDefault"/> is used.
-        /// </param>
-        /// <param name="top">Maximum number of rows to return. Defaults to 5000.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the list of
-        /// <see cref="UDRow"/> rows.
-        /// </returns>
-        public async Task<OperationResult<List<UDRow>>> GetAllAsync(
-            UDRow udrow = null,
-            string UDTable = null,
-            int top = 5000,
-            CancellationToken ct = default)
-        {
-            string table = ResolveTable(UDTable);
-            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
-            svc += "?$top=" + top;
-
-            if (udrow != null)
-            {
-                JObject lineObject = JObject.FromObject(udrow);
-                List<string> selectedcols = new List<string>();
-                foreach (var prop in lineObject.Properties())
-                {
-                    if (nonColumnProperties.Contains(prop.Name))
-                        continue;
-                    selectedcols.Add(prop.Name);
-                }
-                if (selectedcols.Count > 0)
-                    svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
-            }
-
-            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractValueList<UDRow>());
         }
 
         /// <summary>
@@ -427,60 +503,6 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Retrieves the UD-table rows matching a row's Key1–Key5. Calls
-        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor with a key filter.
-        /// </summary>
-        /// <param name="udrow">
-        /// The row whose Key1–Key5 form the filter, and whose populated UD
-        /// columns determine the OData <c>$select</c>.
-        /// </param>
-        /// <param name="UDTable">
-        /// The target UD table. When null (the default),
-        /// <see cref="UDTableDefault"/> is used.
-        /// </param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the matching
-        /// <see cref="UDRow"/> rows.
-        /// </returns>
-        public async Task<OperationResult<List<UDRow>>> GetByIDAsync(
-            UDRow udrow,
-            string UDTable = null,
-            CancellationToken ct = default)
-        {
-            string table = ResolveTable(UDTable);
-            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
-            JObject lineObject = JObject.FromObject(udrow);
-
-            // Only the UD columns this row actually populates.
-            List<string> selectedcols = new List<string>();
-            foreach (var prop in lineObject.Properties())
-            {
-                if (nonColumnProperties.Contains(prop.Name))
-                    continue;
-                selectedcols.Add(prop.Name);
-            }
-
-            // Build the key filter as a List<string> joined by " and ".
-            List<string> filterItems = new List<string>
-            {
-                String.Format("Key1 eq '{0}'", udrow.Key1),
-                String.Format("Key2 eq '{0}'", udrow.Key2),
-                String.Format("Key3 eq '{0}'", udrow.Key3),
-                String.Format("Key4 eq '{0}'", udrow.Key4),
-                String.Format("Key5 eq '{0}'", udrow.Key5)
-            };
-
-            svc += "?$filter=" + UrlEncode(string.Join(" and ", filterItems));
-
-            if (selectedcols.Count > 0)
-                svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
-
-            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractValueList<UDRow>());
-        }
-
-        /// <summary>
         /// Deletes a single UD-table row by its Key1–Key5. Calls
         /// <c>Ice.BO.{UDTable}Svc/DeleteByID</c> in Epicor.
         /// </summary>
@@ -525,26 +547,5 @@ namespace EpicorSvcs
             return response.ToOperationResult(r => r);
         }
 
-        /// <summary>
-        /// Gets a fresh, empty row for a UD table. Calls
-        /// <c>Ice.BO.{UDTable}Svc/GetaNew{UDTable}</c> in Epicor.
-        /// </summary>
-        /// <param name="UDTable">
-        /// The target UD table. When null (the default),
-        /// <see cref="UDTableDefault"/> is used.
-        /// </param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.
-        /// </returns>
-        public async Task<OperationResult<JObject>> GetaNewUDAsync(
-            string UDTable = null,
-            CancellationToken ct = default)
-        {
-            string table = ResolveTable(UDTable);
-            string svc = String.Format("Ice.BO.{0}Svc/GetaNew{0}", table);
-            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
-        }
     }
 }
