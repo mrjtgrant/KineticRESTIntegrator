@@ -146,14 +146,14 @@ namespace EpicorSvcs
         /// <c>Erp.BO.VendorSvc/Update</c> in Epicor.
         /// </summary>
         /// <remarks>
-        /// The <paramref name="payload"/> is the full multi-table dataset
+        /// The <paramref name="ds"/> is the full multi-table dataset
         /// in the same shape returned by <see cref="GetByIDAsync"/>. The
         /// caller mutates rows in the dataset — setting <c>RowMod = "U"</c>
         /// on changed rows and <c>RowMod = "A"</c> on new rows — and posts
         /// the result here. Epicor applies the changes, runs business
         /// logic, and returns the updated dataset.
         /// </remarks>
-        /// <param name="payload">The vendor dataset to persist.</param>
+        /// <param name="ds">The vendor dataset to persist.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
@@ -161,11 +161,11 @@ namespace EpicorSvcs
         /// (calculated columns) filled in.
         /// </returns>
         public async Task<OperationResult<JObject>> UpdateAsync(
-            JObject payload,
+            JObject ds,
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.VendorSvc/Update";
-            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
+            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
     }
