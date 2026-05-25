@@ -15,109 +15,33 @@ namespace EpicorSvcs
     public partial class PartSvc
     {
         /// <summary>
-        /// Finds parts whose Epicor search word matches the given value.
-        /// Queries <c>Erp.BO.PartSvc/Parts</c> with a search-word filter.
+        /// Retrieves parts whose Epicor search word matches the given value.
+        /// Delegates to <see cref="PartsAsync"/> with a search-word filter
+        /// pre-applied, returning a narrow projection (PartNum and
+        /// PartDescription).
         /// </summary>
-        /// <param name="searchword">The search word to match.</param>
+        /// <param name="searchWord">The search word to match.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the matching
-        /// <see cref="Part"/> rows. Only <c>PartNum</c> and
-        /// <c>PartDescription</c> are populated.
+        /// <see cref="Part"/> rows. The plural <c>Parts</c> in the method
+        /// name signals that more than one match is possible.
         /// </returns>
-        public async Task<OperationResult<List<Part>>> BySearchWordAsync(
-            string searchword,
+        public async Task<OperationResult<List<Part>>> GetPartsBySearchWordsAsync(
+            string searchWord,
             CancellationToken ct = default)
         {
-            var filters = new List<string>
-            {
-                String.Format("SearchWord eq '{0}'", searchword)
-            };
-
-            string svc = "Erp.BO.PartSvc/Parts";
-            svc += "?$select=" + UrlEncode("PartNum,PartDescription");
-            svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
-
-            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractValueList<Part>());
-        }
-
-        /// <summary>
-        /// Changes a part's unit price. Composes
-        /// <c>ChangePartUnitPrice</c> &#8594; <c>CheckPartChanges</c> &#8594;
-        /// <c>UpdateExt</c>.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// After applying the price change, Epicor's <c>CheckPartChanges</c>
-        /// call is consulted for advisory messages. Those messages
-        /// (<c>cPartChangedMsgText</c> and <c>cPartSNChangedMsgText</c>) do
-        /// not affect the data pipeline — the dataset persisted by
-        /// <c>UpdateExt</c> is the one returned by <c>ChangePartUnitPrice</c>.
-        /// They are instead attached to the result so the caller can read
-        /// them.
-        /// </para>
-        /// <para>
-        /// On success, the returned <c>Value</c> is the <c>UpdateExt</c>
-        /// response with two extra properties merged in:
-        /// <c>partChangedMessage</c> and <c>partSNChangedMessage</c>. Either
-        /// may be an empty string when Epicor reported nothing.
-        /// </para>
-        /// </remarks>
-        /// <param name="ds">The part dataset whose unit price is being changed.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the <c>UpdateExt</c>
-        /// response, with the advisory messages attached. If the
-        /// <c>CheckPartChanges</c> step fails, the failure is propagated
-        /// rather than the price change being persisted blindly.
-        /// </returns>
-        public async Task<OperationResult<JObject>> ChangePartUnitPriceAsync(
-            JObject ds,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/ChangePartUnitPrice";
-            JObject changed = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
-
-            // ChangePartUnitPrice wraps its dataset under "parameters" —
-            // unwrap to the real dataset that will flow to UpdateExt.
-            JObject payload = JObject.FromObject(changed["parameters"]);
-
-            // Ask Epicor for advisory messages about this change. This call
-            // returns only message strings, not a dataset — so its result is
-            // captured for the caller, not fed back into the pipeline.
-            var check = await CheckPartChangesAsync(payload, ct).ConfigureAwait(false);
-            if (check.IsFailure)
-                return OperationResult<JObject>.Failure(
-                    check.ErrorMessage, check.StatusCode, check.ResourcePath, check.RawResponse);
-
-            string partChangedMessage = "";
-            string partSNChangedMessage = "";
-            JToken checkParams = check.Value != null ? check.Value["parameters"] : null;
-            if (checkParams != null)
-            {
-                if (checkParams["cPartChangedMsgText"] != null)
-                    partChangedMessage = checkParams["cPartChangedMsgText"].ToString();
-                if (checkParams["cPartSNChangedMsgText"] != null)
-                    partSNChangedMessage = checkParams["cPartSNChangedMsgText"].ToString();
-            }
-
-            var updated = await UpdateExtAsync(payload, false, true, ct).ConfigureAwait(false);
-            if (updated.IsFailure)
-                return updated;
-
-            // Surface the advisory messages alongside the UpdateExt response.
-            updated.Value["partChangedMessage"] = partChangedMessage;
-            updated.Value["partSNChangedMessage"] = partSNChangedMessage;
-
-            return updated;
+            return await PartsAsync(
+                filters: new List<string> { String.Format("SearchWord eq '{0}'", searchWord) },
+                select: new List<string> { "PartNum", "PartDescription" },
+                ct: ct).ConfigureAwait(false);
         }
 
         /// <summary>
         /// Creates a new revision for an existing part. Composes
-        /// <c>GetNewPartRev</c> with <c>Update</c>: gets a fresh part-revision
-        /// row, stamps the revision number and alternate method onto it, then
-        /// persists.
+        /// <see cref="GetNewPartRevAsync"/> with <see cref="UpdateAsync"/>:
+        /// gets a fresh part-revision row, stamps the revision number and
+        /// alternate method onto it, then persists.
         /// </summary>
         /// <param name="partNum">The part number to add a revision to.</param>
         /// <param name="revisionNum">The new revision number.</param>
@@ -129,21 +53,20 @@ namespace EpicorSvcs
         /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
         /// response from the update.
         /// </returns>
-        public async Task<OperationResult<JObject>> GetNewPartRevAsync(
+        public async Task<OperationResult<JObject>> AddPartRevAsync(
             string partNum,
             string revisionNum,
             string altMethod = "",
             CancellationToken ct = default)
         {
-            string svc = "Erp.BO.PartSvc/GetNewPartRev";
+            // Fetch a fresh part-revision template via the public BO wrapper.
+            var newRev = await GetNewPartRevAsync(partNum, ct).ConfigureAwait(false);
+            if (newRev.IsFailure)
+                return newRev;
+            JObject ds = newRev.Value;
 
-            JObject newpartrev = new JObject(NewDS);
-            newpartrev.Add(new JProperty("partNum", partNum));
-            newpartrev.Add(new JProperty("revisionNum", ""));
-            newpartrev.Add(new JProperty("altMethod", ""));
-
-            JObject ds = HandleResponse(await RESTCallAsync(svc, newpartrev, ct).ConfigureAwait(false));
-
+            // Stamp the caller's revision number and alternate method onto
+            // the active row of the returned template.
             int? activeRowIndex = GetActiveRowIndex(JArray.FromObject(ds["ds"]["PartRev"]));
             if (activeRowIndex != null)
             {
@@ -152,9 +75,8 @@ namespace EpicorSvcs
                 ds["ds"]["PartRev"][activeRowIndex]["AltMethod"] = altMethod;
             }
 
-            JObject response = await RESTCallAsync(
-                "Erp.BO.PartSvc/Update", ds, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
+            // Persist via the public Update wrapper.
+            return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }
     }
 }

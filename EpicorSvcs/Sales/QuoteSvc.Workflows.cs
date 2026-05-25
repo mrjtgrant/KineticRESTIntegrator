@@ -27,7 +27,7 @@ namespace EpicorSvcs
         /// by Epicor. On failure, <c>ErrorMessage</c> describes what went
         /// wrong.
         /// </returns>
-        public async Task<OperationResult<JObject>> NewQuoteHedAsync(
+        public async Task<OperationResult<JObject>> CreateQuoteAsync(
             QuoteInput quote,
             CancellationToken ct = default)
         {

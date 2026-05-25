@@ -36,7 +36,7 @@ namespace EpicorSvcs
         /// retrieved but no code matched <paramref name="codeID"/>; fails if
         /// the underlying <see cref="GetByIDAsync"/> call failed.
         /// </returns>
-        public async Task<OperationResult<string>> UDCodeLookUpAsync(
+        public async Task<OperationResult<string>> GetUDCodeDescriptionAsync(
             string codeTypeID,
             string codeID,
             bool useLongDesc = false,

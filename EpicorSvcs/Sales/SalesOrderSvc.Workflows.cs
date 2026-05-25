@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -15,38 +16,51 @@ namespace EpicorSvcs
     public partial class SalesOrderSvc
     {
         /// <summary>
-        /// Finds sales orders matching a customer PO number. Queries
-        /// <c>Erp.BO.SalesOrderSvc/SalesOrders</c> with a PO-number filter,
-        /// selecting only the order number.
+        /// Retrieves the full sales-order dataset by customer PO number.
+        /// Composes two calls: queries
+        /// <c>Erp.BO.SalesOrderSvc/SalesOrders</c> with a PO-number filter to
+        /// find the matching <c>OrderNum</c>, then fetches the full multi-table
+        /// dataset via <see cref="GetByIDAsync"/>.
         /// </summary>
-        /// <param name="PONum">
-        /// The customer PO number to match. When null, no filter is applied
-        /// and the query returns order numbers unfiltered.
-        /// </param>
+        /// <remarks>
+        /// PO numbers are expected to be unique per order at the Epicor
+        /// installation level — at most one order will match. When no order
+        /// is found, the failure shape of <see cref="GetByIDAsync"/> for a
+        /// non-existent order number is returned (typically a 404).
+        /// </remarks>
+        /// <param name="PONum">The customer PO number to match.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the matching
-        /// <see cref="OrderHed"/> rows. Only <c>OrderNum</c> is populated —
-        /// this is a narrow lookup, not a full order fetch.
+        /// An <see cref="OperationResult{T}"/> wrapping the raw multi-table
+        /// order dataset returned by <c>GetByID</c>. Materialize the header
+        /// row from <c>RawResponse</c>:
+        /// <c>result.Value["ds"]["OrderHed"][0].ToObject&lt;OrderHed&gt;()</c>.
         /// </returns>
-        public async Task<OperationResult<List<OrderHed>>> FindOrderByPONumAsync(
+        public async Task<OperationResult<JObject>> GetByPONumAsync(
             string PONum,
             CancellationToken ct = default)
         {
-            string svc = "Erp.BO.SalesOrderSvc/SalesOrders";
-            svc += "?$select=OrderNum";
+            // Step 1: narrow OData query to find the OrderNum for this PO.
+            var lookup = await SalesOrdersAsync(
+                filters: new List<string> { String.Format("PONum eq '{0}'", PONum) },
+                select: new List<string> { "OrderNum" },
+                top: 1,
+                ct: ct).ConfigureAwait(false);
 
-            if (PONum != null)
-            {
-                var filters = new List<string>
-                {
-                    String.Format("PONum eq '{0}'", PONum)
-                };
-                svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
-            }
+            if (lookup.IsFailure)
+                return OperationResult<JObject>.Failure(
+                    lookup.ErrorMessage, lookup.StatusCode,
+                    lookup.ResourcePath, lookup.RawResponse);
 
-            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractValueList<OrderHed>());
+            OrderHed match = lookup.Value.FirstOrDefault();
+            if (match == null)
+                return OperationResult<JObject>.Failure(
+                    String.Format("PONum '{0}' does not match any sales order", PONum),
+                    404, lookup.ResourcePath, lookup.RawResponse);
+
+            // Step 2: fetch the full multi-table dataset by the OrderNum we
+            // just found.
+            return await GetByIDAsync(match.OrderNum, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -63,7 +77,7 @@ namespace EpicorSvcs
         /// echoed back by Epicor's <c>MasterUpdate</c>. On failure,
         /// <c>ErrorMessage</c> describes what went wrong.
         /// </returns>
-        public async Task<OperationResult<JObject>> NewOrderLineAsync(
+        public async Task<OperationResult<JObject>> AddOrderLineAsync(
             int orderNum,
             string partNum,
             CancellationToken ct = default)
@@ -113,7 +127,7 @@ namespace EpicorSvcs
         /// echoed back by Epicor's <c>MasterUpdate</c>. On failure,
         /// <c>ErrorMessage</c> describes what went wrong.
         /// </returns>
-        public async Task<OperationResult<JObject>> NewOrderAsync(
+        public async Task<OperationResult<JObject>> CreateOrderAsync(
             string CustID,
             DateTime NeedByDate,
             string PONum = null,

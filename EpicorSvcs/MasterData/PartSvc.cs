@@ -15,8 +15,8 @@ namespace EpicorSvcs
     /// <remarks>
     /// This is a <c>partial class</c>. Native Epicor BO method wrappers live
     /// here in <c>PartSvc.cs</c>; the multi-call orchestrators
-    /// (<c>BySearchWordAsync</c>, <c>ChangePartUnitPriceAsync</c>,
-    /// <c>GetNewPartRevAsync</c>) live in <c>PartSvc.Workflows.cs</c>.
+    /// (<c>GetPartsBySearchWordsAsync</c>, <c>AddPartRevAsync</c>) live in
+    /// <c>PartSvc.Workflows.cs</c>.
     /// </remarks>
     public partial class PartSvc : EpicorSvc
     {
@@ -83,6 +83,35 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Adds a file attachment to a part. Calls
+        /// <c>Erp.BO.PartSvc/PartAttches</c> in Epicor.
+        /// </summary>
+        /// <param name="attch">The attachment metadata.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
+        /// response.
+        /// </returns>
+        public async Task<OperationResult<JObject>> PartAttchesAsync(
+            FileAttachment attch,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/PartAttches";
+            JObject payload = new JObject {
+                new JProperty("Company", EpicorSession.Company),
+                new JProperty("PartNum", attch.GenericItemNum),
+                new JProperty("DrawDesc", attch.FileDesc),
+                new JProperty("FileName", attch.FileName),
+                new JProperty("DrawingSeq", "0"),
+                new JProperty("XFileRefNum", "0"),
+                new JProperty("RowMod", "A")
+            };
+
+            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
         /// Retrieves a page of part records via Epicor's <c>GetList</c>. Calls
         /// <c>Erp.BO.PartSvc/GetList</c> in Epicor.
         /// </summary>
@@ -111,22 +140,6 @@ namespace EpicorSvcs
             svc += "&absolutePage=" + page.ToString();
 
             JObject response = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Gets a fresh, empty part dataset. Calls
-        /// <c>Erp.BO.PartSvc/GetNewPart</c> in Epicor.
-        /// </summary>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw new-part
-        /// dataset.
-        /// </returns>
-        public async Task<OperationResult<JObject>> GetNewPartAsync(CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/GetNewPart";
-            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
 
@@ -161,87 +174,6 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Duplicates an existing part into a new part number. Calls
-        /// <c>Erp.BO.PartSvc/DuplicatePart</c> in Epicor.
-        /// </summary>
-        /// <param name="sourcepart">The part number to copy from.</param>
-        /// <param name="targetpart">The new part number to create.</param>
-        /// <param name="targetpartdesc">The description for the new part.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
-        /// response for the duplicated part.
-        /// </returns>
-        public async Task<OperationResult<JObject>> DuplicatePartAsync(
-            string sourcepart,
-            string targetpart,
-            string targetpartdesc,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/DuplicatePart";
-            JObject payload = new JObject {
-                new JProperty("sourcePartNum", sourcepart),
-                new JProperty("targetPartNum", targetpart),
-                new JProperty("targetPartDescription", targetpartdesc),
-                new JProperty("configuratorMode", "COPY"),
-                new JProperty("configID", ""),
-                new JProperty("configDescription", ""),
-                new JProperty("configType", "PC")
-            };
-
-            JObject response = HandleResponse(await RESTCallAsync(svc, payload, ct).ConfigureAwait(false));
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Persists a part dataset. Calls <c>Erp.BO.PartSvc/Update</c> in
-        /// Epicor.
-        /// </summary>
-        /// <param name="ds">The part dataset to persist.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
-        /// response.
-        /// </returns>
-        public async Task<OperationResult<JObject>> UpdateAsync(
-            JObject ds,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/Update";
-            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
-        /// Adds a file attachment to a part. Calls
-        /// <c>Erp.BO.PartSvc/PartAttches</c> in Epicor.
-        /// </summary>
-        /// <param name="attch">The attachment metadata.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
-        /// response.
-        /// </returns>
-        public async Task<OperationResult<JObject>> PartAttchesAsync(
-            FileAttachment attch,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.PartSvc/PartAttches";
-            JObject payload = new JObject {
-                new JProperty("Company", EpicorSession.Company),
-                new JProperty("PartNum", attch.GenericItemNum),
-                new JProperty("DrawDesc", attch.FileDesc),
-                new JProperty("FileName", attch.FileName),
-                new JProperty("DrawingSeq", "0"),
-                new JProperty("XFileRefNum", "0"),
-                new JProperty("RowMod", "A")
-            };
-
-            JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
-        }
-
-        /// <summary>
         /// Asks Epicor to report any advisory messages arising from a pending
         /// part change. Calls <c>Erp.BO.PartSvc/CheckPartChanges</c> in
         /// Epicor.
@@ -264,6 +196,75 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/CheckPartChanges";
+            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Gets a fresh, empty part dataset. Calls
+        /// <c>Erp.BO.PartSvc/GetNewPart</c> in Epicor.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw new-part
+        /// dataset.
+        /// </returns>
+        public async Task<OperationResult<JObject>> GetNewPartAsync(CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/GetNewPart";
+            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Gets a fresh part-revision template under an existing part. Calls
+        /// <c>Erp.BO.PartSvc/GetNewPartRev</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// The returned dataset contains an empty <c>PartRev</c> row for the
+        /// caller to populate (<c>RevisionNum</c>, <c>RevShortDesc</c>,
+        /// <c>AltMethod</c>, etc.) before persisting via
+        /// <see cref="UpdateAsync"/>. This is a template-only fetch — it does
+        /// not persist a new revision on its own. For the full create-and-
+        /// persist flow, see <c>AddPartRevAsync</c> in
+        /// <c>PartSvc.Workflows.cs</c>.
+        /// </remarks>
+        /// <param name="partNum">The part number to add a revision under.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw part-revision
+        /// template dataset.
+        /// </returns>
+        public async Task<OperationResult<JObject>> GetNewPartRevAsync(
+            string partNum,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/GetNewPartRev";
+
+            JObject ds = new JObject(NewDS);
+            ds.Add(new JProperty("partNum", partNum));
+            ds.Add(new JProperty("revisionNum", ""));
+            ds.Add(new JProperty("altMethod", ""));
+
+            JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Persists a part dataset. Calls <c>Erp.BO.PartSvc/Update</c> in
+        /// Epicor.
+        /// </summary>
+        /// <param name="ds">The part dataset to persist.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
+        /// response.
+        /// </returns>
+        public async Task<OperationResult<JObject>> UpdateAsync(
+            JObject ds,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/Update";
             JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
@@ -297,6 +298,111 @@ namespace EpicorSvcs
             ds.Add(new JProperty("rollbackParentOnChildError", rollbackonerr));
 
             JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Changes a part's unit price. Calls
+        /// <c>Erp.BO.PartSvc/ChangePartUnitPrice</c> in Epicor, then runs the
+        /// standard pre-update check via <see cref="CheckPartChangesAsync"/>
+        /// and persists via <see cref="UpdateExtAsync"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// After applying the price change, Epicor's <c>CheckPartChanges</c>
+        /// call is consulted for advisory messages. Those messages
+        /// (<c>cPartChangedMsgText</c> and <c>cPartSNChangedMsgText</c>) do
+        /// not affect the data pipeline — the dataset persisted by
+        /// <c>UpdateExt</c> is the one returned by <c>ChangePartUnitPrice</c>.
+        /// They are instead attached to the result so the caller can read
+        /// them.
+        /// </para>
+        /// <para>
+        /// On success, the returned <c>Value</c> is the <c>UpdateExt</c>
+        /// response with two extra properties merged in:
+        /// <c>partChangedMessage</c> and <c>partSNChangedMessage</c>. Either
+        /// may be an empty string when Epicor reported nothing.
+        /// </para>
+        /// </remarks>
+        /// <param name="ds">The part dataset whose unit price is being changed.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the <c>UpdateExt</c>
+        /// response, with the advisory messages attached. If the
+        /// <c>CheckPartChanges</c> step fails, the failure is propagated
+        /// rather than the price change being persisted blindly.
+        /// </returns>
+        public async Task<OperationResult<JObject>> ChangePartUnitPriceAsync(
+            JObject ds,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/ChangePartUnitPrice";
+            JObject changed = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+
+            // ChangePartUnitPrice wraps its dataset under "parameters" —
+            // unwrap to the real dataset that will flow to UpdateExt.
+            JObject payload = JObject.FromObject(changed["parameters"]);
+
+            // Ask Epicor for advisory messages about this change. This call
+            // returns only message strings, not a dataset — so its result is
+            // captured for the caller, not fed back into the pipeline.
+            var check = await CheckPartChangesAsync(payload, ct).ConfigureAwait(false);
+            if (check.IsFailure)
+                return OperationResult<JObject>.Failure(
+                    check.ErrorMessage, check.StatusCode, check.ResourcePath, check.RawResponse);
+
+            string partChangedMessage = "";
+            string partSNChangedMessage = "";
+            JToken checkParams = check.Value != null ? check.Value["parameters"] : null;
+            if (checkParams != null)
+            {
+                if (checkParams["cPartChangedMsgText"] != null)
+                    partChangedMessage = checkParams["cPartChangedMsgText"].ToString();
+                if (checkParams["cPartSNChangedMsgText"] != null)
+                    partSNChangedMessage = checkParams["cPartSNChangedMsgText"].ToString();
+            }
+
+            var updated = await UpdateExtAsync(payload, false, true, ct).ConfigureAwait(false);
+            if (updated.IsFailure)
+                return updated;
+
+            // Surface the advisory messages alongside the UpdateExt response.
+            updated.Value["partChangedMessage"] = partChangedMessage;
+            updated.Value["partSNChangedMessage"] = partSNChangedMessage;
+
+            return updated;
+        }
+
+        /// <summary>
+        /// Duplicates an existing part into a new part number. Calls
+        /// <c>Erp.BO.PartSvc/DuplicatePart</c> in Epicor.
+        /// </summary>
+        /// <param name="sourcepart">The part number to copy from.</param>
+        /// <param name="targetpart">The new part number to create.</param>
+        /// <param name="targetpartdesc">The description for the new part.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
+        /// response for the duplicated part.
+        /// </returns>
+        public async Task<OperationResult<JObject>> DuplicatePartAsync(
+            string sourcepart,
+            string targetpart,
+            string targetpartdesc,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.PartSvc/DuplicatePart";
+            JObject payload = new JObject {
+                new JProperty("sourcePartNum", sourcepart),
+                new JProperty("targetPartNum", targetpart),
+                new JProperty("targetPartDescription", targetpartdesc),
+                new JProperty("configuratorMode", "COPY"),
+                new JProperty("configID", ""),
+                new JProperty("configDescription", ""),
+                new JProperty("configType", "PC")
+            };
+
+            JObject response = HandleResponse(await RESTCallAsync(svc, payload, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
         }
     }
