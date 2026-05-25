@@ -36,7 +36,7 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**v0.1.0 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, fifty-two unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
+**v0.1.1 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, fifty-two unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
 
 ---
 
@@ -396,7 +396,7 @@ KineticRESTIntegrator/
 | `InvalidOperationException: EpicorSvcs is not configured...` | You haven't copied `App.config.template` → `App.config`, or you left `YOUR_*` placeholders in place. The exception lists what's missing. |
 | `result.IsFailure` with HTTP 401 | Bad username/passkey, account disabled, or wrong environment URL. |
 | `result.IsFailure` with HTTP 404 | Wrong BO name, wrong company segment in the URL, or a record/BAQ was renamed/deleted. |
-| `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 — the type is `DateTime?` and accommodates this. |
+| `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 or later — the type is `DateTime?` and accommodates this. |
 | `pcNeqQtyAction = "Stop"` on inventory transfer | The move would create negative on-hand. Check source bin quantity. |
 | Email arrives with no attachment, only the error message in the body | `AttachmentData` was null or `Error` was set on the `EMailMeta`. The framework treats either as a no-data case and emails the error message instead of an attachment. |
 | Email never arrives | SMTP host unreachable, port blocked, or auth failed. By default the library connects anonymously on port 25 with no TLS; for relays that require auth or TLS, set `SMTPPort=587`, `SMTPEnableSsl=true`, `SMTPUsername`, and `SMTPPassword` in `App.config`. Port 25 + TLS and port 465 (implicit TLS) are rejected as misconfigurations — use port 587 with STARTTLS instead. Check `EmailError` in the returned `EmailSpecs` for the underlying exception message. |
