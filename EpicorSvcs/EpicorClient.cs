@@ -68,6 +68,7 @@ namespace EpicorSvcs
         private EngWorkBenchSvc _engWorkBench;
         private JobEntrySvc _jobEntry;
         private POSvc _po;
+        private ReceiptSvc _receipt;
         private QuoteSvc _quote;
         private SalesOrderSvc _salesOrder;
 
@@ -267,6 +268,12 @@ namespace EpicorSvcs
             get { ThrowIfDisposed(); return _po ?? (_po = new POSvc(_session)); }
         }
 
+        /// <summary>Purchase-order receipt header / line / attachment reads and creation.</summary>
+        public ReceiptSvc Receipt
+        {
+            get { ThrowIfDisposed(); return _receipt ?? (_receipt = new ReceiptSvc(_session)); }
+        }
+
         // ---------------------------------------------------------------------
         // Sales services
         // ---------------------------------------------------------------------
@@ -325,6 +332,7 @@ namespace EpicorSvcs
             _engWorkBench?.Dispose();
             _jobEntry?.Dispose();
             _po?.Dispose();
+            _receipt?.Dispose();
             _quote?.Dispose();
             _salesOrder?.Dispose();
 
