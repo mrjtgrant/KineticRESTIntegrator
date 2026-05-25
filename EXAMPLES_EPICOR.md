@@ -63,10 +63,21 @@ some segments name a method and others name a collection.
 **Orchestrator methods don't follow this.** They live in
 `*Svc.Workflows.cs` and compose multiple BO calls into a single operation that
 has no single Epicor counterpart, so they don't have a name to mirror. They
-are named for what they accomplish: `ChangePartUnitPriceAsync` (composes three
-calls), `GetNewPartRevAsync` (creates a new revision and persists it),
-`AddMtlsAsync` on `EngWorkBenchSvc` (a long ECO workflow). The intent is
-readable from the name; the composition is the implementation detail.
+are named for what they accomplish: `CreateOrderAsync` (creates a sales order
+by chaining `GetNewOrderHed` → on-change steps → `MasterUpdate`),
+`AddPartRevAsync` (creates a new revision under a part: `GetNewPartRev` →
+stamp the revision → `Update`), `AddMtlsAsync` on `EngWorkBenchSvc` (a long
+ECO workflow). The intent is readable from the name; the composition is the
+implementation detail.
+
+**Verb conventions on orchestrators.** `Create*` for top-level entities that
+have no parent (`CreateProjectAsync`, `CreateOrderAsync`, `CreateQuoteAsync`).
+`Add*` for items added under an existing parent (`AddOrderLineAsync` takes an
+`orderNum`; `AddPartRevAsync` takes a `partNum`; `AddMscShpDtAsync` takes a
+`packNum`). `Get*` for reads — including the convenience reads that compose
+multiple calls (`GetByPONumAsync` queries `SalesOrders` for the OrderNum then
+calls `GetByIDAsync` for the full dataset; `GetUDCodeDescriptionAsync` fetches
+a code type and returns one description string).
 
 **One generalization to be aware of: `UDXSvc`.** Epicor has a separate
 service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`,
@@ -296,7 +307,7 @@ using EpicorSvcs.Dtos;
 
 using (var part = new PartSvc("pilot"))
 {
-    var matches = await part.BySearchWordAsync("WIDGET");
+    var matches = await part.GetPartsBySearchWordsAsync("WIDGET");
     if (matches.IsFailure)
     {
         Console.WriteLine($"Search failed: {matches.ErrorMessage}");
@@ -333,7 +344,7 @@ var session = new EpicorRESTSessionKey
 
 using (var part = new PartSvc(session))
 {
-    var matches = await part.BySearchWordAsync("WIDGET");
+    var matches = await part.GetPartsBySearchWordsAsync("WIDGET");
     // ...
 }
 ```

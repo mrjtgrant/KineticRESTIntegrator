@@ -10,7 +10,7 @@ namespace EpicorSvcs.Dtos
     /// detail (line items on a misc shipment).
     /// </summary>
     /// <remarks>
-    /// Used by <see cref="MiscShipSvc._AddMscShpDtAsync"/>. Replaces the
+    /// Used by <see cref="MiscShipSvc.AddMscShpDtAsync"/>. Replaces the
     /// nested MscShpDt class that previously lived inside <c>MiscShipSvc.cs</c>.
     /// </remarks>
     public class MscShpDt

@@ -4,7 +4,7 @@ namespace EpicorSvcs.Dtos
 {
     /// <summary>
     /// Caller-facing input for creating a quote via
-    /// <see cref="QuoteSvc._NewQuoteHedAsync"/>.
+    /// <see cref="QuoteSvc.CreateQuoteAsync"/>.
     /// </summary>
     /// <remarks>
     /// <para>

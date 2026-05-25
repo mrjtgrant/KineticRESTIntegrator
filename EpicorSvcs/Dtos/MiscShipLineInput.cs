@@ -4,7 +4,7 @@ namespace EpicorSvcs.Dtos
 {
     /// <summary>
     /// Caller-facing input for adding a line to a miscellaneous shipment via
-    /// <see cref="MiscShipSvc._AddMscShpDtAsync"/>.
+    /// <see cref="MiscShipSvc.AddMscShpDtAsync"/>.
     /// </summary>
     /// <remarks>
     /// This is <b>not</b> the Epicor <c>MscShpDt</c> table — that table is far
