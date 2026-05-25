@@ -29,6 +29,23 @@
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
+  <!-- Build-warning suppression.
+       MSB3277 fires on net48 because ClosedXML (a netstandard2.0 library)
+       transitively references newer versions of System.Memory, System.Buffers,
+       System.Numerics.Vectors, and System.Runtime.CompilerServices.Unsafe than
+       the .NET Framework 4.8 facade assemblies provide. App.config's
+       <bindingRedirect> entries resolve this at runtime — the warning is a
+       build-time complaint about a state that is deliberately handled.
+       MSB3836 fires on net8.0 because <AutoGenerateBindingRedirects> produces
+       its own redirects that overlap with the hand-coded ones in App.config
+       (which are there for the net48 runtime path). Same underlying root
+       cause; same "already handled, please stop complaining" character.
+       Both suppressed here rather than papered over with a more invasive fix
+       that risks changing the runtime binding behavior App.config provides. -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);MSB3277;MSB3836</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
