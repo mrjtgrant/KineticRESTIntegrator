@@ -215,7 +215,7 @@ The framework validates settings on the first service construction. If anything 
 ```csharp
 using (var client = new EpicorClient("pilot"))      // env override; null/omitted = config default
 {
-    var customers = await client.Customer.GetListAsync("Inactive = false");
+    var customers = await client.Customer.CustomersAsync(filters: new List<string> { "Inactive eq false" });
     var parts     = await client.Part.PartsAsync(top: 10);
     var order     = await client.SalesOrder.GetByIDAsync(orderNum: 12345);
     // …all services disposed here
