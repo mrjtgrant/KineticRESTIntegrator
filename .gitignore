@@ -158,3 +158,5 @@ tmp/
 temp/
 TODO.local.md
 NOTES.local.md
+# ----- AI assistant context (local-only, not part of the repo) -----
+CLAUDE_CONTEXT.md
