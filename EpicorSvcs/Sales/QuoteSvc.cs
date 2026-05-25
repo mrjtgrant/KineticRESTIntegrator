@@ -47,6 +47,36 @@ namespace EpicorSvcs
         // ---------------------------------------------------------------
 
         /// <summary>
+        /// Retrieves a full quote by its quote number. Calls
+        /// <c>Erp.BO.QuoteSvc/GetByID</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// The <c>GetByID</c> response is a wide, multi-table dataset — the
+        /// <c>QuoteHed</c> header plus the related tables (<c>QuoteDtl</c>,
+        /// <c>QuoteQty</c>, <c>QuoteMfgDtl</c>, attachments, and more).
+        /// It is returned intact as a <c>JObject</c> rather than projected
+        /// to a DTO, because a quote <i>is</i> its whole dataset. To work
+        /// with the header row, materialize it from <c>RawResponse</c>:
+        /// <c>result.Value["ds"]["QuoteHed"][0].ToObject&lt;QuoteHed&gt;()</c>.
+        /// </remarks>
+        /// <param name="quoteNum">The quote number to retrieve.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw multi-table
+        /// quote dataset.
+        /// </returns>
+        public async Task<OperationResult<JObject>> GetByIDAsync(
+            int quoteNum,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.QuoteSvc/GetByID";
+            svc += String.Format("?quoteNum={0}", quoteNum);
+
+            JObject response = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
         /// Gets a fresh, empty quote-header dataset. Calls
         /// <c>Erp.BO.QuoteSvc/GetNewQuoteHed</c> in Epicor.
         /// </summary>

@@ -83,6 +83,39 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Retrieves a full project by its project ID. Calls
+        /// <c>Erp.BO.ProjectSvc/GetByID</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// The <c>GetByID</c> response is a wide, multi-table dataset — the
+        /// <c>Project</c> header plus the related tables (phases, milestones,
+        /// roles, and more). It is returned intact as a <c>JObject</c> rather
+        /// than projected to a DTO, because a project <i>is</i> its whole
+        /// dataset. To work with the header row, materialize it from
+        /// <c>RawResponse</c>:
+        /// <c>result.Value["ds"]["Project"][0].ToObject&lt;Project&gt;()</c>.
+        /// When you only need the header row (no phases or related
+        /// tables), prefer the narrower <see cref="ProjectsAsync"/> with a
+        /// <c>ProjectID eq '...'</c> filter.
+        /// </remarks>
+        /// <param name="projectID">The project ID to retrieve.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw multi-table
+        /// project dataset.
+        /// </returns>
+        public async Task<OperationResult<JObject>> GetByIDAsync(
+            string projectID,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.ProjectSvc/GetByID";
+            svc += String.Format("?projectID={0}", UrlEncode(projectID));
+
+            JObject response = HandleResponse(await RESTCallAsync(svc, null, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
         /// Gets a fresh, empty project dataset. Calls
         /// <c>Erp.BO.ProjectSvc/GetNewProject</c> in Epicor.
         /// </summary>
