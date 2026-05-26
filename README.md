@@ -322,6 +322,53 @@ For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EP
 
 ---
 
+## Integrating Keri into a consumer project
+
+Keri does not publish to NuGet. Consumers reference Keri's DLLs directly from a local `lib/` folder. The three DLLs needed are `EpicorSvcs.dll`, `FileHandling.dll`, and `RESTServices.dll` — plus Keri's transitive dependencies, which Keri's build output ships alongside its own DLLs.
+
+In your consumer project's `.csproj`:
+
+```xml
+<ItemGroup>
+  <Reference Include="EpicorSvcs">
+    <HintPath>lib\EpicorSvcs.dll</HintPath>
+  </Reference>
+  <Reference Include="RESTServices">
+    <HintPath>lib\RESTServices.dll</HintPath>
+  </Reference>
+  <Reference Include="FileHandling">
+    <HintPath>lib\FileHandling.dll</HintPath>
+  </Reference>
+</ItemGroup>
+```
+
+When you build the consumer, MSBuild copies the referenced DLLs into the consumer's output folder. The transitive DLLs sitting in `lib/` next to them get picked up automatically by .NET's assembly resolver at runtime.
+
+**Do not add NuGet PackageReferences to the libraries Keri already brings in** — `Newtonsoft.Json`, `ClosedXML`, `MailKit`, `MimeKit`, or any of their transitives. See the next section for why.
+
+---
+
+## Dependency management
+
+Keri ships its full dependency tree alongside its own DLLs. The consumer references Keri; Keri brings in `Newtonsoft.Json`, `ClosedXML`, `MailKit`, and everything else those packages need. The consumer does not need to know what's in the tree.
+
+This makes consumer setup trivial — reference three DLLs, done — at the cost of locking the consumer to whatever versions Keri ships. If the consumer adds its own NuGet reference to a package Keri also uses, the two versions compete at build time. The NuGet-resolved version usually wins for the consumer's bin folder, and Keri's calls into that package then fail at runtime with a `MissingMethodException`, `FileLoadException`, or `TypeLoadException` referencing the package.
+
+The pinned versions (net8.0 build) are:
+
+| Package | Pinned version | Used by |
+|---|---|---|
+| `Newtonsoft.Json` | 13.0.4 | `EpicorSvcs`, `RESTServices`, `FileHandling` (JSON parsing throughout) |
+| `ClosedXML` | 0.105.0 | `FileHandling` (Excel read / write) |
+| `MailKit` / `MimeKit` | 4.16.0 | `FileHandling` (SMTP on net8.0) |
+| `System.Configuration.ConfigurationManager` | 8.0.0 | `EpicorSvcs`, `FileHandling` (`App.config` loading on net8.0) |
+
+If your consumer hits a runtime error referencing one of these packages, check for a competing `<PackageReference>` in the consumer's `.csproj` and remove it — Keri's bundled copy will take over.
+
+The same principle applies on net48, where the pinned versions are `Newtonsoft.Json` 13.0.4 and `ClosedXML` 0.105.0 (no MailKit — `System.Net.Mail.SmtpClient` from the BCL handles SMTP on this target).
+
+---
+
 ## Project layout
 
 ```
