@@ -13,14 +13,37 @@
        Local.targets is gitignored. Each developer maintains their own list of
        consumer destinations without committing local paths to the repo.
        
-       WHAT IT DOES:
-       After a Release build of EpicorSvcs targeting net8.0, copy every DLL from:
-         - $(TargetDir)                                        (this project: EpicorSvcs + RESTServices + transitives)
-         - ..\FileHandling\bin\Release\net8.0\                 (sibling: FileHandling + ClosedXML + MailKit + transitives)
+       WHAT GETS COPIED — Keri's full runtime dependency closure (19 DLLs in
+       net8.0 builds, equivalent to what a published NuGet package would carry).
+       
+       Three layers:
+       
+       Keri's own libraries (3):
+         EpicorSvcs.dll
+         RESTServices.dll
+         FileHandling.dll
+       
+       Direct NuGet dependencies declared in Keri's csprojs (4):
+         Newtonsoft.Json.dll
+         System.Configuration.ConfigurationManager.dll
+         ClosedXML.dll
+         MailKit.dll
+       
+       Transitive dependencies (12), pulled in by the four above:
+         ClosedXML.Parser.dll, DocumentFormat.OpenXml.dll,
+         DocumentFormat.OpenXml.Framework.dll, ExcelNumberFormat.dll, RBush.dll,
+         SixLabors.Fonts.dll, System.IO.Packaging.dll, MimeKit.dll,
+         BouncyCastle.Cryptography.dll, System.Security.Cryptography.Pkcs.dll,
+         System.Diagnostics.EventLog.dll, System.Security.Cryptography.ProtectedData.dll
+       
+       HOW IT WORKS:
+       After a Release build of EpicorSvcs targeting net8.0, copy every *.dll from:
+         - $(TargetDir)                                  (EpicorSvcs's bin: itself + RESTServices + their deps)
+         - ..\FileHandling\bin\Release\net8.0\           (FileHandling's bin: itself + its deps)
        
        to each consumer project's lib/ folder. The wildcard *.dll filters out
-       .pdb, .deps.json, .runtimeconfig.json, App.config files. Each consumer
-       gets the union of both source folders.
+       .pdb, .deps.json, .runtimeconfig.json, App.config. Each consumer gets the
+       union of both source folders — the full dependency closure described above.
        
        Only Release / net8.0 triggers the copy. Debug builds and net48 builds
        are silent. If your consumer projects target net48, change the
@@ -55,12 +78,11 @@
           Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net8.0'">
 
     <ItemGroup>
-      <!-- All DLLs from this project's output dir (EpicorSvcs + RESTServices + transitives) -->
+      <!-- All DLLs from this project's output dir (EpicorSvcs + RESTServices + their deps) -->
       <KeriDll Include="$(TargetDir)*.dll" />
 
-      <!-- All DLLs from the sibling FileHandling output dir (FileHandling + ClosedXML
-           + MailKit + transitives). Silent no-op if FileHandling hasn't been built
-           in Release yet. -->
+      <!-- All DLLs from the sibling FileHandling output dir (FileHandling + its deps).
+           Silent no-op if FileHandling hasn't been built in Release yet. -->
       <KeriDll Include="$(MSBuildThisFileDirectory)..\FileHandling\bin\Release\net8.0\*.dll" />
     </ItemGroup>
 
