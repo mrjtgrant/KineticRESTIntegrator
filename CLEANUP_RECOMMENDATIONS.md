@@ -60,6 +60,18 @@ using (var udx = new UDXSvc("pilot"))
 - **Reflection cache.** First time a DTO type is seen, the library inspects its attributes, validates the rules, and caches the resulting mapping. Subsequent operations on that type use the cached mapping. Reflection runs once per type per process.
 - **`ExtraData` for unmapped columns on read.** Same pattern as existing typed DTOs (`OrderHed`, `QuoteInput`, etc.): a `[JsonExtensionData] IDictionary<string, JToken> ExtraData` property on the DTO surfaces any UD-row columns that don't have a `[UDColumn]` mapping, so users can still see `_c` custom columns or extra data without losing it.
 
+**Relationship to existing `ParseColumnLegend` / `BuildColumnLegend`:** UDXSvc already has a "column legend" convention — a `|`-separated string stored in `Character10` like `"ShortChar02:PartNum|Number05:AvailableQty"` that lets a UD row carry its own self-description of which generic column means what. That pattern is a *storage-side* documentation aid (anyone opening the row in Epicor's UI sees the column meanings), distinct from the *code-side* mapping the typed-DTO feature provides.
+
+The two patterns integrate cleanly: **the typed-DTO API auto-emits a legend to `Character10` on save, derived from the DTO's `[UDColumn]` attributes** — unless the DTO maps a property to `Character10` itself, in which case the library steps aside and writes whatever value the user-controlled property holds. The presence of `[UDColumn("Character10")]` on any property is the opt-out signal: it declaratively tells the library "the user owns this column, don't touch it." Users who want self-describing rows (the common case) do nothing and get them automatically; users who need `Character10` for other data (existing rows being migrated, custom hand-rolled legends, free-text notes that always lived there) map it explicitly and the auto-emission turns off.
+
+This design has three properties worth flagging:
+
+- **The default produces self-describing rows.** Anyone opening a UD row in Epicor's UI after a typed-DTO save sees the legend without the user having to think about it. Matches Keri's "do the right thing by default" philosophy (see also: `ExtraData` pass-through, dataset-shape normalization).
+- **The opt-out is declarative on the type, not per-call.** A given DTO class's behavior with respect to `Character10` is determined by its own attributes — never by how a caller invokes `SaveAsync`. No accidentally-different-behavior-in-different-call-sites bugs.
+- **The migration story is loud but safe.** Users migrating existing UD rows that have meaningful `Character10` data must map `Character10` in their new DTO, or the next `SaveAsync` will overwrite that data with the auto-emitted legend. This must be called out in the typed-DTO docs (first paragraph): "if your existing UD rows already use `Character10` for something, map a property to `Character10` in your DTO to opt out of the auto-legend."
+
+`ParseColumnLegend` and `BuildColumnLegend` remain public — they are still useful to anyone working with raw `UDRow` outside the typed-DTO API, and the typed-DTO implementation will use `BuildColumnLegend` internally to construct the auto-emitted string. The two patterns are unified by sharing this builder.
+
 **Suggested scope (concrete):**
 - New `UDColumnAttribute` class in `EpicorSvcs/Platform/` (small)
 - New `UDColumnCapacityException` class (small)
