@@ -19,7 +19,7 @@ namespace EpicorSvcs
     /// for UD-column values. Only the columns a given <see cref="UDRow"/>
     /// actually populates are sent or selected.
     /// </remarks>
-    public class UDTableSvc : EpicorSvc
+    public partial class UDTableSvc : EpicorSvc
     {
         /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
         /// <param name="env">
