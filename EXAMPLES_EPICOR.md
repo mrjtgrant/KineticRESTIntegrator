@@ -459,6 +459,25 @@ if (rows.IsSuccess)
         Console.WriteLine($"{r.Key1} / {r.Key2}");
 ```
 
+`QueryAsync` accepts an optional filter row that drives both column
+projection and row filtering. Populated key columns (`Key1`–`Key5`) become
+OData `$filter` clauses, joined with `and`; an unset (null or empty) key
+contributes no filter on that level — so you can narrow by `Key1` alone,
+by `Key1` + `Key2`, etc., without specifying trailing empty keys. Non-key
+columns drive `$select` projection only; they are not used for filtering
+(to avoid type-default ambiguity — is `Number01 = 0` a filter or an unset
+default?).
+
+```csharp
+// All rows whose Key1 = "ORDER_TRACKING":
+var byCategory = await client.UDTable.QueryAsync(
+    new UDRow { Key1 = "ORDER_TRACKING" }, "UD22", top: 100);
+
+// All rows for one specific order:
+var byOrder = await client.UDTable.QueryAsync(
+    new UDRow { Key1 = "ORDER_TRACKING", Key2 = "12345" }, "UD22");
+```
+
 ### A note on destructive operations
 
 `UDTableSvc` exposes two destructive methods: `DeleteByIDAsync` for removing

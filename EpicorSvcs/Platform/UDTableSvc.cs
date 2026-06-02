@@ -255,16 +255,40 @@ namespace EpicorSvcs
         /// entity-set read.
         /// </summary>
         /// <remarks>
-        /// When a template <paramref name="udrow"/> is supplied, the OData
-        /// <c>$select</c> clause is limited to the UD columns that row
-        /// populates; otherwise all columns are returned. Use
-        /// <see cref="GetByIDAsync"/> for an exact single-row lookup by all
-        /// five keys.
+        /// <para>
+        /// When a non-null <paramref name="filter"/> is supplied, it drives
+        /// both the OData <c>$select</c> projection and the <c>$filter</c>
+        /// row filter:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item><description>
+        ///   <b>Column projection (<c>$select</c>):</b> only the UD columns
+        ///   the filter row populates are requested. To get all columns,
+        ///   pass <c>null</c> (the default).
+        ///   </description></item>
+        ///   <item><description>
+        ///   <b>Row filter (<c>$filter</c>):</b> populated key columns
+        ///   (<c>Key1</c>–<c>Key5</c>) become filter clauses joined with
+        ///   <c>and</c>. An unset (null or empty) key contributes no filter
+        ///   on that level — so passing a filter row with only
+        ///   <c>Key1 = "X"</c> returns every row whose <c>Key1</c> equals
+        ///   <c>"X"</c> regardless of the other keys. Non-key columns are
+        ///   <i>not</i> used for filtering — the populated-as-filter pattern
+        ///   is intentionally limited to keys to avoid ambiguity with
+        ///   type-default values (is <c>Number01 = 0</c> a filter or an
+        ///   unset default?).
+        ///   </description></item>
+        /// </list>
+        /// <para>
+        /// Use <see cref="GetByIDAsync"/> for an exact single-row lookup by
+        /// all five keys.
+        /// </para>
         /// </remarks>
-        /// <param name="udrow">
-        /// Optional template row. When supplied, the OData <c>$select</c> is
-        /// limited to the UD columns this row populates; when null, all
-        /// columns are returned.
+        /// <param name="filter">
+        /// Optional filter/projection template. When non-null, populated key
+        /// columns drive <c>$filter</c> and populated UD-column properties
+        /// drive <c>$select</c>. Pass <c>null</c> to fetch all rows with
+        /// all columns.
         /// </param>
         /// <param name="UDTable">
         /// The target UD table. When null (the default),
@@ -277,7 +301,7 @@ namespace EpicorSvcs
         /// <see cref="UDRow"/> rows.
         /// </returns>
         public async Task<OperationResult<List<UDRow>>> QueryAsync(
-            UDRow udrow = null,
+            UDRow filter = null,
             string UDTable = null,
             int top = 5000,
             CancellationToken ct = default)
@@ -286,9 +310,10 @@ namespace EpicorSvcs
             string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
             svc += "?$top=" + top;
 
-            if (udrow != null)
+            if (filter != null)
             {
-                JObject lineObject = JObject.FromObject(udrow);
+                // $select: limit response columns to those the filter row populates.
+                JObject lineObject = JObject.FromObject(filter);
                 List<string> selectedcols = new List<string>();
                 foreach (var prop in lineObject.Properties())
                 {
@@ -298,6 +323,19 @@ namespace EpicorSvcs
                 }
                 if (selectedcols.Count > 0)
                     svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
+
+                // $filter: clauses for any populated string keys (Key1–Key5).
+                // Null or empty values mean "no filter on this level" — letting
+                // callers narrow by Key1 only, or Key1+Key2, etc., without
+                // specifying trailing empty keys.
+                List<string> filterClauses = new List<string>();
+                if (!string.IsNullOrEmpty(filter.Key1)) filterClauses.Add("Key1 eq '" + filter.Key1 + "'");
+                if (!string.IsNullOrEmpty(filter.Key2)) filterClauses.Add("Key2 eq '" + filter.Key2 + "'");
+                if (!string.IsNullOrEmpty(filter.Key3)) filterClauses.Add("Key3 eq '" + filter.Key3 + "'");
+                if (!string.IsNullOrEmpty(filter.Key4)) filterClauses.Add("Key4 eq '" + filter.Key4 + "'");
+                if (!string.IsNullOrEmpty(filter.Key5)) filterClauses.Add("Key5 eq '" + filter.Key5 + "'");
+                if (filterClauses.Count > 0)
+                    svc += "&$filter=" + UrlEncode(string.Join(" and ", filterClauses));
             }
 
             JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
