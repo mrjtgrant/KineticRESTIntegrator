@@ -36,7 +36,7 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**v0.1.1 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, fifty-two unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
+**v0.2.0 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, one hundred and one unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
 
 ---
 
@@ -61,7 +61,7 @@ The one place where target framework matters internally is `FileHandling.Emailer
 | `FileHandling` | `FileHandling.dll` | Excel generation (ClosedXML), CSV writer, and SMTP email sender. |
 | `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
-| `KineticRESTIntegrator.Tests` | xUnit test project | 52 offline unit tests covering the framework's deterministic surface. |
+| `KineticRESTIntegrator.Tests` | xUnit test project | 101 offline unit tests covering the framework's deterministic surface. |
 
 ---
 
@@ -296,6 +296,42 @@ Not every method on a service is part of the public API. Methods are classified 
 The user-facing entry point for any multi-step operation is the **orchestrator** in `*Svc.Workflows.cs`: `AddMtlsAsync`, `MoveInventoryAsync`, `NewOrderAsync`, `NewQuoteHedAsync`, etc. Orchestrators are always `public`, always return `OperationResult<T>`, and handle the internal sequencing — get a template, mutate it through the right `OnChange*` calls, write it through the right `Update`/`MasterUpdate`. From a caller's perspective, the orchestrator is the operation.
 
 This split keeps the public API surface small and consistent: every public method either returns data, requests a template, or persists a write — there are no half-step operations sitting next to whole-step ones to confuse new readers.
+
+### Typed UD-table access
+
+`UDTableSvc` exposes generic UD-table CRUD through the `UDRow` DTO, which has slots for every standard UD column: five keys, ten `Character*` (1000 chars each), twenty `ShortChar*` (100 chars each), twenty `Number*` (`double`), twenty `Date*`, and twenty `CheckBox*`. That generic shape works, but applications that use a UD table for typed data quickly accumulate "Key1 is the row category, ShortChar01 is customer name, Number01 is total value" bookkeeping that's easy to drift.
+
+The typed-DTO API lets you declare that mapping once on a class and call the table with your own type:
+
+```csharp
+public class OrderTracking
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string OrderNum { get; set; }
+    [UDTableColumn("ShortChar01")]  public string CustomerName { get; set; }
+    [UDTableColumn("Number01")]     public decimal TotalValue { get; set; }
+    [UDTableColumn("Date01")]       public DateTime SubmittedDate { get; set; }
+    [UDTableColumn("CheckBox01")]   public bool IsExpedited { get; set; }
+}
+
+// Save:
+var save = await client.UDTable.SaveAsync("UD22",
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345",
+                        CustomerName = "Acme Corp", TotalValue = 15000.50m,
+                        SubmittedDate = DateTime.Now });
+
+// Fetch one row by its full keys:
+var one = await client.UDTable.GetByIDAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
+
+// Fetch a filtered list (populated key columns become the OData $filter):
+var byCategory = await client.UDTable.QueryAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING" }, "UD22", top: 100);
+```
+
+The mapper validates the DTO on first use (column names exist on `UDRow`, types are compatible with their column family, no two properties map to the same column, and `Key1` + `Key2` are mapped — Epicor identifies UD rows by the composite of all five keys, and these two carry no default). String overflows throw `UDTableColumnCapacityException` *before* the save reaches the wire. When the DTO doesn't map `Character10`, the framework auto-emits a column-legend into it describing the mapping — useful when the row is later opened in Epicor's UI.
+
+For the full conventions — when to use which column family, the 2^5 key grain levels, reserved columns, and four progressively complete worked examples — see [EXAMPLES_EPICOR.md — Typed UD-table access](EXAMPLES_EPICOR.md#typed-ud-table-access).
 
 ### Practical Examples
 

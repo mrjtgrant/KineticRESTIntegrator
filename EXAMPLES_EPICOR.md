@@ -19,6 +19,7 @@ calling an Epicor endpoint Keri doesn't wrap, see
 2. [Using a single service directly](#2-using-a-single-service-directly)
 3. [Writing data into Epicor (UD-row upsert)](#3-writing-data-into-epicor-ud-row-upsert)
 4. [UD-row conventions](#4-ud-row-conventions)
+5. [Typed UD-table access](#5-typed-ud-table-access)
 
 ---
 
@@ -609,3 +610,274 @@ carry a legend, use `Key1` as a category, or treat the `*20` columns as
 reserved — and any of those columns remains free for another use if your design
 calls for it. Keep the column size limits in mind (`Character` columns hold up
 to 1000 characters, `ShortChar` columns up to 100).
+
+---
+
+## 5. Typed UD-table access
+
+The UD-row examples up to this point work with the generic `UDRow` DTO —
+fine for one-off scripts, awkward for an application that uses a UD table
+heavily. The typed-DTO API lets you define your own class for a specific
+UD-table use case, map its properties to UD columns with attributes, and
+call the table using your own type instead of `UDRow`. Save direction,
+read direction, query — all generic.
+
+This section covers the moving pieces (`[UDTableColumn]`, the three
+typed wrappers, validation, capacity checks, the auto-emitted legend),
+the key conventions you'll want to know about, and four progressively
+complete worked examples.
+
+### The attribute
+
+`[UDTableColumn("ColumnName")]` on a public property tells the typed
+mapper which UD column the property reads from and writes to. The
+column name must match a real property on `UDRow` exactly — `Key1`
+through `Key5`, `Character01` through `Character10`, `ShortChar01`
+through `ShortChar20`, `Number01` through `Number20`, `Date01` through
+`Date20`, or `CheckBox01` through `CheckBox20`.
+
+The property's type must be compatible with the column's family:
+
+| Column family | Valid property types |
+|---|---|
+| `Key1`–`Key5` | `string` |
+| `Character01`–`Character10` | `string` |
+| `ShortChar01`–`ShortChar20` | `string` |
+| `Number01`–`Number20` | `int`, `long`, `float`, `double`, or `decimal` |
+| `Date01`–`Date20` | `DateTime` or `DateTime?` |
+| `CheckBox01`–`CheckBox20` | `bool` |
+
+Map type mismatches, duplicate columns, and unknown column names all
+fail at the first use of the DTO type with `InvalidOperationException`
+listing every error in one message — fix all of them in one pass.
+
+### The three wrappers on `UDTableSvc`
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `SaveAsync<T>(udTable, row)` | `OperationResult<JObject>` | Map `row` to a `UDRow` and upsert it. Same shape as every other Keri `UpdateAsync`. |
+| `GetByIDAsync<T>(keys, udTable)` | `OperationResult<T>` | Pass a `T` with key properties populated; receive a `T` reconstructed from the row. |
+| `QueryAsync<T>(filter, udTable, top)` | `OperationResult<List<T>>` | Pass a `T` with key properties populated (or `null`); receive matching rows projected to `T`. |
+
+`SaveAsync` and `QueryAsync` are direct typed equivalents of the
+underlying raw methods. `GetByIDAsync<T>` takes a `T` (rather than
+separate `key1`, `key2`, ... arguments) so the property names on your
+DTO carry the meaning of each key — calling
+`GetByIDAsync<OrderTracking>(new OrderTracking { Category = "X", OrderNum = "1" }, ...)`
+reads as the lookup it is.
+
+### Key conventions for typed DTOs
+
+Epicor identifies a UD row by the composite of all five keys
+(`Key1` + `Key2` + `Key3` + `Key4` + `Key5`). The five keys give you
+**2⁵ = 32 grain levels** — coarse-to-fine identification you choose for
+your data shape:
+
+- **One key** — `Key1` only. Useful when `Key2`–`Key5` carry no
+  meaning, but every row competes for the same `Key1` value — rare in
+  practice.
+- **Two keys** — `Key1` + `Key2`. The common case: `Key1` identifies
+  the row's *category* (a row indicator), `Key2` identifies the
+  *specific instance* within that category.
+- **Three or more keys** — adds finer-grained dimensions. A natural
+  shape is `Key1 = "category", Key2 = "instance", Key3 = "year"` for
+  rows that recycle the same instance ID across years.
+- **All five keys** — when uniqueness needs all five dimensions.
+
+**The framework requires `Key1` and `Key2` to be mapped on every typed
+DTO.** A DTO without one or both fails validation at first use. The
+reasoning is upstream of typed DTOs: `UDRow.Key1` and `UDRow.Key2`
+carry no default value, so a row that doesn't set them is rejected by
+Epicor.
+
+**`Key3`, `Key4`, and `Key5` are optional.** If your DTO doesn't map
+them, `UDRow.Key3`, `Key4`, and `Key5` default to empty strings —
+which is Epicor's native "no value at this grain level" convention.
+If your DTO *does* map one of them, you become responsible for setting
+that property on every saved row; a null value will be written through
+to the saved row.
+
+Key1 by convention identifies the row's category — "the kind of thing
+this row is." Examples: `"ORDER_TRACKING"`, `"WEBSITE_INQUIRY"`,
+`"REPAIR_INTAKE"`. The framework doesn't enforce that convention;
+it's strongly recommended because a UD table without categorized rows
+is hard to organize or query later.
+
+### The auto-emitted column legend
+
+When your typed DTO does *not* map a property to `Character10`, the
+mapper writes a column-legend string into `Character10` on save —
+something like `"Key1:Category|Key2:OrderNum|ShortChar01:CustomerName"`.
+This lets someone opening the row in Epicor's UI see what each generic
+column means in this row's shape.
+
+If you *do* map a property to `Character10`, the framework backs off
+and uses your value unchanged — you've taken ownership.
+
+### Capacity checks
+
+Epicor's column-storage limits are fixed: keys hold up to 50
+characters, `ShortChar*` columns hold up to 100, `Character*` columns
+hold up to 1000. If a string value on your DTO exceeds the column's
+limit at save time, `SaveAsync<T>` throws
+`UDTableColumnCapacityException` *before* the request reaches the wire
+— the exception carries the property name, the column it was mapped
+to, the value's length, and the column's capacity. The fix is one of:
+shorten the value, map the property to a larger-capacity column
+(e.g. `Character01` instead of `ShortChar01`), or split the data
+across multiple columns.
+
+---
+
+### Four worked DTOs
+
+The examples progress from minimum-viable to full-featured. Each
+illustrates one or two specific design points.
+
+#### `MinimalNote` — the smallest legal DTO
+
+The minimum required is `Key1` + `Key2` mapped, plus at least one
+data-bearing column for the DTO to be useful:
+
+```csharp
+public class MinimalNote
+{
+    [UDTableColumn("Key1")]        public string Category { get; set; }
+    [UDTableColumn("Key2")]        public string NoteID { get; set; }
+    [UDTableColumn("ShortChar01")] public string NoteText { get; set; }
+}
+
+// Save:
+await client.UDTable.SaveAsync("UD22", new MinimalNote
+{
+    Category = "USER_PREF",
+    NoteID = "DASHBOARD_LAYOUT_V2",
+    NoteText = "two-column compact"
+});
+```
+
+`MinimalNote` shows the floor: required keys, one data column, nothing
+more. The mapper auto-emits a `Character10` legend, so anyone opening
+the row in Epicor's UI sees `"Key1:Category|Key2:NoteID|ShortChar01:NoteText"`.
+
+#### `OrderTracking` — the canonical worked example
+
+A typical application DTO that exercises every column family at the
+practical-core level:
+
+```csharp
+public class OrderTracking
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string OrderNum { get; set; }
+    [UDTableColumn("ShortChar01")]  public string CustomerName { get; set; }
+    [UDTableColumn("Character01")]  public string Notes { get; set; }
+    [UDTableColumn("Number01")]     public decimal TotalValue { get; set; }
+    [UDTableColumn("Date01")]       public DateTime SubmittedDate { get; set; }
+    [UDTableColumn("CheckBox01")]   public bool IsExpedited { get; set; }
+}
+
+// Round-trip:
+await client.UDTable.SaveAsync("UD22", new OrderTracking
+{
+    Category = "ORDER_TRACKING",
+    OrderNum = "12345",
+    CustomerName = "Acme Corp",
+    Notes = "Customer requested expedited handling.",
+    TotalValue = 15000.50m,
+    SubmittedDate = DateTime.Now,
+    IsExpedited = true
+});
+
+var one = await client.UDTable.GetByIDAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
+
+if (one.IsSuccess && one.Value != null)
+    Console.WriteLine($"{one.Value.CustomerName}: ${one.Value.TotalValue:N2}");
+
+// All open tracking rows:
+var byCategory = await client.UDTable.QueryAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING" }, "UD22", top: 500);
+```
+
+This DTO is what the rest of the section is loosely calibrated to.
+Note the decimal `TotalValue` — at the C# boundary you can use `int`,
+`long`, `float`, `double`, or `decimal`; the mapper converts to
+`double` for `UDRow.Number01` and back to your type on read.
+
+#### `PartMetadata` — finer key grain
+
+When `Key1` + `Key2` aren't enough to identify a row uniquely, add
+`Key3`. This DTO tracks part metadata that may recycle the same part
+number across years, so the year becomes part of the row's identity:
+
+```csharp
+public class PartMetadata
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string PartNum { get; set; }
+    [UDTableColumn("Key3")]         public string Year { get; set; }
+    [UDTableColumn("ShortChar01")]  public string Supplier { get; set; }
+    [UDTableColumn("Number01")]     public decimal QtyOnHand { get; set; }
+}
+```
+
+A `QueryAsync<PartMetadata>` for `Category = "PART_META"` + `PartNum = "WIDGET-001"`
+returns every year of metadata for that part, sorted by Epicor's
+return order; passing `Year = "2026"` in the filter narrows to that
+specific year.
+
+Note that once `Key3` is mapped to a property, you own it: leaving
+`Year` unset will write `null` into the saved row's `Key3`, which
+Epicor may reject or store as null depending on the table. Document
+the expectation on your DTO.
+
+#### `WorkLog` — a reserved column put to work
+
+A practical pattern: use `ShortChar20` as a tag column for search and
+filtering. The column has no special meaning to Epicor, but treating
+one column as a stable "search keyword" lets queries (or human eyes
+scanning the table) filter by tag without parsing prose out of a notes
+column:
+
+```csharp
+public class WorkLog
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string EntryID { get; set; }
+    [UDTableColumn("ShortChar01")]  public string Author { get; set; }
+    [UDTableColumn("Character01")]  public string Description { get; set; }
+    [UDTableColumn("Date01")]       public DateTime LogDate { get; set; }
+    [UDTableColumn("ShortChar20")]  public string Tag { get; set; }
+}
+
+// Tagged save:
+await client.UDTable.SaveAsync("UD22", new WorkLog
+{
+    Category = "WORK_LOG",
+    EntryID = Guid.NewGuid().ToString("N"),
+    Author = "jgrant",
+    Description = "Renamed UDXSvc to UDTableSvc, updated all callers.",
+    LogDate = DateTime.Now,
+    Tag = "REFACTOR"
+});
+```
+
+`ShortChar20` is documented in `UDRow.cs` as a *reserved* column with
+this kind of tag-search use case in mind; the framework doesn't
+enforce it, and the convention is yours to follow or ignore. If you
+have a different reserved use for `ShortChar20`, map it accordingly —
+the framework's recommendations are documentation, not constraints.
+
+### When to reach for the typed API vs raw `UDRow`
+
+| Use case | Preferred shape |
+|---|---|
+| One-off script, reading rows whose schema you don't control | Raw `UDRow` + `ToMappedValues()` if the row carries a legend |
+| Application code where one UD-table use case has a stable shape | Typed DTO + `SaveAsync<T>` / `GetByIDAsync<T>` / `QueryAsync<T>` |
+| Inspecting attachments / extension tables in the `GetByID` response | Either API — read `result.RawResponse` for the full multi-table dataset |
+| Custom `_c` columns | Either API — `UDRow.ExtraData` captures them; typed DTOs flow them through the same way once an `ExtraData` property is added to your DTO (planned for a future release) |
+
+The two APIs share the underlying raw `UDTableSvc` methods, so you can
+mix them in the same application without ceremony — use whichever fits
+the specific call site.
