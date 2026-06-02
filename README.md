@@ -223,7 +223,7 @@ using (var client = new EpicorClient("pilot"))      // env override; null/omitte
 }
 ```
 
-Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDX`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Receipt`, `Quote`, `SalesOrder`.
+Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDTable`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Receipt`, `Quote`, `SalesOrder`.
 
 Direct service construction (`new BAQSvc(...)`, etc.) is the underlying pattern — `EpicorClient` is a convenience wrapper over it, not a replacement. Each service is its own complete, disposable unit: open a `using` block and call as many methods on it as the workflow needs, or stack `using` blocks across several services when you want explicit control over scope. Reach for `EpicorClient` when an orchestrator touches several services together and the stack-of-`using`-blocks shape is getting repetitive; reach for direct construction otherwise. See [EXAMPLES_EPICOR.md — Using a single service directly](EXAMPLES_EPICOR.md#2-using-a-single-service-directly) for the patterns.
 
@@ -305,13 +305,13 @@ The fastest way to see Keri working is `EpicorSvcDemo` — an end-to-end sample 
 dotnet run --project EpicorSvcDemo
 ```
 
-For per-service detail, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDX, SalesOrder, MenuTree):
+For per-service detail, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDTable, SalesOrder, MenuTree):
 
 ```
 dotnet run --project EpicorSvcPOCs
 ```
 
-Reads run safely against your configured environment. Write operations (UDX upsert, SalesOrder create) are **gated** — they dry-run by default, printing the exact payload they *would* send. To arm writes for a session:
+Reads run safely against your configured environment. Write operations (UDTable upsert, SalesOrder create) are **gated** — they dry-run by default, printing the exact payload they *would* send. To arm writes for a session:
 
 ```
 set KERI_POC_ALLOW_WRITES=true
@@ -402,7 +402,7 @@ KineticRESTIntegrator/
 │   ├── Purchasing/                  POSvc, ReceiptSvc
 │   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
 │   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
-│   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDXSvc, UserCodesSvc
+│   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDTableSvc, UserCodesSvc
 │   ├── AR/                          PayMethodSvc, PaymentEntrySvc
 │   └── EpicorSvcs.csproj
 │       Services with multi-step operations have a companion
@@ -425,7 +425,7 @@ KineticRESTIntegrator/
 │   ├── Program.cs
 │   ├── PocConfig.cs                 (the write-gate)
 │   ├── PocBanner.cs
-│   ├── UserCodesPoc.cs, PartPoc.cs, UdxPoc.cs, SalesOrderPoc.cs, MenuTreePoc.cs
+│   ├── UserCodesPoc.cs, PartPoc.cs, UDTablePoc.cs, SalesOrderPoc.cs, MenuTreePoc.cs
 │   └── EpicorSvcPOCs.csproj
 │
 └── KineticRESTIntegrator.Tests/     xUnit unit tests (offline, deterministic)
@@ -459,7 +459,7 @@ The library has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDXSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 52 tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 52 tests, all green.
 
 Test Explorer in Visual Studio also discovers and runs them.
 

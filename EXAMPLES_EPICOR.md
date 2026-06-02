@@ -79,11 +79,11 @@ multiple calls (`GetByPONumAsync` queries `SalesOrders` for the OrderNum then
 calls `GetByIDAsync` for the full dataset; `GetUDCodeDescriptionAsync` fetches
 a code type and returns one description string).
 
-**One generalization to be aware of: `UDXSvc`.** Epicor has a separate
+**One generalization to be aware of: `UDTableSvc`.** Epicor has a separate
 service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`,
 `Ice.BO.UDCodesSvc`, and so on — 30+ in total). Wrapping each one as its own
 Keri class would be tedious and unhelpful since they share an interface.
-`UDXSvc` instead parameterizes over the table — `client.UDX.GetAllAsync(top: 25, udTable: "UD22")` —
+`UDTableSvc` instead parameterizes over the table — `client.UDTable.GetAllAsync(top: 25, udTable: "UD22")` —
 so one Keri class covers the family. The class-matches-Svc-name rule is
 deliberately broken here to keep the surface manageable.
 
@@ -215,7 +215,7 @@ JObject payload = JObject.FromObject(p);
 await part.UpdateAsync(BuildDatasetWith(payload));
 ```
 
-For `UDXSvc` specifically, the same applies — `UDRow.ExtraData` captures custom
+For `UDTableSvc` specifically, the same applies — `UDRow.ExtraData` captures custom
 columns on UD tables, and `UpdateAsync`/`GetAllAsync`/`GetByIDAsync` send and
 select them automatically.
 
@@ -362,7 +362,7 @@ using EpicorSvcs.Dtos;
 var session = new EpicorRESTSessionKey { /* ... */ };
 
 using (var part = new PartSvc(session))
-using (var udx  = new UDXSvc(session))
+using (var udTable = new UDTableSvc(session))
 {
     var parts = await part.PartsAsync(
         filters: new List<string> { "NonStock eq false" }, top: 10);
@@ -370,7 +370,7 @@ using (var udx  = new UDXSvc(session))
 
     foreach (var p in parts.Value)
     {
-        var meta = await udx.GetByIDAsync(
+        var meta = await udTable.GetByIDAsync(
             new UDRow { Key1 = "PART_META", Key2 = p.PartNum }, "UD22");
         // ...
     }
@@ -397,10 +397,10 @@ that touches one or two services — direct construction is the simpler shape.
 ## 3. Writing data into Epicor (UD-row upsert)
 
 Most examples in the README read data. This one writes it — pushing a row into
-an Epicor user-defined (UD) table through `UDXSvc`.
+an Epicor user-defined (UD) table through `UDTableSvc`.
 
 The pattern, and the safety habit worth keeping: **build the row, inspect the
-payload, then send.** The `EpicorSvcPOCs` UDX example does exactly this — it
+payload, then send.** The `EpicorSvcPOCs` UDTable example does exactly this — it
 serializes and prints the row it is about to write, and only sends when writes
 are explicitly armed. Mirror that in your own code: a write you can see before
 it leaves is a write you can catch a mistake in.
@@ -413,7 +413,7 @@ using Newtonsoft.Json;
 using (var client = new EpicorClient("pilot"))
 {
     // Choose the target UD table for this service instance.
-    client.UDX.UDTableDefault = "UD22";
+    client.UDTable.UDTableDefault = "UD22";
 
     // Construct the row. Key1-Key5 identify the record; the generic
     // columns (Character/Number/CheckBox/ShortChar/Date) carry the data.
@@ -432,7 +432,7 @@ using (var client = new EpicorClient("pilot"))
 
     // Upsert. UpdateAsync targets Ice.BO.{UDTable}Svc; the table comes
     // from UDTableDefault unless a UDTable argument is passed per call.
-    var result = await client.UDX.UpdateAsync(row);
+    var result = await client.UDTable.UpdateAsync(row);
 
     if (result.IsFailure)
     {
@@ -453,7 +453,7 @@ using `Value`, the same contract as every other service call.
 `GetByIDAsync` returns the rows matching a given row's `Key1`–`Key5`:
 
 ```csharp
-var rows = await client.UDX.GetAllAsync(top: 25);
+var rows = await client.UDTable.GetAllAsync(top: 25);
 if (rows.IsSuccess)
     foreach (var r in rows.Value)
         Console.WriteLine($"{r.Key1} / {r.Key2}");
@@ -461,7 +461,7 @@ if (rows.IsSuccess)
 
 ### A note on deletion
 
-`UDXSvc` also exposes `DeleteByIDAsync` (one row, by its keys) and
+`UDTableSvc` also exposes `DeleteByIDAsync` (one row, by its keys) and
 `DeleteAllAsync` (every row of a table). Both are destructive, and a delete
 pointed at the wrong table is an easy and unrecoverable mistake — so the
 methods are built to make that mistake hard. Each requires its target table to
@@ -482,11 +482,11 @@ without it. Name the table, and confirm it, before the call:
 ```csharp
 // A single row — the table is required and explicit.
 // UDXX is a placeholder — replace it with your real UD table name.
-var one = await client.UDX.DeleteByIDAsync(row, "UDXX");
+var one = await client.UDTable.DeleteByIDAsync(row, "UDXX");
 
 // Every row of a table — also requires explicit confirmation.
 // UDXX is a placeholder — replace it with your real UD table name.
-var all = await client.UDX.DeleteAllAsync("UDXX", confirmDeleteAllRows: true);
+var all = await client.UDTable.DeleteAllAsync("UDXX", confirmDeleteAllRows: true);
 
 if (all.IsFailure)
     Console.WriteLine($"Delete failed: {all.ErrorMessage}");
@@ -520,7 +520,7 @@ means — encoded into `Character10`. The purpose of each column then travels
 with the record, rather than living in documentation elsewhere.
 
 The legend is a `|`-separated list of `column:meaning` pairs. Two static
-helpers on `UDXSvc` build and parse it:
+helpers on `UDTableSvc` build and parse it:
 
 ```csharp
 using System.Collections.Generic;
@@ -534,10 +534,10 @@ var legend = new Dictionary<string, string>
     ["CheckBox01"]  = "WasCounted"
 };
 
-string encoded = UDXSvc.BuildColumnLegend(legend);
+string encoded = UDTableSvc.BuildColumnLegend(legend);
 // "ShortChar01:PartNum|ShortChar02:WarehouseCode|Number01:QtyOnHand|CheckBox01:WasCounted"
 
-Dictionary<string, string> decoded = UDXSvc.ParseColumnLegend(encoded);
+Dictionary<string, string> decoded = UDTableSvc.ParseColumnLegend(encoded);
 ```
 
 Store the encoded string in a row's `Character10`, and a row that carries a

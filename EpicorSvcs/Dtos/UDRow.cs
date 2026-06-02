@@ -15,7 +15,7 @@ namespace EpicorSvcs.Dtos
     /// <para>
     /// This is <b>not</b> an Epicor table itself. It's a caller-facing value
     /// container — fill in whichever UD columns matter for your use case, then
-    /// pass it to one of <see cref="UDXSvc"/>'s methods alongside the
+    /// pass it to one of <see cref="UDTableSvc"/>'s methods alongside the
     /// <c>UDTable</c> argument that selects which Epicor UD table is being
     /// targeted. It exposes the full standard UD column set: 5 key columns,
     /// 10 <c>Character</c>, 20 <c>ShortChar</c>, 20 <c>Number</c>, 20
@@ -77,12 +77,12 @@ namespace EpicorSvcs.Dtos
     ///     ShortChar20 = "REPRINT",
     ///     // Date20, CheckBox20 default to DateTime.Now / true
     /// };
-    /// await client.UDX.UpdateAsync(row, UDTable: "UD22");
+    /// await client.UDTable.UpdateAsync(row, UDTable: "UD22");
     /// </code>
     /// </para>
     /// <para>
     /// <b>Why the Date properties carry a <c>[JsonProperty]</c> attribute</b>
-    /// (unlike every other DTO in this library): <see cref="UDXSvc"/> decides
+    /// (unlike every other DTO in this library): <see cref="UDTableSvc"/> decides
     /// which columns to send or <c>$select</c> by serializing this object and
     /// checking which property names are present. String columns can simply
     /// be absent by being empty, but <see cref="DateTime"/> is a value type —
@@ -90,7 +90,7 @@ namespace EpicorSvcs.Dtos
     /// always be "present", forcing unset dates into every read and write.
     /// <see cref="NullValueHandling.Ignore"/> makes a null date drop out of
     /// the serialized object entirely, so the existing column-detection logic
-    /// in <see cref="UDXSvc"/> keeps working unchanged — a date is included
+    /// in <see cref="UDTableSvc"/> keeps working unchanged — a date is included
     /// only when the caller actually set it. <see cref="Date20"/> is the one
     /// exception: it is non-nullable and always sent, because a transaction
     /// timestamp is meant to always be written.
@@ -118,7 +118,7 @@ namespace EpicorSvcs.Dtos
         /// company than the session's default — the multi-company case. A
         /// non-empty value here wins over the session's company, exactly as a
         /// per-call <c>UDTable</c> argument wins over
-        /// <see cref="UDXSvc.UDTableDefault"/>.
+        /// <see cref="UDTableSvc.UDTableDefault"/>.
         /// </para>
         /// </remarks>
         public string Company { get; set; } = "";
@@ -200,8 +200,8 @@ namespace EpicorSvcs.Dtos
         /// <para>
         /// The string is literal and entirely yours — store it, ignore it, or
         /// parse it however you see fit. For convenience the framework
-        /// provides <see cref="UDXSvc.ParseColumnLegend"/> and
-        /// <see cref="UDXSvc.BuildColumnLegend"/> to convert between this
+        /// provides <see cref="UDTableSvc.ParseColumnLegend"/> and
+        /// <see cref="UDTableSvc.BuildColumnLegend"/> to convert between this
         /// string and a dictionary, and <see cref="ToMappedValues"/> to
         /// re-key this row's values by their meanings. Those helpers assume
         /// the <c>|</c> / <c>:</c> format above; they are a quick-start
@@ -357,7 +357,7 @@ namespace EpicorSvcs.Dtos
 
         // Date01-19 are nullable with NullValueHandling.Ignore so that an
         // unset date drops out of the serialized object entirely, keeping
-        // UDXSvc's column-detection logic working unchanged. See the class
+        // UDTableSvc's column-detection logic working unchanged. See the class
         // remarks for the full rationale. Date20 is the deliberate exception.
 
         /// <summary>Date column 01. Null when unset.</summary>
@@ -559,7 +559,7 @@ namespace EpicorSvcs.Dtos
         public Dictionary<string, string> ToMappedValues()
         {
             var result = new Dictionary<string, string>();
-            var legend = UDXSvc.ParseColumnLegend(Character10);
+            var legend = UDTableSvc.ParseColumnLegend(Character10);
 
             foreach (var entry in legend)
             {

@@ -9,7 +9,7 @@ namespace KineticRESTIntegrator.Tests
     /// Tests for <see cref="UDRow"/> serialization behavior. <see cref="UDRow"/>
     /// is the one DTO in the library that carries <c>[JsonProperty]</c>
     /// attributes — the unset <c>Date</c> columns must drop out of the
-    /// serialized object so <see cref="EpicorSvcs.UDXSvc"/>'s
+    /// serialized object so <see cref="EpicorSvcs.UDTableSvc"/>'s
     /// "which columns did the caller touch" detection keeps working. These
     /// tests pin that behavior down. Pure, offline.
     /// </summary>
@@ -22,7 +22,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // Date01..Date19 are nullable and attributed so that a date the
             // caller never set is ABSENT from the JObject — not present-as-null.
-            // This is what lets UDXSvc tell "untouched" from "set".
+            // This is what lets UDTableSvc tell "untouched" from "set".
             var row = new UDRow();
 
             JObject json = JObject.FromObject(row);
@@ -67,7 +67,7 @@ namespace KineticRESTIntegrator.Tests
         public void StringAndValueColumns_AlwaysSerialize()
         {
             // Only the Date columns carry the attribute. Everything else
-            // serializes normally — UDXSvc handles "untouched" for those by
+            // serializes normally — UDTableSvc handles "untouched" for those by
             // their empty/zero defaults instead.
             var row = new UDRow();
 
