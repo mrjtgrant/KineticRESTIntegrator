@@ -25,6 +25,56 @@ No integration tests in CI — the existing tests are offline by design and that
 
 This is the one item in this document that isn't repairing existing code but adding new infrastructure, and it's "future" — not committed to.
 
+### 2. Typed-DTO mapping layer for UDXSvc
+
+**✨ Feature.** UDXSvc currently exposes UD-table CRUD through the `UDRow` type, which has explicit slots for every UD column (`Key1`–`Key5`, `Character01`–`Character10`, `ShortChar01`–`ShortChar10`, `Number01`–`Number20`, `Date01`–`Date05`, `CheckBox01`–`CheckBox10`). Callers using UD tables for typed data have to remember which column holds what — "order number goes in Key1, customer name in ShortChar01, notes in Character01" — and apply that convention everywhere they read or write. Repeated across multiple call sites, this is the kind of bookkeeping that drifts and decays.
+
+**Proposed shape:** add a parallel API on `UDXSvc` that takes user-defined DTO classes with attribute-decorated properties, and handles the UD-column mapping internally.
+
+```csharp
+// User defines once, in their own project:
+public class OrderTracking
+{
+    [UDColumn("Key1")]         public string OrderNum { get; set; }
+    [UDColumn("ShortChar01")]  public string CustomerName { get; set; }
+    [UDColumn("Character01")]  public string Notes { get; set; }
+    [UDColumn("Number01")]     public decimal TotalValue { get; set; }
+    [UDColumn("Date01")]       public DateTime SubmittedDate { get; set; }
+    [UDColumn("CheckBox01")]   public bool IsExpedited { get; set; }
+}
+
+// And uses it everywhere:
+using (var udx = new UDXSvc("pilot"))
+{
+    await udx.SaveAsync("UD22", new OrderTracking { ... });
+    var loaded = await udx.GetByKeysAsync<OrderTracking>("UD22", key1: "12345");
+}
+```
+
+**Design decisions already settled** (in the session that produced this entry):
+
+- **Approach: attribute-based explicit mapping.** Considered convention-based auto-mapping (property order → column number) and a fluent-builder registration pattern. Attributes win because the mapping is self-documenting on the type, survives property renames, and avoids silent column-shift bugs when a property is added to the middle of a class. The `[UDColumn("...")]` declaration is the persistent contract between the DTO and the UD-table data.
+- **ShortChar vs Character is the user's call, not auto-inferred.** They're different capacity (100 vs 1000 chars) and the choice is a design decision the DTO author should make explicitly. Auto-picking by content length would produce ambiguity ("does this 80-char value go in ShortChar or Character?") and unstable mappings.
+- **Strict exceptions on rule violations.** At first use of a DTO type, throw `InvalidOperationException` for: invalid column name, type mismatch (e.g. `Date01` on a `string` property), or duplicate column mapping (two properties pointing at the same column). At save time, throw `UDColumnCapacityException` (a new type) when a value exceeds the column's capacity, with a message naming the property, column, value length, and capacity. Loud, early failure beats silent data corruption.
+- **Lives alongside the existing `UDRow` API.** The typed-DTO methods are a convenience layer; the explicit `UDRow`-based methods remain for raw access. Both call into the same internal CRUD code.
+- **Reflection cache.** First time a DTO type is seen, the library inspects its attributes, validates the rules, and caches the resulting mapping. Subsequent operations on that type use the cached mapping. Reflection runs once per type per process.
+- **`ExtraData` for unmapped columns on read.** Same pattern as existing typed DTOs (`OrderHed`, `QuoteInput`, etc.): a `[JsonExtensionData] IDictionary<string, JToken> ExtraData` property on the DTO surfaces any UD-row columns that don't have a `[UDColumn]` mapping, so users can still see `_c` custom columns or extra data without losing it.
+
+**Suggested scope (concrete):**
+- New `UDColumnAttribute` class in `EpicorSvcs/Platform/` (small)
+- New `UDColumnCapacityException` class (small)
+- New internal `UDMapping<TModel>` class with reflection + caching + validation (modest, ~150 lines)
+- Four new public methods on `UDXSvc`: `SaveAsync<T>`, `GetByKeysAsync<T>`, `UpdateAsync<T>`, `QueryAsync<T>` — each a thin wrapper over the existing `UDRow`-based CRUD plus a mapping step
+- Unit tests covering: each of the four validation rules (invalid column, type mismatch, duplicate, capacity violation), each of the four CRUD methods, the reflection cache hit path, and the `ExtraData` round-trip
+- Documentation: a new section in `README.md` ("Typed UD-table access"), a new example in `EXAMPLES_EPICOR.md`
+- CHANGELOG entry under a `[0.2.0]` block (this is real new public API surface, justifying a minor-version bump rather than a patch)
+
+**Estimated effort:** 4–8 hours of focused work end to end.
+
+**Open question deferred to implementation time:** support `UDColumn(UDCol.Character01)` enum-based attribute as a typo-safe alternative to the string version. Both shapes can coexist (two attribute overloads, internal logic normalizes). Decide at implementation.
+
+This is a real feature, not a polish item. It deserves its own design pass and its own CHANGELOG entry. Not urgent.
+
 ---
 
 ## Recently addressed (kept here briefly as project history)
