@@ -44,6 +44,13 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
+  <!-- Test access: lets KineticRESTIntegrator.Tests see internal types
+       (notably UDTableMapping<T>) without making them part of the
+       public API. Mirrors the same configuration in RESTServices.csproj. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" />
+  </ItemGroup>
+
   <!-- Microsoft.CSharp is required on .NET Framework to enable `dynamic`
        typing support. On .NET 6+, `dynamic` works without this reference. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
