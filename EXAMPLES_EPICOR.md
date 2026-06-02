@@ -83,7 +83,7 @@ a code type and returns one description string).
 service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`,
 `Ice.BO.UDCodesSvc`, and so on — 30+ in total). Wrapping each one as its own
 Keri class would be tedious and unhelpful since they share an interface.
-`UDTableSvc` instead parameterizes over the table — `client.UDTable.GetAllAsync(top: 25, udTable: "UD22")` —
+`UDTableSvc` instead parameterizes over the table — `client.UDTable.QueryAsync(top: 25, udTable: "UD22")` —
 so one Keri class covers the family. The class-matches-Svc-name rule is
 deliberately broken here to keep the surface manageable.
 
@@ -216,7 +216,7 @@ await part.UpdateAsync(BuildDatasetWith(payload));
 ```
 
 For `UDTableSvc` specifically, the same applies — `UDRow.ExtraData` captures custom
-columns on UD tables, and `UpdateAsync`/`GetAllAsync`/`GetByIDAsync` send and
+columns on UD tables, and `UpdateAsync`/`QueryAsync`/`GetByIDAsync` send and
 select them automatically.
 
 `ExtraData` is for *columns on this row* that the DTO doesn't model.
@@ -449,47 +449,52 @@ using `Value`, the same contract as every other service call.
 
 ### Reading UD rows back
 
-`GetAllAsync` returns every row of a table as typed `UDRow` objects;
-`GetByIDAsync` returns the rows matching a given row's `Key1`–`Key5`:
+`QueryAsync` returns rows from a UD table as typed `UDRow` objects;
+`GetByIDAsync` returns the single row matching a given row's full `Key1`–`Key5`:
 
 ```csharp
-var rows = await client.UDTable.GetAllAsync(top: 25);
+var rows = await client.UDTable.QueryAsync(top: 25);
 if (rows.IsSuccess)
     foreach (var r in rows.Value)
         Console.WriteLine($"{r.Key1} / {r.Key2}");
 ```
 
-### A note on deletion
+### A note on destructive operations
 
-`UDTableSvc` also exposes `DeleteByIDAsync` (one row, by its keys) and
-`DeleteAllAsync` (every row of a table). Both are destructive, and a delete
-pointed at the wrong table is an easy and unrecoverable mistake — so the
-methods are built to make that mistake hard. Each requires its target table to
-be named explicitly, and `DeleteAllAsync` additionally requires an explicit
-confirmation flag before it will clear a table. The example below shows the
-safe shape of each call.
+`UDTableSvc` exposes two destructive methods: `DeleteByIDAsync` for removing
+a single row by its keys, and `TruncateAsync` for clearing every row of a
+table. Each has a distinct audience.
 
-Unlike the read methods, the delete methods do **not** fall back to
-`UDTableDefault`. The `UDTable` argument is required and must be named on every
-call; passing null, empty, or whitespace throws `ArgumentException` before any
-rows are touched — a missing table name fails fast rather than silently
-deleting from whichever table the default happens to point at.
+`DeleteByIDAsync` is the everyday single-row delete: same shape as the
+other Keri delete methods, table required, fails fast if pointed at the
+wrong table.
 
-`DeleteAllAsync` carries the extra guard: because it clears an entire table, it
-requires a `confirmDeleteAllRows: true` argument and throws `ArgumentException`
-without it. Name the table, and confirm it, before the call:
+`TruncateAsync` is intended for **pre-production and proof-of-concept work**
+— iterating on a UD table's data shape, clearing junk from test runs,
+resetting between experiments. It is not appropriate for production tables
+carrying historical data. The implementation is a loop of single-row deletes
+(non-atomic; partial failures possible), which is fine at test-table sizes
+but a sign the table has graduated past this method's audience for anything
+larger.
+
+Both methods require their target table to be named explicitly and do
+**not** fall back to `UDTableDefault`. A null, empty, or whitespace table
+name throws `ArgumentException` before any rows are touched.
+`TruncateAsync` additionally requires a `confirmTruncate: true` argument to
+confirm the wipe — passing it as a named argument keeps the intent visible
+at the call site.
 
 ```csharp
 // A single row — the table is required and explicit.
 // UDXX is a placeholder — replace it with your real UD table name.
 var one = await client.UDTable.DeleteByIDAsync(row, "UDXX");
 
-// Every row of a table — also requires explicit confirmation.
+// Every row of a test table — pre-prod / POC use only.
 // UDXX is a placeholder — replace it with your real UD table name.
-var all = await client.UDTable.DeleteAllAsync("UDXX", confirmDeleteAllRows: true);
+var all = await client.UDTable.TruncateAsync("UDXX", confirmTruncate: true);
 
 if (all.IsFailure)
-    Console.WriteLine($"Delete failed: {all.ErrorMessage}");
+    Console.WriteLine($"Truncate failed: {all.ErrorMessage}");
 ```
 
 ---

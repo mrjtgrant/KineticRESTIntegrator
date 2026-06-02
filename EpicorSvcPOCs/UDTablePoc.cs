@@ -21,7 +21,7 @@ namespace EpicorSvcPOCs
     /// <list type="number">
     ///   <item><description>
     ///     How to retrieve UD rows as typed <see cref="UDRow"/> DTOs via
-    ///     <see cref="UDTableSvc.GetAllAsync"/>.
+    ///     <see cref="UDTableSvc.QueryAsync"/>.
     ///   </description></item>
     ///   <item><description>
     ///     The column-legend convention — encoding "what does column N mean"
@@ -57,10 +57,10 @@ namespace EpicorSvcPOCs
             Console.WriteLine($"Targeting UD table: {client.UDTable.UDTableDefault}");
             Console.WriteLine();
 
-            // ---- 1) Read: GetAllAsync ---------------------------------------
+            // ---- 1) Read: QueryAsync ---------------------------------------
 
             Console.WriteLine($"Fetching all rows from {DemoUDTable} (top 25)...");
-            var allRows = await client.UDTable.GetAllAsync(top: 25).ConfigureAwait(false);
+            var allRows = await client.UDTable.QueryAsync(top: 25).ConfigureAwait(false);
 
             if (allRows.IsFailure)
             {

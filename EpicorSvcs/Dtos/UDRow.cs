@@ -551,6 +551,15 @@ namespace EpicorSvcs.Dtos
         /// the legend declared the mapping. A legend entry that names a
         /// column this class does not have is skipped.
         /// </para>
+        /// <para>
+        /// If your row's schema is known at compile time, the typed-DTO API
+        /// on <see cref="UDTableSvc"/> gives the same access via typed
+        /// properties — no dictionary indirection, no string-formatting loss.
+        /// This method remains useful when the schema is not known at compile
+        /// time (e.g. inspecting legacy rows or scanning a table without a
+        /// matching DTO) and for callers working directly with raw
+        /// <see cref="UDRow"/> instances.
+        /// </para>
         /// </remarks>
         /// <returns>
         /// A dictionary of meaning to column value (as a string). Never null;
