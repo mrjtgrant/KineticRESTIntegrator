@@ -27,7 +27,7 @@ This is the one item in this document that isn't repairing existing code but add
 
 ### 2. Typed-DTO mapping layer for UDXSvc
 
-**✨ Feature.** UDXSvc currently exposes UD-table CRUD through the `UDRow` type, which has explicit slots for every UD column (`Key1`–`Key5`, `Character01`–`Character10`, `ShortChar01`–`ShortChar10`, `Number01`–`Number20`, `Date01`–`Date05`, `CheckBox01`–`CheckBox10`). Callers using UD tables for typed data have to remember which column holds what — "order number goes in Key1, customer name in ShortChar01, notes in Character01" — and apply that convention everywhere they read or write. Repeated across multiple call sites, this is the kind of bookkeeping that drifts and decays.
+**✨ Feature.** UDXSvc currently exposes UD-table CRUD through the `UDRow` type, which has explicit slots for the full standard UD column set: 5 key columns, 10 `Character` (1000 chars each), 20 `ShortChar` (100 chars each), 20 `Number` (`double`), 20 `Date` (`DateTime?`), and 20 `CheckBox` (`bool`). Callers using UD tables for typed data have to remember which column holds what — "order number goes in Key1, customer name in ShortChar01, notes in Character01" — and apply that convention everywhere they read or write. Repeated across multiple call sites, this is the kind of bookkeeping that drifts and decays.
 
 **Proposed shape:** add a parallel API on `UDXSvc` that takes user-defined DTO classes with attribute-decorated properties, and handles the UD-column mapping internally.
 
@@ -35,8 +35,10 @@ This is the one item in this document that isn't repairing existing code but add
 // User defines once, in their own project:
 public class OrderTracking
 {
-    [UDColumn("Key1")]         public string OrderNum { get; set; }
+    [UDColumn("Key1")]         public string Category { get; set; }  // "ORDER_TRACKING"
+    [UDColumn("Key2")]         public string OrderNum { get; set; }
     [UDColumn("ShortChar01")]  public string CustomerName { get; set; }
+    [UDColumn("ShortChar20")]  public string SearchTags { get; set; }  // "expedited,acme-corp"
     [UDColumn("Character01")]  public string Notes { get; set; }
     [UDColumn("Number01")]     public decimal TotalValue { get; set; }
     [UDColumn("Date01")]       public DateTime SubmittedDate { get; set; }
@@ -47,43 +49,77 @@ public class OrderTracking
 using (var udx = new UDXSvc("pilot"))
 {
     await udx.SaveAsync("UD22", new OrderTracking { ... });
-    var loaded = await udx.GetByKeysAsync<OrderTracking>("UD22", key1: "12345");
+    var loaded = await udx.GetByKeysAsync<OrderTracking>("UD22", key1: "ORDER_TRACKING", key2: "12345");
 }
 ```
 
-**Design decisions already settled** (in the session that produced this entry):
+#### Design decisions
 
 - **Approach: attribute-based explicit mapping.** Considered convention-based auto-mapping (property order → column number) and a fluent-builder registration pattern. Attributes win because the mapping is self-documenting on the type, survives property renames, and avoids silent column-shift bugs when a property is added to the middle of a class. The `[UDColumn("...")]` declaration is the persistent contract between the DTO and the UD-table data.
 - **ShortChar vs Character is the user's call, not auto-inferred.** They're different capacity (100 vs 1000 chars) and the choice is a design decision the DTO author should make explicitly. Auto-picking by content length would produce ambiguity ("does this 80-char value go in ShortChar or Character?") and unstable mappings.
-- **Strict exceptions on rule violations.** At first use of a DTO type, throw `InvalidOperationException` for: invalid column name, type mismatch (e.g. `Date01` on a `string` property), or duplicate column mapping (two properties pointing at the same column). At save time, throw `UDColumnCapacityException` (a new type) when a value exceeds the column's capacity, with a message naming the property, column, value length, and capacity. Loud, early failure beats silent data corruption.
+- **Numeric type flexibility.** UD `Number` columns are `double` in `UDRow` (Epicor's current type — was `decimal` in older versions). The typed-DTO mapper accepts properties typed as `int`, `long`, `float`, `double`, or `decimal` on `Number##`-mapped properties, converting at the boundary. `decimal` ↔ `double` conversion is lossless within decimal's range for any double Epicor would store; `int`/`long` widen to `double` cleanly. Other types (e.g. `string` mapped to a `Number##` column) fail validation. This lets users reach for whatever numeric type fits their domain (`decimal` for money, `int` for quantities) without forcing them to convert at every call site.
+- **Strict exceptions on rule violations.** At first use of a DTO type, throw `InvalidOperationException` for: invalid column name (e.g. `[UDColumn("Whatever05")]`), type mismatch (e.g. `Date01` on a `string` property, or a non-numeric type on a `Number##` column), or duplicate column mapping (two properties pointing at the same column). At save time, throw `UDColumnCapacityException` (a new type) when a `string` value exceeds the column's capacity (100 for `ShortChar`, 1000 for `Character`, ~50 for `Key`), with a message naming the property, column, value length, and capacity. Loud, early failure beats silent data corruption.
 - **Lives alongside the existing `UDRow` API.** The typed-DTO methods are a convenience layer; the explicit `UDRow`-based methods remain for raw access. Both call into the same internal CRUD code.
 - **Reflection cache.** First time a DTO type is seen, the library inspects its attributes, validates the rules, and caches the resulting mapping. Subsequent operations on that type use the cached mapping. Reflection runs once per type per process.
 - **`ExtraData` for unmapped columns on read.** Same pattern as existing typed DTOs (`OrderHed`, `QuoteInput`, etc.): a `[JsonExtensionData] IDictionary<string, JToken> ExtraData` property on the DTO surfaces any UD-row columns that don't have a `[UDColumn]` mapping, so users can still see `_c` custom columns or extra data without losing it.
 
-**Relationship to existing `ParseColumnLegend` / `BuildColumnLegend`:** UDXSvc already has a "column legend" convention — a `|`-separated string stored in `Character10` like `"ShortChar02:PartNum|Number05:AvailableQty"` that lets a UD row carry its own self-description of which generic column means what. That pattern is a *storage-side* documentation aid (anyone opening the row in Epicor's UI sees the column meanings), distinct from the *code-side* mapping the typed-DTO feature provides.
+#### Reserved-column conventions and behavior
 
-The two patterns integrate cleanly: **the typed-DTO API auto-emits a legend to `Character10` on save, derived from the DTO's `[UDColumn]` attributes** — unless the DTO maps a property to `Character10` itself, in which case the library steps aside and writes whatever value the user-controlled property holds. The presence of `[UDColumn("Character10")]` on any property is the opt-out signal: it declaratively tells the library "the user owns this column, don't touch it." Users who want self-describing rows (the common case) do nothing and get them automatically; users who need `Character10` for other data (existing rows being migrated, custom hand-rolled legends, free-text notes that always lived there) map it explicitly and the auto-emission turns off.
+`UDRow` documents six columns as carrying suggested conventions for organized UD-table data. Under the typed-DTO API these conventions split into three categories — **automated by the framework**, **documentation-only**, and **dropped entirely** — based on whether the library has enough information to do useful work without the user's input.
 
-This design has three properties worth flagging:
+| Column | UDRow.cs default | Typed-DTO behavior | Convention purpose |
+|---|---|---|---|
+| `Key1` | `""` (strip current `"ROW_INDICATOR"` placeholder) | None — left blank if unmapped | A row category string identifying what kind of data the row holds (e.g. `"ORDER_TRACKING"`, `"WEBSITE_INQUIRY"`). User-defined; framework cannot infer. |
+| `Character10` | `""` | **Auto-emit a column legend** derived from the DTO's `[UDColumn]` attributes (e.g. `"ShortChar01:CustomerName\|Date01:SubmittedDate"`) — unless the DTO maps a property to `Character10`, in which case the user owns it. | Lets anyone opening the row in Epicor's UI see what each generic column means, without consulting external docs. |
+| `ShortChar20` | `""` | None — left blank if unmapped | Search/tag keywords: a comma-separated list of terms useful for cross-row search (e.g. `"expedited,warranty,acme-corp"`). User-defined; framework cannot infer. |
+| `Number20` | `0.0` | None — reservation dropped | (No reservation. Previous "checksum" reservation was weak; column is now an ordinary `Number` slot.) |
+| `Date20` | `DateTime.Now` (constructor default) | **Auto-stamp `DateTime.Now`** via UDRow's constructor default — unless the DTO maps a property to `Date20`. | Row's insertion / last-acted-on timestamp. |
+| `CheckBox20` | `true` (constructor default) | **Auto-set `true`** via UDRow's constructor default — unless the DTO maps a property to `CheckBox20`. | Active-flag for the row. A row can be soft-deleted (set inactive without losing the data) by setting this to `false` later. |
 
-- **The default produces self-describing rows.** Anyone opening a UD row in Epicor's UI after a typed-DTO save sees the legend without the user having to think about it. Matches Keri's "do the right thing by default" philosophy (see also: `ExtraData` pass-through, dataset-shape normalization).
-- **The opt-out is declarative on the type, not per-call.** A given DTO class's behavior with respect to `Character10` is determined by its own attributes — never by how a caller invokes `SaveAsync`. No accidentally-different-behavior-in-different-call-sites bugs.
-- **The migration story is loud but safe.** Users migrating existing UD rows that have meaningful `Character10` data must map `Character10` in their new DTO, or the next `SaveAsync` will overwrite that data with the auto-emitted legend. This must be called out in the typed-DTO docs (first paragraph): "if your existing UD rows already use `Character10` for something, map a property to `Character10` in your DTO to opt out of the auto-legend."
+In all cases, **mapping a property to a reserved column is the opt-out signal** — the user owns that column completely, and the framework's automated behavior steps aside. This applies uniformly across all three automated columns. The opt-out is declarative on the DTO type, never per-call.
 
-`ParseColumnLegend` and `BuildColumnLegend` remain public — they are still useful to anyone working with raw `UDRow` outside the typed-DTO API, and the typed-DTO implementation will use `BuildColumnLegend` internally to construct the auto-emitted string. The two patterns are unified by sharing this builder.
+The reasoning for which columns get framework automation:
 
-**Suggested scope (concrete):**
+- **The library auto-fills columns where it has irreplaceable per-row information**: the legend from the user's own attribute mapping (Character10), the current clock (Date20), and a sensible default-for-new-records (CheckBox20).
+- **The library does NOT auto-fill columns where only the user knows the value**: the row category string (Key1) and the searchable tag keywords (ShortChar20). These are documentation-only conventions.
+- **The library drops reservations that don't earn their place** (Number20 "checksum" — too weak to justify).
+
+The two columns that have `UDRow` constructor defaults (Date20, CheckBox20) get their automation for free: the typed-DTO mapper builds a fresh `UDRow` internally, the constructor sets Date20 and CheckBox20, the mapper applies the user's mapped properties on top. The mapped properties win when they exist; the defaults win when they don't. The only column the mapper has to do special work for is Character10, where it builds and assigns the legend string when no property is mapped to that column.
+
+#### Relationship to existing `ParseColumnLegend` / `BuildColumnLegend`
+
+UDXSvc already has these public static helpers — they parse and build the `|`-separated `column:meaning` legend strings stored in `Character10`. They remain public after this feature lands: they are still useful for anyone working with raw `UDRow` outside the typed-DTO API, and the typed-DTO implementation calls `BuildColumnLegend` internally to construct the auto-emitted string. The two patterns are unified by sharing this builder.
+
+#### Precursor cleanup (separate small commit before typed-DTO work)
+
+`UDRow.cs` has two small wart edits that should land first, on their own, before the typed-DTO feature begins:
+
+- **Strip `Key1 = "ROW_INDICATOR"` default.** Change to `""` to match other key columns. Rewrite the Key1 doc comment to teach the convention through examples (`PRINTED_PACKSLIP_LOG`, `WEBSITE_INQUIRY`) without seeding a placeholder value the framework shouldn't be writing automatically.
+- **Drop the Number20 "checksum" reservation.** Replace the elaborate doc comment with the same plain `<summary>Number column 20.</summary>` the other Number columns carry.
+
+Both are pure cleanup — no code logic changes, just default-value and doc comment edits on one file. Small commit, lands cleanly, gives the typed-DTO feature a clean foundation.
+
+#### Suggested scope (concrete)
+
+Precursor commit:
+- Edit `EpicorSvcs/Dtos/UDRow.cs`: strip `Key1` default, rewrite Key1 doc, drop Number20 reservation doc
+
+Typed-DTO feature commits (4–5 commits):
 - New `UDColumnAttribute` class in `EpicorSvcs/Platform/` (small)
-- New `UDColumnCapacityException` class (small)
-- New internal `UDMapping<TModel>` class with reflection + caching + validation (modest, ~150 lines)
+- New `UDColumnCapacityException` class in `EpicorSvcs/Platform/` (small)
+- New internal `UDMapping<TModel>` class with reflection + caching + validation (modest, ~150–200 lines including the type-conversion logic for `Number##` columns)
 - Four new public methods on `UDXSvc`: `SaveAsync<T>`, `GetByKeysAsync<T>`, `UpdateAsync<T>`, `QueryAsync<T>` — each a thin wrapper over the existing `UDRow`-based CRUD plus a mapping step
-- Unit tests covering: each of the four validation rules (invalid column, type mismatch, duplicate, capacity violation), each of the four CRUD methods, the reflection cache hit path, and the `ExtraData` round-trip
-- Documentation: a new section in `README.md` ("Typed UD-table access"), a new example in `EXAMPLES_EPICOR.md`
+- Unit tests covering: each of the four validation rules (invalid column, type mismatch, duplicate, capacity violation), the numeric-type conversion paths (each of `int`/`long`/`float`/`double`/`decimal`), each of the four CRUD methods, the reflection cache hit path, the `ExtraData` round-trip, and the reserved-column automation (legend emission on save, Date20/CheckBox20 defaults preserved, mapped-property opt-out for each reserved column)
+- Documentation: a new section in `README.md` ("Typed UD-table access"), and worked examples in `EXAMPLES_EPICOR.md` illustrating the conventions through 3–4 progressively complete DTOs (minimal example with no reserved columns mapped showing automation in action; example mapping Key1 showing the category convention; example mapping ShortChar20 showing search tags; example mapping CheckBox20 showing soft-delete usage). No "starter DTO" base class — the conventions are taught through documentation and examples, not through a class hierarchy the user is steered to inherit from.
 - CHANGELOG entry under a `[0.2.0]` block (this is real new public API surface, justifying a minor-version bump rather than a patch)
 
-**Estimated effort:** 4–8 hours of focused work end to end.
+#### Estimated effort
 
-**Open question deferred to implementation time:** support `UDColumn(UDCol.Character01)` enum-based attribute as a typo-safe alternative to the string version. Both shapes can coexist (two attribute overloads, internal logic normalizes). Decide at implementation.
+6–10 hours of focused work end to end (slightly more than the original estimate because of the numeric-type-conversion logic and the additional reserved-column tests).
+
+#### Open question deferred to implementation time
+
+Support `UDColumn(UDCol.Character01)` enum-based attribute as a typo-safe alternative to the string version. Both shapes can coexist (two attribute overloads, internal logic normalizes). Decide at implementation.
 
 This is a real feature, not a polish item. It deserves its own design pass and its own CHANGELOG entry. Not urgent.
 
