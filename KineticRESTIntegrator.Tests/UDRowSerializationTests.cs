@@ -82,17 +82,6 @@ namespace KineticRESTIntegrator.Tests
         // -- Reserved-column defaults (the "strong suggestion" conventions) --
 
         [Fact]
-        public void Key1_DefaultsToRowIndicatorPlaceholder()
-        {
-            // Key1 is the reserved "row category" column. It defaults to a
-            // visible placeholder so the convention is discoverable; callers
-            // are expected to replace it with their own category.
-            var row = new UDRow();
-
-            Assert.Equal("ROW_INDICATOR", row.Key1);
-        }
-
-        [Fact]
         public void Date20_DefaultsToApproximatelyNow()
         {
             // Date20 defaults to DateTime.Now at construction. The property
@@ -110,14 +99,24 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void EmptyStringColumns_DefaultToEmptyNotNull()
         {
-            // The string columns default to "" (not null) so callers can
+            // Most string columns default to "" (not null) so callers can
             // append/compare without null checks, and so "untouched" reads
-            // as empty rather than absent.
+            // as empty rather than absent. Key1 and Key2 are the exceptions:
+            // they have no default and come out as null. That asymmetry is
+            // deliberate — Key1 (row category) and Key2 (specific row) are
+            // the two key segments a meaningful row must carry, and an unset
+            // null is a clearer "you forgot to set this" signal than an
+            // accidentally-saved empty string. Key3/4/5 default to "" like
+            // the other string columns.
             var row = new UDRow();
 
+            Assert.Null(row.Key1);
+            Assert.Null(row.Key2);
+            Assert.Equal(string.Empty, row.Key3);
+            Assert.Equal(string.Empty, row.Key4);
+            Assert.Equal(string.Empty, row.Key5);
             Assert.Equal(string.Empty, row.Character01);
             Assert.Equal(string.Empty, row.ShortChar01);
-            Assert.Equal(string.Empty, row.Key3);
         }
 
         // -- Round-trip ------------------------------------------------------

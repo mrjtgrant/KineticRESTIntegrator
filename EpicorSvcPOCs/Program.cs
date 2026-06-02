@@ -14,7 +14,7 @@ namespace EpicorSvcPOCs
     /// server.
     /// </para>
     /// <para>
-    /// <b>Write POCs are GATED.</b> The UDX upsert and SalesOrder create
+    /// <b>Write POCs are GATED.</b> The UDTable upsert and SalesOrder create
     /// only execute when the <c>KERI_POC_ALLOW_WRITES</c> environment
     /// variable is set to <c>true</c>, <c>1</c>, <c>yes</c>, or <c>on</c>.
     /// Otherwise they run in dry-run mode: they build the call, print the
@@ -59,7 +59,7 @@ namespace EpicorSvcPOCs
                     // the others from demonstrating their behavior.
                     await SafeRun("UserCodes", () => UserCodesPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("Part",      () => PartPoc.RunAsync(client)).ConfigureAwait(false);
-                    await SafeRun("UDX",       () => UdxPoc.RunAsync(client)).ConfigureAwait(false);
+                    await SafeRun("UDTable",       () => UDTablePoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("SalesOrder", () => SalesOrderPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("JobEntry",  () => JobEntryPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("MenuTree",  () => MenuTreePoc.RunAsync(client)).ConfigureAwait(false);

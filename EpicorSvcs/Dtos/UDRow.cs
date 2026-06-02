@@ -41,7 +41,7 @@ namespace EpicorSvcs.Dtos
     /// <list type="bullet">
     ///   <item><description>
     ///   <see cref="Key1"/> — a user-defined <i>category</i> that groups rows
-    ///   of the same kind. Defaults to <c>"ROW_INDICATOR"</c>.
+    ///   of the same kind.
     ///   </description></item>
     ///   <item><description>
     ///   <see cref="Character10"/> — a column legend mapping generic columns
@@ -50,9 +50,6 @@ namespace EpicorSvcs.Dtos
     ///   <item><description>
     ///   <see cref="ShortChar20"/> — a short keyword or comma-separated
     ///   keyword list.
-    ///   </description></item>
-    ///   <item><description>
-    ///   <see cref="Number20"/> — a checksum or comparison value.
     ///   </description></item>
     ///   <item><description>
     ///   <see cref="Date20"/> — a transaction timestamp. Defaults to
@@ -133,16 +130,16 @@ namespace EpicorSvcs.Dtos
         /// <summary>
         /// Primary key segment 1.
         /// <para>
-        /// <b>Reserved (strong suggestion).</b> Use this as a user-defined
+        /// <b>Required (strong suggestion).</b> Use this as a user-defined
         /// <i>category</i> that groups rows of the same kind — it lets one UD
-        /// table hold many distinct logical row types. Defaults to
-        /// <c>"ROW_INDICATOR"</c> to make the convention visible; replace it
-        /// with your own category. Examples: <c>"PRINTED_PACKSLIP_LOG"</c>,
-        /// <c>"WEBSITE_INQUIRY"</c>, <c>"REPAIR_INTAKE"</c>. The framework
-        /// does not enforce this.
+        /// table hold many distinct logical row types. Examples:
+        /// <c>"PRINTED_PACKSLIP_LOG"</c>, <c>"WEBSITE_INQUIRY"</c>,
+        /// <c>"REPAIR_INTAKE"</c>. The framework does not enforce this; leave
+        /// it unset and it stays null, but a row without a Key1 category is
+        /// hard to find or organize later.
         /// </para>
         /// </summary>
-        public string Key1 { get; set; } = "ROW_INDICATOR";
+        public string Key1 { get; set; }
 
         /// <summary>Primary key segment 2. Required: identifies the specific row.</summary>
         public string Key2 { get; set; }
@@ -351,16 +348,7 @@ namespace EpicorSvcs.Dtos
         /// <summary>Number column 19.</summary>
         public double Number19 { get; set; }
 
-        /// <summary>
-        /// Number column 20.
-        /// <para>
-        /// <b>Reserved (strong suggestion).</b> Use this to hold a checksum or
-        /// comparison value for the row — something that lets a later read
-        /// detect change or verify integrity. Examples: a file-attachment byte
-        /// size, a hash or comparison value, a record count. The framework
-        /// does not enforce this.
-        /// </para>
-        /// </summary>
+        /// <summary>Number column 20.</summary>
         public double Number20 { get; set; }
 
         #endregion
