@@ -35,15 +35,18 @@ namespace EpicorSvcs
 
         /// <summary>
         /// The UD table every method on this service targets when its
-        /// <c>UDTable</c> argument is left null. Defaults to <c>"UD22"</c>.
+        /// <c>UDTable</c> argument is left null. Has no default — set it to
+        /// choose a fallback table, or pass <c>UDTable</c> per call.
         /// </summary>
         /// <remarks>
         /// There are two ways to choose the target table: set this property
         /// once on the instance and then call methods without a <c>UDTable</c>
         /// argument, or pass <c>UDTable</c> per call to override it for that
-        /// call only. A per-call argument always wins over this property.
+        /// call only. A per-call argument always wins over this property. If
+        /// neither is supplied, a constructive call throws rather than guessing
+        /// a table — the library doesn't know which UD tables your install uses.
         /// </remarks>
-        public string UDTableDefault { get; set; } = "UD22";
+        public string UDTableDefault { get; set; }
 
         /// <summary>
         /// Resolves the table for a call: the per-call argument if supplied,

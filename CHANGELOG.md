@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.2.2] — 2026-06-03
+
+### Changed
+
+- **`UDTableSvc.UDTableDefault` no longer defaults to `"UD22"`.** It now starts unset (null). Constructive calls (reads and upserts) that neither pass a `UDTable` argument nor have `UDTableDefault` set now throw the existing "pass a UDTable argument or set UDTableDefault" error instead of silently targeting `UD22`. The library has no way to know which UD tables a given install uses, so guessing one was the same "invent a value the caller didn't declare" problem the key-default change addressed — callers that want a fallback set `UDTableDefault` explicitly (one line), exactly as the write example in `EXAMPLES_EPICOR.md` already shows.
+
+### Documentation
+
+- `EXAMPLES_EPICOR.md` brought in line with the 0.2.1 API: five-string `GetByIDAsync`/`DeleteByIDAsync` call sites, `Key3`–`Key5` defaulting to null, the four typed wrappers, and a corrected `Key1` note.
+
+---
+
 ## [0.2.1] — 2026-06-03
 
 ### Changed
