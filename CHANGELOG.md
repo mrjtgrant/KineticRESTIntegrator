@@ -6,7 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
-## [0.2.0] — 2026-06-02
+## [0.2.1] — Unreleased
+
+### Changed
+
+- **`UDRow.Key3`, `Key4`, and `Key5` no longer default to an empty string.** *Breaking.* These three key segments previously initialized to `""`; they now default to null, matching `Key1` and `Key2` (which were already defaultless as of 0.2.0). The library should not silently invent key values the caller never declared — once a caller is on the typed-DTO path, their DTO is the source of truth for which keys their row has. Null means "unset"; the write path coalesces an unset key to the empty-string form Epicor expects just before the wire (see the *DeleteByID* entry below), so the on-the-wire behavior for a fully-unmapped key is unchanged. The break surfaces only for code that read `Key3`–`Key5` expecting a non-null empty string before setting them.
+
+- **`DeleteByIDAsync(UDRow, string, …)` replaced with `DeleteByIDAsync(string key1, string key2, string key3, string key4, string key5, string UDTable, …)`.** *Breaking.* The five-string signature mirrors `GetByIDAsync`'s five-key identity shape. A `UDRow` is a row-data container; passing one purely to carry a key identity overloaded the type's role, since only its `Key1`–`Key5` were ever read. The old overload is removed outright rather than `[Obsolete]`-deprecated — pre-1.0, with effectively no production adoption, a clean cut is cheaper than a deprecation cycle. Each key is coalesced from null to an empty string immediately before the request is built, local to the write path rather than via a converter on the type. `UDTable` remains required with no default (a delete must act on exactly the table named). Internal callers `UpdateAsync(…, delete: true)` and `TruncateAsync` were updated to the new signature.
+
+- **`GetByIDAsync(UDRow, string, …)` replaced with `GetByIDAsync(string key1, string key2, string key3, string key4, string key5, string UDTable = null, …)`.** *Breaking.* Mirrors the new five-string `DeleteByIDAsync` so the two single-row identity methods take the same parameter shape — and matches Epicor's own `GetByID` contract, which takes five flat key values. Same rationale as the delete change: a `UDRow` only ever surrendered its `Key1`–`Key5` here, so the row type was doing identity-stub duty it was never meant for. The old overload is removed, not deprecated. The one deliberate difference from delete: `UDTable` stays optional and falls back to `UDTableDefault`, because a read against the wrong table is recoverable where a delete is not. Day-to-day callers should prefer the typed `GetByIDAsync<T>`, whose external signature is unchanged — only its internal delegation now targets the five-string raw method.
+
+### Added
+
+- **`DeleteByIDAsync<T>(T dto, string UDTable, …)` — typed-DTO single-row delete.** Completes the typed-DTO surface for the destructive path, alongside the existing `SaveAsync<T>`, `GetByIDAsync<T>`, and `QueryAsync<T>`. Reads the DTO's mapped `Key1`–`Key5` values through the existing `UDTableMapping<T>` infrastructure and delegates to the raw five-string `DeleteByIDAsync`. Keys the DTO does not map flow through as null and are coalesced to empty strings at the wire. `UDTable` is required with no default, consistent with the destructive-operation rule and with the raw method it wraps. Constrained `where T : class, new()`, matching the other typed wrappers.
+
+---
+
 
 ### Added
 

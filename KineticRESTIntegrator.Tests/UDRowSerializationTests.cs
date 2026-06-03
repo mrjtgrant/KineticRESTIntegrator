@@ -99,24 +99,34 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void EmptyStringColumns_DefaultToEmptyNotNull()
         {
-            // Most string columns default to "" (not null) so callers can
-            // append/compare without null checks, and so "untouched" reads
-            // as empty rather than absent. Key1 and Key2 are the exceptions:
-            // they have no default and come out as null. That asymmetry is
-            // deliberate — Key1 (row category) and Key2 (specific row) are
-            // the two key segments a meaningful row must carry, and an unset
-            // null is a clearer "you forgot to set this" signal than an
-            // accidentally-saved empty string. Key3/4/5 default to "" like
-            // the other string columns.
+            // The non-key string columns default to "" (not null) so callers
+            // can append or compare without null checks, and so an untouched
+            // column reads as empty rather than absent. The five key columns
+            // are the deliberate exception — see KeyColumns_DefaultToNull.
+            var row = new UDRow();
+
+            Assert.Equal(string.Empty, row.Character01);
+            Assert.Equal(string.Empty, row.ShortChar01);
+        }
+
+        [Fact]
+        public void KeyColumns_DefaultToNull()
+        {
+            // None of the five key columns carries a default — an unset key is
+            // null, a clearer "you didn't set this" signal than an
+            // accidentally-saved empty string. Key1 (row category) and Key2
+            // (specific row) were already defaultless; Key3–Key5 joined them
+            // in 0.2.1 so the library never invents key values the caller did
+            // not declare. The write path coalesces a null key to the
+            // empty-string form Epicor expects just before the wire, so an
+            // unmapped key still resolves on GetByID / DeleteByID.
             var row = new UDRow();
 
             Assert.Null(row.Key1);
             Assert.Null(row.Key2);
-            Assert.Equal(string.Empty, row.Key3);
-            Assert.Equal(string.Empty, row.Key4);
-            Assert.Equal(string.Empty, row.Key5);
-            Assert.Equal(string.Empty, row.Character01);
-            Assert.Equal(string.Empty, row.ShortChar01);
+            Assert.Null(row.Key3);
+            Assert.Null(row.Key4);
+            Assert.Null(row.Key5);
         }
 
         // -- Round-trip ------------------------------------------------------

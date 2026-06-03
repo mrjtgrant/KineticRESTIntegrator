@@ -343,29 +343,43 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Retrieves a single UD-table row by its full Key1–Key5. Calls
+        /// Retrieves a single UD-table row by its five key values. Calls
         /// <c>Ice.BO.{UDTable}Svc/GetByID</c> in Epicor — the BO action,
         /// not an OData filtered read.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// All five keys on <paramref name="udrow"/> are sent as query
-        /// parameters; an unset key contributes an empty value. The response
-        /// is a multi-table dataset containing the UD row and its related
-        /// tables (e.g. <c>{UDTable}Attch</c> for attachments, plus extension
-        /// tables); this method extracts the UD-row portion and returns it
-        /// as a <see cref="UDRow"/>. To access the full dataset (attachments,
+        /// The five keys are taken as raw strings — mirroring
+        /// <see cref="DeleteByIDAsync(string, string, string, string, string, string, CancellationToken)"/>'s
+        /// five-key identity shape — and are sent as query parameters; a null
+        /// key contributes an empty value. The response is a multi-table
+        /// dataset containing the UD row and its related tables (e.g.
+        /// <c>{UDTable}Attch</c> for attachments, plus extension tables); this
+        /// method extracts the UD-row portion and returns it as a
+        /// <see cref="UDRow"/>. To access the full dataset (attachments,
         /// extension tables, etc.), read <c>RawResponse</c> on the returned
         /// <see cref="OperationResult{T}"/>.
+        /// </para>
+        /// <para>
+        /// Callers holding a typed DTO should use
+        /// <see cref="GetByIDAsync{T}(T, string, CancellationToken)"/>, which
+        /// reads the mapped key values and projects the result back into the
+        /// DTO. Unlike the destructive
+        /// <see cref="DeleteByIDAsync(string, string, string, string, string, string, CancellationToken)"/>,
+        /// <paramref name="UDTable"/> is optional here and falls back to
+        /// <see cref="UDTableDefault"/>: a read against the wrong table is
+        /// recoverable, a delete is not.
         /// </para>
         /// <para>
         /// For row lists or partial-key queries, use <see cref="QueryAsync"/>
         /// — that's the OData entity-set read.
         /// </para>
         /// </remarks>
-        /// <param name="udrow">
-        /// The row whose Key1–Key5 identify which row to fetch.
-        /// </param>
+        /// <param name="key1">Key segment 1 of the row to fetch. Null is sent as empty.</param>
+        /// <param name="key2">Key segment 2 of the row to fetch. Null is sent as empty.</param>
+        /// <param name="key3">Key segment 3 of the row to fetch. Null is sent as empty.</param>
+        /// <param name="key4">Key segment 4 of the row to fetch. Null is sent as empty.</param>
+        /// <param name="key5">Key segment 5 of the row to fetch. Null is sent as empty.</param>
         /// <param name="UDTable">
         /// The target UD table. When null (the default),
         /// <see cref="UDTableDefault"/> is used.
@@ -376,17 +390,21 @@ namespace EpicorSvcs
         /// <see cref="UDRow"/>, or a null value when no row matches.
         /// </returns>
         public async Task<OperationResult<UDRow>> GetByIDAsync(
-            UDRow udrow,
+            string key1,
+            string key2,
+            string key3,
+            string key4,
+            string key5,
             string UDTable = null,
             CancellationToken ct = default)
         {
             string table = ResolveTable(UDTable);
             string svc = String.Format("Ice.BO.{0}Svc/GetByID", table);
-            svc += String.Format("?key1={0}", UrlEncode(udrow.Key1 ?? string.Empty));
-            svc += String.Format("&key2={0}", UrlEncode(udrow.Key2 ?? string.Empty));
-            svc += String.Format("&key3={0}", UrlEncode(udrow.Key3 ?? string.Empty));
-            svc += String.Format("&key4={0}", UrlEncode(udrow.Key4 ?? string.Empty));
-            svc += String.Format("&key5={0}", UrlEncode(udrow.Key5 ?? string.Empty));
+            svc += String.Format("?key1={0}", UrlEncode(key1 ?? string.Empty));
+            svc += String.Format("&key2={0}", UrlEncode(key2 ?? string.Empty));
+            svc += String.Format("&key3={0}", UrlEncode(key3 ?? string.Empty));
+            svc += String.Format("&key4={0}", UrlEncode(key4 ?? string.Empty));
+            svc += String.Format("&key5={0}", UrlEncode(key5 ?? string.Empty));
 
             JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
             return response.ToOperationResult(r =>
@@ -467,7 +485,9 @@ namespace EpicorSvcs
             if (delete)
             {
                 string deleteTable = ResolveTableForDelete(UDTable, nameof(UDTable));
-                return await DeleteByIDAsync(udrow, deleteTable, ct).ConfigureAwait(false);
+                return await DeleteByIDAsync(
+                    udrow.Key1, udrow.Key2, udrow.Key3, udrow.Key4, udrow.Key5,
+                    deleteTable, ct).ConfigureAwait(false);
             }
 
             string table = ResolveTable(UDTable);
@@ -583,7 +603,9 @@ namespace EpicorSvcs
             int deleted = 0;
             foreach (var ud in all.Value)
             {
-                await DeleteByIDAsync(ud, table, ct).ConfigureAwait(false);
+                await DeleteByIDAsync(
+                    ud.Key1, ud.Key2, ud.Key3, ud.Key4, ud.Key5,
+                    table, ct).ConfigureAwait(false);
                 deleted++;
             }
 
@@ -591,10 +613,28 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Deletes a single UD-table row by its Key1–Key5. Calls
+        /// Deletes a single UD-table row by its five key values. Calls
         /// <c>Ice.BO.{UDTable}Svc/DeleteByID</c> in Epicor.
         /// </summary>
         /// <remarks>
+        /// <para>
+        /// The five keys are taken as raw strings — mirroring
+        /// <see cref="GetByIDAsync(string, string, string, string, string, string, CancellationToken)"/>'s
+        /// five-key identity shape — rather than as a <see cref="UDRow"/>.
+        /// A <see cref="UDRow"/> is a row-data container; using one only to
+        /// carry a key identity overloaded the type's role. Callers holding a
+        /// typed DTO should use
+        /// <see cref="DeleteByIDAsync{T}(T, string, CancellationToken)"/>,
+        /// which reads the mapped key values and delegates here.
+        /// </para>
+        /// <para>
+        /// Each key is coalesced from null to an empty string just before the
+        /// wire: the library treats null as "unset", and Epicor's UD
+        /// <c>DeleteByID</c> matches on the empty-string form of an unset key.
+        /// Callers that map only <c>Key1</c>/<c>Key2</c> can leave the rest
+        /// null and the row still resolves.
+        /// </para>
+        /// <para>
         /// This operation is destructive. <paramref name="UDTable"/> is
         /// required and must be supplied explicitly — unlike the read methods,
         /// this method does <b>not</b> fall back to <see cref="UDTableDefault"/>.
@@ -602,8 +642,13 @@ namespace EpicorSvcs
         /// <see cref="ArgumentException"/> rather than defaulting, so a missing
         /// table name fails fast instead of silently deleting from whichever
         /// table the default happens to point at.
+        /// </para>
         /// </remarks>
-        /// <param name="udrow">The row whose Key1–Key5 identify the record to delete.</param>
+        /// <param name="key1">Key segment 1 of the row to delete. Null is sent as empty.</param>
+        /// <param name="key2">Key segment 2 of the row to delete. Null is sent as empty.</param>
+        /// <param name="key3">Key segment 3 of the row to delete. Null is sent as empty.</param>
+        /// <param name="key4">Key segment 4 of the row to delete. Null is sent as empty.</param>
+        /// <param name="key5">Key segment 5 of the row to delete. Null is sent as empty.</param>
         /// <param name="UDTable">
         /// The target UD table the row is deleted from. Required; must be a
         /// non-blank table name. There is no default — passing null, empty,
@@ -617,18 +662,26 @@ namespace EpicorSvcs
         /// <paramref name="UDTable"/> is null, empty, or whitespace.
         /// </exception>
         public async Task<OperationResult<JObject>> DeleteByIDAsync(
-            UDRow udrow,
+            string key1,
+            string key2,
+            string key3,
+            string key4,
+            string key5,
             string UDTable,
             CancellationToken ct = default)
         {
             string table = ResolveTableForDelete(UDTable, nameof(UDTable));
             string svc = String.Format("Ice.BO.{0}Svc/DeleteByID", table);
+
+            // Coalesce null → "" just before the wire. The library type carries
+            // null for an unset key; Epicor's DeleteByID expects the
+            // empty-string form. Local to the write path, not on the type.
             JObject payload = new JObject {
-                new JProperty("key1", udrow.Key1),
-                new JProperty("key2", udrow.Key2),
-                new JProperty("key3", udrow.Key3),
-                new JProperty("key4", udrow.Key4),
-                new JProperty("key5", udrow.Key5)
+                new JProperty("key1", key1 ?? ""),
+                new JProperty("key2", key2 ?? ""),
+                new JProperty("key3", key3 ?? ""),
+                new JProperty("key4", key4 ?? ""),
+                new JProperty("key5", key5 ?? "")
             };
 
             JObject response = await RESTCallAsync(svc, payload, ct).ConfigureAwait(false);

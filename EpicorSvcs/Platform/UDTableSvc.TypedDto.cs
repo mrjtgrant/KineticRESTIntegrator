@@ -21,7 +21,7 @@ namespace EpicorSvcs
     /// <see cref="UDTableMapping{T}"/> to convert between the user's DTO
     /// and Keri's generic <see cref="UDRow"/>, then delegates to the
     /// corresponding raw method (<see cref="UpdateAsync"/>,
-    /// <see cref="GetByIDAsync(UDRow, string, CancellationToken)"/>,
+    /// <see cref="GetByIDAsync(string, string, string, string, string, string, CancellationToken)"/>,
     /// <see cref="QueryAsync"/>). The mapper validates the DTO type on
     /// first use and caches the result, so subsequent calls pay only the
     /// cost of the property copies and the underlying HTTP call.
@@ -109,7 +109,7 @@ namespace EpicorSvcs
         /// <summary>
         /// Retrieves a single UD-table row by the keys on a typed DTO.
         /// Maps the DTO to a <see cref="UDRow"/> for the key payload, calls
-        /// the raw <see cref="GetByIDAsync(UDRow, string, CancellationToken)"/>,
+        /// the raw <see cref="GetByIDAsync(string, string, string, string, string, string, CancellationToken)"/>,
         /// and projects the response back into a fresh
         /// <typeparamref name="T"/> instance.
         /// </summary>
@@ -160,7 +160,9 @@ namespace EpicorSvcs
             var mapping = UDTableMapping<T>.Get();
             UDRow keyRow = mapping.ToUDRow(keys);
 
-            var raw = await GetByIDAsync(keyRow, UDTable, ct).ConfigureAwait(false);
+            var raw = await GetByIDAsync(
+                keyRow.Key1, keyRow.Key2, keyRow.Key3, keyRow.Key4, keyRow.Key5,
+                UDTable, ct).ConfigureAwait(false);
             if (raw.IsFailure)
                 return OperationResult<T>.Failure(
                     raw.ErrorMessage, raw.StatusCode, raw.ResourcePath, raw.RawResponse);
@@ -241,6 +243,72 @@ namespace EpicorSvcs
             }
 
             return OperationResult<List<T>>.Success(projected, raw.RawResponse);
+        }
+
+        // ---------------------------------------------------------------
+        // Typed-DTO single-row delete
+        // ---------------------------------------------------------------
+
+        /// <summary>
+        /// Deletes a single UD-table row identified by the keys on a typed
+        /// DTO. Reads the mapped <c>Key1</c>–<c>Key5</c> values via
+        /// <see cref="UDTableMapping{T}"/> and delegates to the raw
+        /// five-string
+        /// <see cref="DeleteByIDAsync(string, string, string, string, string, string, CancellationToken)"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The caller passes a <typeparamref name="T"/> instance with its key
+        /// properties (those mapped to <c>Key1</c>–<c>Key5</c>) populated.
+        /// Non-key properties are ignored — only the key columns identify the
+        /// row. Keys the DTO does not map flow through as null and are
+        /// coalesced to empty strings at the wire by the raw method.
+        /// </para>
+        /// <para>
+        /// This operation is destructive, so per the library's destructive-op
+        /// rule <paramref name="UDTable"/> is required and has no default: the
+        /// delete acts on exactly the table named, never falling back to
+        /// <see cref="UDTableDefault"/>.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">
+        /// The user's DTO type. Must have a public parameterless constructor.
+        /// </typeparam>
+        /// <param name="keys">
+        /// A DTO instance with key properties populated. Non-key properties
+        /// are ignored.
+        /// </param>
+        /// <param name="UDTable">
+        /// The target UD table the row is deleted from. Required; must be a
+        /// non-blank table name. There is no default — passing null, empty,
+        /// or whitespace throws <see cref="ArgumentException"/>.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="keys"/> is null.
+        /// </exception>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="UDTable"/> is null, empty, or whitespace.
+        /// </exception>
+        /// <exception cref="InvalidOperationException">
+        /// <typeparamref name="T"/> has mapping errors.
+        /// </exception>
+        public async Task<OperationResult<JObject>> DeleteByIDAsync<T>(
+            T keys,
+            string UDTable,
+            CancellationToken ct = default) where T : class, new()
+        {
+            if (keys == null) throw new ArgumentNullException(nameof(keys));
+
+            var mapping = UDTableMapping<T>.Get();
+            UDRow keyRow = mapping.ToUDRow(keys);
+
+            return await DeleteByIDAsync(
+                keyRow.Key1, keyRow.Key2, keyRow.Key3, keyRow.Key4, keyRow.Key5,
+                UDTable, ct).ConfigureAwait(false);
         }
     }
 }

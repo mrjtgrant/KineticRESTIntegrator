@@ -46,8 +46,9 @@ namespace EpicorSvcs
     ///   <c>Key1</c> and <c>Key2</c>. Epicor identifies UD rows by the
     ///   composite of all five keys; <c>Key1</c> and <c>Key2</c> carry no
     ///   default value on <see cref="UDRow"/>, so a row that leaves them
-    ///   unset is rejected. <c>Key3</c>–<c>Key5</c> are optional and default
-    ///   to empty strings when unmapped — map them when finer-grained
+    ///   unset is rejected. <c>Key3</c>–<c>Key5</c> are optional; when
+    ///   unmapped they stay null on the type and are coalesced to empty
+    ///   strings on the wire — map them when finer-grained
     ///   uniqueness is needed (see <c>EXAMPLES_EPICOR.md</c> for the full
     ///   key convention).</description></item>
     /// </list>

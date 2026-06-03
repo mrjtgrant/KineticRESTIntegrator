@@ -144,14 +144,14 @@ namespace EpicorSvcs.Dtos
         /// <summary>Primary key segment 2. Required: identifies the specific row.</summary>
         public string Key2 { get; set; }
 
-        /// <summary>Primary key segment 3.</summary>
-        public string Key3 { get; set; } = "";
+        /// <summary>Primary key segment 3. Null when unset (coalesced to an empty string on the wire).</summary>
+        public string Key3 { get; set; }
 
-        /// <summary>Primary key segment 4.</summary>
-        public string Key4 { get; set; } = "";
+        /// <summary>Primary key segment 4. Null when unset (coalesced to an empty string on the wire).</summary>
+        public string Key4 { get; set; }
 
-        /// <summary>Primary key segment 5.</summary>
-        public string Key5 { get; set; } = "";
+        /// <summary>Primary key segment 5. Null when unset (coalesced to an empty string on the wire).</summary>
+        public string Key5 { get; set; }
 
         #endregion
 
