@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using EpicorSvcs.Dtos;
 
 namespace EpicorSvcs
@@ -53,6 +55,20 @@ namespace EpicorSvcs
     /// <c>Character*</c>, 50 for <c>Key*</c>) is checked separately at save
     /// time, throwing <see cref="UDTableColumnCapacityException"/>.
     /// </para>
+    /// <para>
+    /// <b>ExtraData round-tripping (optional).</b> If the DTO declares a
+    /// property decorated with <c>[JsonExtensionData]</c> and typed as
+    /// <c>IDictionary&lt;string, JToken&gt;</c>, the mapper round-trips
+    /// install-specific custom columns (Epicor's <c>_c</c> suffix
+    /// convention) through that property: on save the entries flow into
+    /// <see cref="UDRow.ExtraData"/>, on read the row's <c>ExtraData</c>
+    /// entries flow back into the DTO's property. Entries whose keys
+    /// match standard UD-column names are skipped on save (the typed
+    /// mapping wins), so the dictionary carries only truly-extra
+    /// columns. DTOs without such a property silently discard unmodeled
+    /// columns on read; the raw response remains available via
+    /// <c>OperationResult.RawResponse</c>.
+    /// </para>
     /// </remarks>
     /// <typeparam name="TModel">The user's DTO type.</typeparam>
     internal sealed class UDTableMapping<TModel> where TModel : new()
@@ -90,6 +106,16 @@ namespace EpicorSvcs
 
         private readonly List<MappedColumn> _columns;
         private readonly bool _character10Mapped;
+
+        // ExtraData support — populated only when the DTO declares a property
+        // with [JsonExtensionData] and the right shape. Null otherwise.
+        private readonly PropertyInfo _extraDataProperty;
+
+        // All UDRow column-property names (Key1–Key5, Character01–Character10,
+        // ShortChar01–ShortChar20, Number01–Number20, Date01–Date20,
+        // CheckBox01–CheckBox20). Used to filter ExtraData on save so user
+        // entries with column-like names don't shadow the typed mapping.
+        private readonly HashSet<string> _udRowColumnNames;
 
         /// <summary>
         /// The full set of column-to-property mappings discovered on
@@ -170,6 +196,47 @@ namespace EpicorSvcs
                     "No property maps to 'Key2'. Map a string property to Key2 with [UDTableColumn(\"Key2\")] — " +
                     "Key2 is required and has no default on UDRow.");
 
+            // ExtraData detection — optional. The DTO may declare a property
+            // with [JsonExtensionData] to round-trip install-specific custom
+            // columns (e.g. Epicor's _c suffix convention). The property must
+            // be typed as IDictionary<string, JToken> (or the concrete
+            // Dictionary<string, JToken>) and writable.
+            PropertyInfo extraDataProp = null;
+            foreach (var prop in typeof(TModel).GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (prop.GetCustomAttribute<JsonExtensionDataAttribute>() == null)
+                    continue;
+
+                if (extraDataProp != null)
+                {
+                    errors.Add(string.Format(
+                        "Properties '{0}' and '{1}' are both decorated with [JsonExtensionData]; " +
+                        "at most one ExtraData property is allowed per DTO.",
+                        extraDataProp.Name, prop.Name));
+                    continue;
+                }
+
+                if (!IsValidExtraDataType(prop.PropertyType))
+                {
+                    errors.Add(string.Format(
+                        "Property '{0}' is decorated with [JsonExtensionData] but its type ({1}) is not supported. " +
+                        "Use IDictionary<string, JToken> or Dictionary<string, JToken>.",
+                        prop.Name, FriendlyTypeName(prop.PropertyType)));
+                    continue;
+                }
+
+                if (prop.GetSetMethod(nonPublic: false) == null)
+                {
+                    errors.Add(string.Format(
+                        "Property '{0}' is decorated with [JsonExtensionData] but has no public setter. " +
+                        "Declare it as 'public IDictionary<string, JToken> {0} {{ get; set; }}'.",
+                        prop.Name));
+                    continue;
+                }
+
+                extraDataProp = prop;
+            }
+
             if (errors.Count > 0)
             {
                 string typeName = typeof(TModel).FullName ?? typeof(TModel).Name;
@@ -180,6 +247,8 @@ namespace EpicorSvcs
 
             _columns = mappedColumns;
             _character10Mapped = mappedColumns.Any(m => m.ColumnName == "Character10");
+            _extraDataProperty = extraDataProp;
+            _udRowColumnNames = new HashSet<string>(udRowProps.Keys, StringComparer.Ordinal);
         }
 
         // ---------------------------------------------------------------
@@ -245,6 +314,27 @@ namespace EpicorSvcs
                 row.Character10 = UDTableSvc.BuildColumnLegend(legend);
             }
 
+            // Flow user-DTO ExtraData entries through to UDRow.ExtraData so
+            // install-specific custom columns (e.g. _c suffix) are emitted on
+            // serialization. Entries whose keys collide with standard UD
+            // column names are skipped — the typed mapping already covered
+            // them, and emitting both would produce duplicate JSON properties.
+            if (_extraDataProperty != null)
+            {
+                var sourceExtras = _extraDataProperty.GetValue(model) as IDictionary<string, JToken>;
+                if (sourceExtras != null && sourceExtras.Count > 0)
+                {
+                    if (row.ExtraData == null)
+                        row.ExtraData = new Dictionary<string, JToken>(StringComparer.Ordinal);
+                    foreach (var kv in sourceExtras)
+                    {
+                        if (_udRowColumnNames.Contains(kv.Key))
+                            continue;
+                        row.ExtraData[kv.Key] = kv.Value;
+                    }
+                }
+            }
+
             return row;
         }
 
@@ -284,6 +374,17 @@ namespace EpicorSvcs
                 }
 
                 col.ModelProperty.SetValue(model, value);
+            }
+
+            // Populate the DTO's ExtraData property (when present) with any
+            // unmodeled columns from the row. UDRow's own ExtraData only
+            // contains entries that weren't UDRow-typed properties (e.g. _c
+            // custom columns), so everything in it is genuinely "extra"
+            // relative to both the row schema and the user's typed mapping.
+            if (_extraDataProperty != null && row.ExtraData != null && row.ExtraData.Count > 0)
+            {
+                var target = new Dictionary<string, JToken>(row.ExtraData, StringComparer.Ordinal);
+                _extraDataProperty.SetValue(model, target);
             }
 
             return model;
@@ -401,6 +502,19 @@ namespace EpicorSvcs
             Type underlying = Nullable.GetUnderlyingType(t);
             if (underlying != null) return underlying.Name + "?";
             return t.Name;
+        }
+
+        /// <summary>
+        /// Checks whether a property type is one of the supported ExtraData
+        /// shapes: <c>IDictionary&lt;string, JToken&gt;</c> or the concrete
+        /// <c>Dictionary&lt;string, JToken&gt;</c>. Both work because the
+        /// mapper assigns a <c>Dictionary&lt;string, JToken&gt;</c> instance
+        /// when populating on read.
+        /// </summary>
+        private static bool IsValidExtraDataType(Type t)
+        {
+            return t == typeof(IDictionary<string, JToken>)
+                || t == typeof(Dictionary<string, JToken>);
         }
     }
 }

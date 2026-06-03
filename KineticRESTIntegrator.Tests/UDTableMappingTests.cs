@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using EpicorSvcs;
 using EpicorSvcs.Dtos;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests
@@ -516,6 +518,201 @@ namespace KineticRESTIntegrator.Tests
             var numericMapping = UDTableMapping<AllNumericTypesDto>.Get();
 
             Assert.NotSame((object)validMapping, (object)numericMapping);
+        }
+
+        // ===================================================================
+        // ExtraData round-tripping
+        // ===================================================================
+        //
+        // A DTO may carry install-specific custom columns (Epicor's _c
+        // suffix convention) by declaring a property with
+        // [JsonExtensionData] typed as IDictionary<string, JToken>. The
+        // mapper detects it during validation and round-trips it through
+        // UDRow.ExtraData. The feature is opt-in: DTOs without such a
+        // property continue to discard unmodeled columns silently.
+
+        public class ExtraDataDto
+        {
+            [UDTableColumn("Key1")]        public string Category { get; set; }
+            [UDTableColumn("Key2")]        public string ItemID { get; set; }
+            [UDTableColumn("ShortChar01")] public string Name { get; set; }
+
+            [JsonExtensionData]
+            public IDictionary<string, JToken> ExtraData { get; set; }
+        }
+
+        public class WrongExtraDataTypeDto
+        {
+            [UDTableColumn("Key1")]        public string Category { get; set; }
+            [UDTableColumn("Key2")]        public string ItemID { get; set; }
+
+            [JsonExtensionData]
+            public IDictionary<string, object> Extras { get; set; }
+        }
+
+        public class TwoExtensionPropertiesDto
+        {
+            [UDTableColumn("Key1")]        public string Category { get; set; }
+            [UDTableColumn("Key2")]        public string ItemID { get; set; }
+
+            [JsonExtensionData]
+            public IDictionary<string, JToken> First { get; set; }
+
+            [JsonExtensionData]
+            public IDictionary<string, JToken> Second { get; set; }
+        }
+
+        [Fact]
+        public void ExtraData_SaveDirection_EntriesFlowIntoUDRow()
+        {
+            // User-provided extras land on the UDRow's ExtraData, ready to
+            // be serialized as top-level _c (or other install-custom)
+            // columns when the row is sent to Epicor.
+            var dto = new ExtraDataDto
+            {
+                Category = "INVENTORY",
+                ItemID = "WIDGET-001",
+                Name = "Standard widget",
+                ExtraData = new Dictionary<string, JToken>
+                {
+                    ["WarrantyMonths_c"] = 12,
+                    ["Region_c"] = "WEST"
+                }
+            };
+
+            UDRow row = UDTableMapping<ExtraDataDto>.Get().ToUDRow(dto);
+
+            Assert.NotNull(row.ExtraData);
+            Assert.Equal(12, (int)row.ExtraData["WarrantyMonths_c"]);
+            Assert.Equal("WEST", (string)row.ExtraData["Region_c"]);
+        }
+
+        [Fact]
+        public void ExtraData_SaveDirection_SkipsKeysThatCollideWithRealColumns()
+        {
+            // If a user puts e.g. "ShortChar01" in their ExtraData (probably
+            // by accident), it would shadow the typed-mapping value and
+            // produce duplicate JSON properties. The mapper drops such
+            // entries — the typed mapping always wins.
+            var dto = new ExtraDataDto
+            {
+                Category = "INVENTORY",
+                ItemID = "WIDGET-001",
+                Name = "from typed property",
+                ExtraData = new Dictionary<string, JToken>
+                {
+                    ["ShortChar01"] = "from ExtraData — should be dropped",
+                    ["LegitCustom_c"] = "kept"
+                }
+            };
+
+            UDRow row = UDTableMapping<ExtraDataDto>.Get().ToUDRow(dto);
+
+            Assert.Equal("from typed property", row.ShortChar01);
+            Assert.NotNull(row.ExtraData);
+            Assert.False(row.ExtraData.ContainsKey("ShortChar01"));
+            Assert.Equal("kept", (string)row.ExtraData["LegitCustom_c"]);
+        }
+
+        [Fact]
+        public void ExtraData_ReadDirection_UDRowExtrasFlowIntoDto()
+        {
+            // UDRow.ExtraData entries (e.g. _c columns Epicor returned)
+            // populate the typed DTO's ExtraData on read.
+            var row = new UDRow
+            {
+                Key1 = "INVENTORY",
+                Key2 = "WIDGET-001",
+                ShortChar01 = "Standard widget",
+                ExtraData = new Dictionary<string, JToken>
+                {
+                    ["WarrantyMonths_c"] = 12,
+                    ["Region_c"] = "WEST"
+                }
+            };
+
+            var dto = UDTableMapping<ExtraDataDto>.Get().FromUDRow(row);
+
+            Assert.NotNull(dto.ExtraData);
+            Assert.Equal(12, (int)dto.ExtraData["WarrantyMonths_c"]);
+            Assert.Equal("WEST", (string)dto.ExtraData["Region_c"]);
+        }
+
+        [Fact]
+        public void ExtraData_RoundTrip_PreservesEntries()
+        {
+            var original = new ExtraDataDto
+            {
+                Category = "INVENTORY",
+                ItemID = "WIDGET-001",
+                Name = "Standard widget",
+                ExtraData = new Dictionary<string, JToken>
+                {
+                    ["WarrantyMonths_c"] = 12,
+                    ["Region_c"] = "WEST",
+                    ["IsKitParent_c"] = true
+                }
+            };
+
+            var mapping = UDTableMapping<ExtraDataDto>.Get();
+            var row = mapping.ToUDRow(original);
+            var restored = mapping.FromUDRow(row);
+
+            Assert.NotNull(restored.ExtraData);
+            Assert.Equal(3, restored.ExtraData.Count);
+            Assert.Equal(12, (int)restored.ExtraData["WarrantyMonths_c"]);
+            Assert.Equal("WEST", (string)restored.ExtraData["Region_c"]);
+            Assert.True((bool)restored.ExtraData["IsKitParent_c"]);
+        }
+
+        [Fact]
+        public void ExtraData_AbsentFromDto_UnmodeledColumnsAreDiscarded()
+        {
+            // Existing DTOs without an ExtraData property continue to
+            // discard unmodeled columns silently. The data remains
+            // accessible via the raw UDRow but is not projected onto T.
+            var row = new UDRow
+            {
+                Key1 = "INVENTORY",
+                Key2 = "WIDGET-001",
+                ShortChar01 = "Standard widget",
+                ExtraData = new Dictionary<string, JToken>
+                {
+                    ["UntypedCustom_c"] = "lost on projection"
+                }
+            };
+
+            // ValidDto has no ExtraData property — should still project
+            // cleanly without errors, just missing the _c data.
+            var dto = UDTableMapping<ValidDto>.Get().FromUDRow(row);
+
+            Assert.Equal("INVENTORY", dto.Category);
+            Assert.Equal("WIDGET-001", dto.OrderNum);
+            Assert.Equal("Standard widget", dto.CustomerName);
+            // ValidDto has no ExtraData — nothing to check beyond "no throw".
+        }
+
+        [Fact]
+        public void ExtraData_WrongType_FailsValidation()
+        {
+            // [JsonExtensionData] on IDictionary<string, object> is rejected.
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => UDTableMapping<WrongExtraDataTypeDto>.Get());
+
+            Assert.Contains("JsonExtensionData", ex.Message);
+            Assert.Contains("Extras", ex.Message);
+        }
+
+        [Fact]
+        public void ExtraData_TwoExtensionProperties_FailValidation()
+        {
+            // Newtonsoft itself errors when a type has multiple
+            // [JsonExtensionData] properties; the mapper matches.
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => UDTableMapping<TwoExtensionPropertiesDto>.Get());
+
+            Assert.Contains("First", ex.Message);
+            Assert.Contains("Second", ex.Message);
         }
     }
 }
