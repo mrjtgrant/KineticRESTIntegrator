@@ -869,6 +869,75 @@ enforce it, and the convention is yours to follow or ignore. If you
 have a different reserved use for `ShortChar20`, map it accordingly —
 the framework's recommendations are documentation, not constraints.
 
+### ExtraData on typed DTOs — install-specific columns
+
+Epicor installations often add custom columns (the `_c` suffix convention)
+to UD tables. The standard Keri DTOs can't model these — `_c` columns are
+specific to one installation by definition — so the library carries them
+through transparently using a `[JsonExtensionData]` dictionary, the same
+pattern every Epicor-table DTO (`Customer`, `Part`, `OrderHed`, `UDRow`,
+etc.) already uses.
+
+To round-trip `_c` columns through your typed UD-table DTO, add an
+`ExtraData` property to the class:
+
+```csharp
+public class OrderTracking
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string OrderNum { get; set; }
+    [UDTableColumn("ShortChar01")]  public string CustomerName { get; set; }
+    // ...
+
+    [JsonExtensionData]
+    public IDictionary<string, JToken> ExtraData { get; set; }
+}
+
+// Save: install-specific custom columns ride along with the typed save.
+var dto = new OrderTracking
+{
+    Category = "ORDER_TRACKING",
+    OrderNum = "12345",
+    CustomerName = "Acme Corp",
+    ExtraData = new Dictionary<string, JToken>
+    {
+        ["Region_c"]         = "WEST",
+        ["WarrantyMonths_c"] = 12,
+        ["IsKitParent_c"]    = true
+    }
+};
+await client.UDTable.SaveAsync("UD22", dto);
+
+// Read: the same columns come back through ExtraData on the projected DTO.
+var read = await client.UDTable.GetByIDAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
+if (read.IsSuccess && read.Value != null)
+{
+    string region = (string)read.Value.ExtraData["Region_c"];
+    int months    = (int)read.Value.ExtraData["WarrantyMonths_c"];
+}
+```
+
+Primitive values (`string`, `int`, `bool`, `DateTime`, `decimal`, etc.)
+assign and read with no ceremony — `JToken` defines implicit conversions
+for the common cases. Arrays and nested objects need `JToken.FromObject(...)`
+on the way in.
+
+A few rules the mapper enforces on `ExtraData`:
+
+- **At most one `[JsonExtensionData]` property per DTO.** Newtonsoft.Json
+  itself errors on multiple; the mapper matches.
+- **The property must be `IDictionary<string, JToken>`** (or the concrete
+  `Dictionary<string, JToken>`) with a public getter and setter.
+- **Keys that match standard UD-column names are filtered out on save.**
+  If you put `"ShortChar01"` in `ExtraData`, the typed mapping for
+  ShortChar01 wins and the dictionary entry is dropped — no duplicate
+  JSON properties are emitted to Epicor.
+
+The feature is opt-in. DTOs without an `[JsonExtensionData]` property
+continue to discard unmodeled columns on the typed projection; the data
+remains accessible through `result.RawResponse` for callers who need it.
+
 ### When to reach for the typed API vs raw `UDRow`
 
 | Use case | Preferred shape |
@@ -876,7 +945,7 @@ the framework's recommendations are documentation, not constraints.
 | One-off script, reading rows whose schema you don't control | Raw `UDRow` + `ToMappedValues()` if the row carries a legend |
 | Application code where one UD-table use case has a stable shape | Typed DTO + `SaveAsync<T>` / `GetByIDAsync<T>` / `QueryAsync<T>` |
 | Inspecting attachments / extension tables in the `GetByID` response | Either API — read `result.RawResponse` for the full multi-table dataset |
-| Custom `_c` columns | Either API — `UDRow.ExtraData` captures them; typed DTOs flow them through the same way once an `ExtraData` property is added to your DTO (planned for a future release) |
+| Custom `_c` columns | Either API — `UDRow.ExtraData` captures them; typed DTOs flow them through the same way when an `ExtraData` property is added to the DTO (see below) |
 
 The two APIs share the underlying raw `UDTableSvc` methods, so you can
 mix them in the same application without ceremony — use whichever fits
