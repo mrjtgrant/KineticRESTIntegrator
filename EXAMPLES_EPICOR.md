@@ -372,7 +372,7 @@ using (var udTable = new UDTableSvc(session))
     foreach (var p in parts.Value)
     {
         var meta = await udTable.GetByIDAsync(
-            new UDRow { Key1 = "PART_META", Key2 = p.PartNum }, "UD22");
+            "PART_META", p.PartNum, "", "", "", "UD22");
         // ...
     }
 }
@@ -451,7 +451,7 @@ using `Value`, the same contract as every other service call.
 ### Reading UD rows back
 
 `QueryAsync` returns rows from a UD table as typed `UDRow` objects;
-`GetByIDAsync` returns the single row matching a given row's full `Key1`–`Key5`:
+`GetByIDAsync` returns the single row matching the five key values you pass (`Key1`–`Key5`):
 
 ```csharp
 var rows = await client.UDTable.QueryAsync(top: 25);
@@ -507,7 +507,8 @@ at the call site.
 ```csharp
 // A single row — the table is required and explicit.
 // UDXX is a placeholder — replace it with your real UD table name.
-var one = await client.UDTable.DeleteByIDAsync(row, "UDXX");
+var one = await client.UDTable.DeleteByIDAsync(
+    row.Key1, row.Key2, row.Key3, row.Key4, row.Key5, "UDXX");
 
 // Every row of a test table — pre-prod / POC use only.
 // UDXX is a placeholder — replace it with your real UD table name.
@@ -533,8 +534,9 @@ them are enforced by the framework; they are strong suggestions, and the
 single UD table hold many distinct logical row types. `Key2`–`Key5` then
 identify the specific record within that category.
 
-`UDRow.Key1` defaults to `"ROW_INDICATOR"` purely to make the convention
-visible — replace it with your own category. Examples: `"PRINTED_PACKSLIP_LOG"`,
+`UDRow.Key1` carries no default — it stays `null` until you set it, so a
+row without a category reads as an explicit `null` rather than a silently
+invented value. Set it to your own category. Examples: `"PRINTED_PACKSLIP_LOG"`,
 `"WEBSITE_INQUIRY"`, `"REPAIR_INTAKE"`. Reading code can then branch on `Key1`
 to know how to interpret the rest of the row.
 
@@ -651,20 +653,24 @@ Map type mismatches, duplicate columns, and unknown column names all
 fail at the first use of the DTO type with `InvalidOperationException`
 listing every error in one message — fix all of them in one pass.
 
-### The three wrappers on `UDTableSvc`
+### The four wrappers on `UDTableSvc`
 
 | Method | Returns | Purpose |
 |---|---|---|
 | `SaveAsync<T>(udTable, row)` | `OperationResult<JObject>` | Map `row` to a `UDRow` and upsert it. Same shape as every other Keri `UpdateAsync`. |
 | `GetByIDAsync<T>(keys, udTable)` | `OperationResult<T>` | Pass a `T` with key properties populated; receive a `T` reconstructed from the row. |
 | `QueryAsync<T>(filter, udTable, top)` | `OperationResult<List<T>>` | Pass a `T` with key properties populated (or `null`); receive matching rows projected to `T`. |
+| `DeleteByIDAsync<T>(keys, udTable)` | `OperationResult<JObject>` | Pass a `T` with key properties populated; delete the matching row. `udTable` is required — there is no `UDTableDefault` fallback for a destructive call. |
 
 `SaveAsync` and `QueryAsync` are direct typed equivalents of the
 underlying raw methods. `GetByIDAsync<T>` takes a `T` (rather than
 separate `key1`, `key2`, ... arguments) so the property names on your
 DTO carry the meaning of each key — calling
 `GetByIDAsync<OrderTracking>(new OrderTracking { Category = "X", OrderNum = "1" }, ...)`
-reads as the lookup it is.
+reads as the lookup it is. `DeleteByIDAsync<T>` works the same way as
+`GetByIDAsync<T>` — it reads the key properties off the `T` to identify
+the row — but, being destructive, it requires `udTable` explicitly with
+no `UDTableDefault` fallback.
 
 ### Key conventions for typed DTOs
 
@@ -691,11 +697,11 @@ carry no default value, so a row that doesn't set them is rejected by
 Epicor.
 
 **`Key3`, `Key4`, and `Key5` are optional.** If your DTO doesn't map
-them, `UDRow.Key3`, `Key4`, and `Key5` default to empty strings —
-which is Epicor's native "no value at this grain level" convention.
-If your DTO *does* map one of them, you become responsible for setting
-that property on every saved row; a null value will be written through
-to the saved row.
+them, `UDRow.Key3`, `Key4`, and `Key5` stay `null` on the type and are
+coalesced to empty strings on the wire — Epicor's native "no value at
+this grain level" form. If your DTO *does* map one of them, you become
+responsible for setting that property on every saved row; an unset
+mapped property is sent as an empty string, the same as an unmapped key.
 
 Key1 by convention identifies the row's category — "the kind of thing
 this row is." Examples: `"ORDER_TRACKING"`, `"WEBSITE_INQUIRY"`,
@@ -828,9 +834,10 @@ return order; passing `Year = "2026"` in the filter narrows to that
 specific year.
 
 Note that once `Key3` is mapped to a property, you own it: leaving
-`Year` unset will write `null` into the saved row's `Key3`, which
-Epicor may reject or store as null depending on the table. Document
-the expectation on your DTO.
+`Year` unset sends an empty string to the saved row's `Key3` — the
+write path coalesces the unset `null` to `""` on the wire — so the row
+lands at the coarser grain rather than failing. Set `Year` deliberately
+when the finer grain matters, and document the expectation on your DTO.
 
 #### `WorkLog` — a reserved column put to work
 
