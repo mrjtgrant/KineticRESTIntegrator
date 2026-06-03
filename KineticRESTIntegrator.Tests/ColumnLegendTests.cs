@@ -8,8 +8,8 @@ namespace KineticRESTIntegrator.Tests
     /// <summary>
     /// Tests for the UD column-legend feature — Keri's convention for letting
     /// a UD row carry its own "column N means X" map in <c>Character10</c>.
-    /// Covers <see cref="UDXSvc.ParseColumnLegend"/>,
-    /// <see cref="UDXSvc.BuildColumnLegend"/>, and
+    /// Covers <see cref="UDTableSvc.ParseColumnLegend"/>,
+    /// <see cref="UDTableSvc.BuildColumnLegend"/>, and
     /// <see cref="UDRow.ToMappedValues"/>. All pure, offline, no server.
     /// </summary>
     public class ColumnLegendTests
@@ -19,7 +19,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Parse_SinglePair_YieldsOneEntry()
         {
-            var map = UDXSvc.ParseColumnLegend("ShortChar02:PartNum");
+            var map = UDTableSvc.ParseColumnLegend("ShortChar02:PartNum");
 
             Assert.Single(map);
             Assert.Equal("PartNum", map["ShortChar02"]);
@@ -28,7 +28,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Parse_MultiplePairs_YieldsAllEntries()
         {
-            var map = UDXSvc.ParseColumnLegend(
+            var map = UDTableSvc.ParseColumnLegend(
                 "ShortChar02:PartNum|Number05:AvailableQty|CheckBox01:IsActive");
 
             Assert.Equal(3, map.Count);
@@ -40,10 +40,10 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Parse_NullOrEmpty_YieldsEmptyMapNotNull()
         {
-            Assert.NotNull(UDXSvc.ParseColumnLegend(null));
-            Assert.Empty(UDXSvc.ParseColumnLegend(null));
-            Assert.Empty(UDXSvc.ParseColumnLegend(""));
-            Assert.Empty(UDXSvc.ParseColumnLegend("   "));
+            Assert.NotNull(UDTableSvc.ParseColumnLegend(null));
+            Assert.Empty(UDTableSvc.ParseColumnLegend(null));
+            Assert.Empty(UDTableSvc.ParseColumnLegend(""));
+            Assert.Empty(UDTableSvc.ParseColumnLegend("   "));
         }
 
         [Fact]
@@ -51,7 +51,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // "GarbageEntry" has no ':' — it is malformed and skipped, but the
             // valid entry beside it still parses.
-            var map = UDXSvc.ParseColumnLegend("GarbageEntry|ShortChar02:PartNum");
+            var map = UDTableSvc.ParseColumnLegend("GarbageEntry|ShortChar02:PartNum");
 
             Assert.Single(map);
             Assert.Equal("PartNum", map["ShortChar02"]);
@@ -60,7 +60,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Parse_EntryWithEmptyColumnName_IsSkipped()
         {
-            var map = UDXSvc.ParseColumnLegend(":orphanMeaning|ShortChar02:PartNum");
+            var map = UDTableSvc.ParseColumnLegend(":orphanMeaning|ShortChar02:PartNum");
 
             Assert.Single(map);
             Assert.False(map.ContainsKey(""));
@@ -69,7 +69,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Parse_DuplicateColumn_LastWins()
         {
-            var map = UDXSvc.ParseColumnLegend("Number01:First|Number01:Second");
+            var map = UDTableSvc.ParseColumnLegend("Number01:First|Number01:Second");
 
             Assert.Single(map);
             Assert.Equal("Second", map["Number01"]);
@@ -80,7 +80,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // The meaning itself may contain ':' — only the first ':' in a
             // pair splits column from meaning.
-            var map = UDXSvc.ParseColumnLegend("ShortChar03:Time:HH:MM");
+            var map = UDTableSvc.ParseColumnLegend("ShortChar03:Time:HH:MM");
 
             Assert.Single(map);
             Assert.Equal("Time:HH:MM", map["ShortChar03"]);
@@ -89,7 +89,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Parse_TrimsWhitespaceAroundColumnAndMeaning()
         {
-            var map = UDXSvc.ParseColumnLegend("  ShortChar02  :  PartNum  ");
+            var map = UDTableSvc.ParseColumnLegend("  ShortChar02  :  PartNum  ");
 
             Assert.Equal("PartNum", map["ShortChar02"]);
         }
@@ -101,7 +101,7 @@ namespace KineticRESTIntegrator.Tests
         {
             var legend = new Dictionary<string, string> { ["ShortChar02"] = "PartNum" };
 
-            string s = UDXSvc.BuildColumnLegend(legend);
+            string s = UDTableSvc.BuildColumnLegend(legend);
 
             Assert.Equal("ShortChar02:PartNum", s);
         }
@@ -117,7 +117,7 @@ namespace KineticRESTIntegrator.Tests
                 ["Number05"] = "AvailableQty"
             };
 
-            string s = UDXSvc.BuildColumnLegend(legend);
+            string s = UDTableSvc.BuildColumnLegend(legend);
 
             Assert.Equal("ShortChar02:PartNum|Number05:AvailableQty", s);
         }
@@ -125,8 +125,8 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Build_NullOrEmpty_ProducesEmptyString()
         {
-            Assert.Equal(string.Empty, UDXSvc.BuildColumnLegend(null));
-            Assert.Equal(string.Empty, UDXSvc.BuildColumnLegend(new Dictionary<string, string>()));
+            Assert.Equal(string.Empty, UDTableSvc.BuildColumnLegend(null));
+            Assert.Equal(string.Empty, UDTableSvc.BuildColumnLegend(new Dictionary<string, string>()));
         }
 
         [Fact]
@@ -138,7 +138,7 @@ namespace KineticRESTIntegrator.Tests
                 ["Number01"] = "keepMe"
             };
 
-            string s = UDXSvc.BuildColumnLegend(legend);
+            string s = UDTableSvc.BuildColumnLegend(legend);
 
             Assert.Equal("Number01:keepMe", s);
         }
@@ -148,7 +148,7 @@ namespace KineticRESTIntegrator.Tests
         {
             var legend = new Dictionary<string, string> { ["Number01"] = null };
 
-            string s = UDXSvc.BuildColumnLegend(legend);
+            string s = UDTableSvc.BuildColumnLegend(legend);
 
             Assert.Equal("Number01:", s);
         }
@@ -166,8 +166,8 @@ namespace KineticRESTIntegrator.Tests
                 ["CheckBox01"] = "Posted"
             };
 
-            string built = UDXSvc.BuildColumnLegend(original);
-            var parsed = UDXSvc.ParseColumnLegend(built);
+            string built = UDTableSvc.BuildColumnLegend(original);
+            var parsed = UDTableSvc.ParseColumnLegend(built);
 
             Assert.Equal(original.Count, parsed.Count);
             foreach (var kv in original)

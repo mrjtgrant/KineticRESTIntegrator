@@ -36,7 +36,7 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**v0.1.1 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, fifty-two unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
+**v0.2.0 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, one hundred and eight unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
 
 ---
 
@@ -61,7 +61,7 @@ The one place where target framework matters internally is `FileHandling.Emailer
 | `FileHandling` | `FileHandling.dll` | Excel generation (ClosedXML), CSV writer, and SMTP email sender. |
 | `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
-| `KineticRESTIntegrator.Tests` | xUnit test project | 52 offline unit tests covering the framework's deterministic surface. |
+| `KineticRESTIntegrator.Tests` | xUnit test project | 108 offline unit tests covering the framework's deterministic surface. |
 
 ---
 
@@ -223,7 +223,7 @@ using (var client = new EpicorClient("pilot"))      // env override; null/omitte
 }
 ```
 
-Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDX`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Receipt`, `Quote`, `SalesOrder`.
+Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDTable`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Receipt`, `Quote`, `SalesOrder`.
 
 Direct service construction (`new BAQSvc(...)`, etc.) is the underlying pattern — `EpicorClient` is a convenience wrapper over it, not a replacement. Each service is its own complete, disposable unit: open a `using` block and call as many methods on it as the workflow needs, or stack `using` blocks across several services when you want explicit control over scope. Reach for `EpicorClient` when an orchestrator touches several services together and the stack-of-`using`-blocks shape is getting repetitive; reach for direct construction otherwise. See [EXAMPLES_EPICOR.md — Using a single service directly](EXAMPLES_EPICOR.md#2-using-a-single-service-directly) for the patterns.
 
@@ -297,6 +297,42 @@ The user-facing entry point for any multi-step operation is the **orchestrator**
 
 This split keeps the public API surface small and consistent: every public method either returns data, requests a template, or persists a write — there are no half-step operations sitting next to whole-step ones to confuse new readers.
 
+### Typed UD-table access
+
+`UDTableSvc` exposes generic UD-table CRUD through the `UDRow` DTO, which has slots for every standard UD column: five keys, ten `Character*` (1000 chars each), twenty `ShortChar*` (100 chars each), twenty `Number*` (`double`), twenty `Date*`, and twenty `CheckBox*`. That generic shape works, but applications that use a UD table for typed data quickly accumulate "Key1 is the row category, ShortChar01 is customer name, Number01 is total value" bookkeeping that's easy to drift.
+
+The typed-DTO API lets you declare that mapping once on a class and call the table with your own type:
+
+```csharp
+public class OrderTracking
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string OrderNum { get; set; }
+    [UDTableColumn("ShortChar01")]  public string CustomerName { get; set; }
+    [UDTableColumn("Number01")]     public decimal TotalValue { get; set; }
+    [UDTableColumn("Date01")]       public DateTime SubmittedDate { get; set; }
+    [UDTableColumn("CheckBox01")]   public bool IsExpedited { get; set; }
+}
+
+// Save:
+var save = await client.UDTable.SaveAsync("UD22",
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345",
+                        CustomerName = "Acme Corp", TotalValue = 15000.50m,
+                        SubmittedDate = DateTime.Now });
+
+// Fetch one row by its full keys:
+var one = await client.UDTable.GetByIDAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
+
+// Fetch a filtered list (populated key columns become the OData $filter):
+var byCategory = await client.UDTable.QueryAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING" }, "UD22", top: 100);
+```
+
+The mapper validates the DTO on first use (column names exist on `UDRow`, types are compatible with their column family, no two properties map to the same column, and `Key1` + `Key2` are mapped — Epicor identifies UD rows by the composite of all five keys, and these two carry no default). String overflows throw `UDTableColumnCapacityException` *before* the save reaches the wire. When the DTO doesn't map `Character10`, the framework auto-emits a column-legend into it describing the mapping — useful when the row is later opened in Epicor's UI.
+
+For the full conventions — when to use which column family, the 2^5 key grain levels, reserved columns, and four progressively complete worked examples — see [EXAMPLES_EPICOR.md — Typed UD-table access](EXAMPLES_EPICOR.md#typed-ud-table-access).
+
 ### Practical Examples
 
 The fastest way to see Keri working is `EpicorSvcDemo` — an end-to-end sample where a single run exercises the whole library: it executes a BAQ, turns the result into a formatted Excel workbook (using a column header map to control which fields appear and how they're labeled), and emails it as an attachment. Run this first to confirm your configuration works and to see how the pieces fit together:
@@ -305,13 +341,13 @@ The fastest way to see Keri working is `EpicorSvcDemo` — an end-to-end sample 
 dotnet run --project EpicorSvcDemo
 ```
 
-For per-service detail, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDX, SalesOrder, MenuTree):
+For per-service detail, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDTable, SalesOrder, MenuTree):
 
 ```
 dotnet run --project EpicorSvcPOCs
 ```
 
-Reads run safely against your configured environment. Write operations (UDX upsert, SalesOrder create) are **gated** — they dry-run by default, printing the exact payload they *would* send. To arm writes for a session:
+Reads run safely against your configured environment. Write operations (UDTable upsert, SalesOrder create) are **gated** — they dry-run by default, printing the exact payload they *would* send. To arm writes for a session:
 
 ```
 set KERI_POC_ALLOW_WRITES=true
@@ -402,7 +438,7 @@ KineticRESTIntegrator/
 │   ├── Purchasing/                  POSvc, ReceiptSvc
 │   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
 │   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
-│   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDXSvc, UserCodesSvc
+│   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDTableSvc, UserCodesSvc
 │   ├── AR/                          PayMethodSvc, PaymentEntrySvc
 │   └── EpicorSvcs.csproj
 │       Services with multi-step operations have a companion
@@ -425,7 +461,7 @@ KineticRESTIntegrator/
 │   ├── Program.cs
 │   ├── PocConfig.cs                 (the write-gate)
 │   ├── PocBanner.cs
-│   ├── UserCodesPoc.cs, PartPoc.cs, UdxPoc.cs, SalesOrderPoc.cs, MenuTreePoc.cs
+│   ├── UserCodesPoc.cs, PartPoc.cs, UDTablePoc.cs, SalesOrderPoc.cs, MenuTreePoc.cs
 │   └── EpicorSvcPOCs.csproj
 │
 └── KineticRESTIntegrator.Tests/     xUnit unit tests (offline, deterministic)
@@ -459,7 +495,7 @@ The library has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDXSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 52 tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 52 tests, all green.
 
 Test Explorer in Visual Studio also discovers and runs them.
 

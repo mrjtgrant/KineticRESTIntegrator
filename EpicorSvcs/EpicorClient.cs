@@ -52,7 +52,7 @@ namespace EpicorSvcs
         private MenuSvc _menu;
         private UserCodesSvc _userCodes;
         private GenxDataSvc _genxData;
-        private UDXSvc _udx;
+        private UDTableSvc _udTable;
         private ProjectSvc _project;
         private CustomerSvc _customer;
         private VendorSvc _vendor;
@@ -148,10 +148,10 @@ namespace EpicorSvcs
             get { ThrowIfDisposed(); return _genxData ?? (_genxData = new GenxDataSvc(_session)); }
         }
 
-        /// <summary>Generic UD-table service (UD01–UD30, UDcodes, etc.).</summary>
-        public UDXSvc UDX
+        /// <summary>Generic UD-table service — read and write rows across any UD table (UD01–UD30).</summary>
+        public UDTableSvc UDTable
         {
-            get { ThrowIfDisposed(); return _udx ?? (_udx = new UDXSvc(_session)); }
+            get { ThrowIfDisposed(); return _udTable ?? (_udTable = new UDTableSvc(_session)); }
         }
 
         /// <summary>Project header lookup and creation.</summary>
@@ -316,7 +316,7 @@ namespace EpicorSvcs
             _menu?.Dispose();
             _userCodes?.Dispose();
             _genxData?.Dispose();
-            _udx?.Dispose();
+            _udTable?.Dispose();
             _project?.Dispose();
             _customer?.Dispose();
             _vendor?.Dispose();

@@ -19,7 +19,7 @@ namespace EpicorSvcs
     /// for UD-column values. Only the columns a given <see cref="UDRow"/>
     /// actually populates are sent or selected.
     /// </remarks>
-    public class UDXSvc : EpicorSvc
+    public partial class UDTableSvc : EpicorSvc
     {
         /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
         /// <param name="env">
@@ -27,11 +27,11 @@ namespace EpicorSvcs
         /// <c>DefaultEnvironment</c> from config. Typical values:
         /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
         /// </param>
-        public UDXSvc(string env = null) : base(env) { }
+        public UDTableSvc(string env = null) : base(env) { }
 
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
-        public UDXSvc(EpicorRESTSessionKey env) : base(env) { }
+        public UDTableSvc(EpicorRESTSessionKey env) : base(env) { }
 
         /// <summary>
         /// The UD table every method on this service targets when its
@@ -250,13 +250,45 @@ namespace EpicorSvcs
         // ---------------------------------------------------------------
 
         /// <summary>
-        /// Retrieves all rows of a UD table. Calls
-        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor.
+        /// Queries rows from a UD table. Calls
+        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor — the OData
+        /// entity-set read.
         /// </summary>
-        /// <param name="udrow">
-        /// Optional template row. When supplied, the OData <c>$select</c> is
-        /// limited to the UD columns this row populates; when null, all
-        /// columns are returned.
+        /// <remarks>
+        /// <para>
+        /// When a non-null <paramref name="filter"/> is supplied, it drives
+        /// both the OData <c>$select</c> projection and the <c>$filter</c>
+        /// row filter:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item><description>
+        ///   <b>Column projection (<c>$select</c>):</b> only the UD columns
+        ///   the filter row populates are requested. To get all columns,
+        ///   pass <c>null</c> (the default).
+        ///   </description></item>
+        ///   <item><description>
+        ///   <b>Row filter (<c>$filter</c>):</b> populated key columns
+        ///   (<c>Key1</c>–<c>Key5</c>) become filter clauses joined with
+        ///   <c>and</c>. An unset (null or empty) key contributes no filter
+        ///   on that level — so passing a filter row with only
+        ///   <c>Key1 = "X"</c> returns every row whose <c>Key1</c> equals
+        ///   <c>"X"</c> regardless of the other keys. Non-key columns are
+        ///   <i>not</i> used for filtering — the populated-as-filter pattern
+        ///   is intentionally limited to keys to avoid ambiguity with
+        ///   type-default values (is <c>Number01 = 0</c> a filter or an
+        ///   unset default?).
+        ///   </description></item>
+        /// </list>
+        /// <para>
+        /// Use <see cref="GetByIDAsync"/> for an exact single-row lookup by
+        /// all five keys.
+        /// </para>
+        /// </remarks>
+        /// <param name="filter">
+        /// Optional filter/projection template. When non-null, populated key
+        /// columns drive <c>$filter</c> and populated UD-column properties
+        /// drive <c>$select</c>. Pass <c>null</c> to fetch all rows with
+        /// all columns.
         /// </param>
         /// <param name="UDTable">
         /// The target UD table. When null (the default),
@@ -268,8 +300,8 @@ namespace EpicorSvcs
         /// An <see cref="OperationResult{T}"/> wrapping the list of
         /// <see cref="UDRow"/> rows.
         /// </returns>
-        public async Task<OperationResult<List<UDRow>>> GetAllAsync(
-            UDRow udrow = null,
+        public async Task<OperationResult<List<UDRow>>> QueryAsync(
+            UDRow filter = null,
             string UDTable = null,
             int top = 5000,
             CancellationToken ct = default)
@@ -278,9 +310,10 @@ namespace EpicorSvcs
             string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
             svc += "?$top=" + top;
 
-            if (udrow != null)
+            if (filter != null)
             {
-                JObject lineObject = JObject.FromObject(udrow);
+                // $select: limit response columns to those the filter row populates.
+                JObject lineObject = JObject.FromObject(filter);
                 List<string> selectedcols = new List<string>();
                 foreach (var prop in lineObject.Properties())
                 {
@@ -290,6 +323,19 @@ namespace EpicorSvcs
                 }
                 if (selectedcols.Count > 0)
                     svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
+
+                // $filter: clauses for any populated string keys (Key1–Key5).
+                // Null or empty values mean "no filter on this level" — letting
+                // callers narrow by Key1 only, or Key1+Key2, etc., without
+                // specifying trailing empty keys.
+                List<string> filterClauses = new List<string>();
+                if (!string.IsNullOrEmpty(filter.Key1)) filterClauses.Add("Key1 eq '" + filter.Key1 + "'");
+                if (!string.IsNullOrEmpty(filter.Key2)) filterClauses.Add("Key2 eq '" + filter.Key2 + "'");
+                if (!string.IsNullOrEmpty(filter.Key3)) filterClauses.Add("Key3 eq '" + filter.Key3 + "'");
+                if (!string.IsNullOrEmpty(filter.Key4)) filterClauses.Add("Key4 eq '" + filter.Key4 + "'");
+                if (!string.IsNullOrEmpty(filter.Key5)) filterClauses.Add("Key5 eq '" + filter.Key5 + "'");
+                if (filterClauses.Count > 0)
+                    svc += "&$filter=" + UrlEncode(string.Join(" and ", filterClauses));
             }
 
             JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
@@ -297,12 +343,28 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Retrieves the UD-table rows matching a row's Key1–Key5. Calls
-        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor with a key filter.
+        /// Retrieves a single UD-table row by its full Key1–Key5. Calls
+        /// <c>Ice.BO.{UDTable}Svc/GetByID</c> in Epicor — the BO action,
+        /// not an OData filtered read.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// All five keys on <paramref name="udrow"/> are sent as query
+        /// parameters; an unset key contributes an empty value. The response
+        /// is a multi-table dataset containing the UD row and its related
+        /// tables (e.g. <c>{UDTable}Attch</c> for attachments, plus extension
+        /// tables); this method extracts the UD-row portion and returns it
+        /// as a <see cref="UDRow"/>. To access the full dataset (attachments,
+        /// extension tables, etc.), read <c>RawResponse</c> on the returned
+        /// <see cref="OperationResult{T}"/>.
+        /// </para>
+        /// <para>
+        /// For row lists or partial-key queries, use <see cref="QueryAsync"/>
+        /// — that's the OData entity-set read.
+        /// </para>
+        /// </remarks>
         /// <param name="udrow">
-        /// The row whose Key1–Key5 form the filter, and whose populated UD
-        /// columns determine the OData <c>$select</c>.
+        /// The row whose Key1–Key5 identify which row to fetch.
         /// </param>
         /// <param name="UDTable">
         /// The target UD table. When null (the default),
@@ -310,44 +372,34 @@ namespace EpicorSvcs
         /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the matching
-        /// <see cref="UDRow"/> rows.
+        /// An <see cref="OperationResult{T}"/> wrapping the single
+        /// <see cref="UDRow"/>, or a null value when no row matches.
         /// </returns>
-        public async Task<OperationResult<List<UDRow>>> GetByIDAsync(
+        public async Task<OperationResult<UDRow>> GetByIDAsync(
             UDRow udrow,
             string UDTable = null,
             CancellationToken ct = default)
         {
             string table = ResolveTable(UDTable);
-            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
-            JObject lineObject = JObject.FromObject(udrow);
-
-            // Only the UD columns this row actually populates.
-            List<string> selectedcols = new List<string>();
-            foreach (var prop in lineObject.Properties())
-            {
-                if (nonColumnProperties.Contains(prop.Name))
-                    continue;
-                selectedcols.Add(prop.Name);
-            }
-
-            // Build the key filter as a List<string> joined by " and ".
-            List<string> filterItems = new List<string>
-            {
-                String.Format("Key1 eq '{0}'", udrow.Key1),
-                String.Format("Key2 eq '{0}'", udrow.Key2),
-                String.Format("Key3 eq '{0}'", udrow.Key3),
-                String.Format("Key4 eq '{0}'", udrow.Key4),
-                String.Format("Key5 eq '{0}'", udrow.Key5)
-            };
-
-            svc += "?$filter=" + UrlEncode(string.Join(" and ", filterItems));
-
-            if (selectedcols.Count > 0)
-                svc += "&$select=" + UrlEncode(string.Join(",", selectedcols));
+            string svc = String.Format("Ice.BO.{0}Svc/GetByID", table);
+            svc += String.Format("?key1={0}", UrlEncode(udrow.Key1 ?? string.Empty));
+            svc += String.Format("&key2={0}", UrlEncode(udrow.Key2 ?? string.Empty));
+            svc += String.Format("&key3={0}", UrlEncode(udrow.Key3 ?? string.Empty));
+            svc += String.Format("&key4={0}", UrlEncode(udrow.Key4 ?? string.Empty));
+            svc += String.Format("&key5={0}", UrlEncode(udrow.Key5 ?? string.Empty));
 
             JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r.ExtractValueList<UDRow>());
+            return response.ToOperationResult(r =>
+            {
+                // Epicor returns the multi-table dataset under "returnObj":
+                //   { "returnObj": { "{UDTable}": [ { ...row... } ], "{UDTable}Attch": [...], "ExtensionTables": [...] } }
+                // The UD-row portion is what most callers want; attachments and
+                // extension tables remain accessible via RawResponse.
+                JToken rows = r["returnObj"]?[table];
+                if (rows == null || !rows.HasValues)
+                    return null;
+                return rows[0].ToObject<UDRow>();
+            });
         }
 
         /// <summary>
@@ -445,70 +497,85 @@ namespace EpicorSvcs
         }
 
         // ---------------------------------------------------------------
-        // Destructive operations — bulk and single-row delete
+        // Destructive operations — table truncate and single-row delete
         //
         // Separated from the BO action wrappers above because deletes
-        // remove data that may not be recoverable, and DeleteAllAsync in
+        // remove data that may not be recoverable, and TruncateAsync in
         // particular requires explicit opt-in via a named-argument boolean.
         // ---------------------------------------------------------------
 
         /// <summary>
-        /// Deletes every row of a UD table, one row at a time. Calls
-        /// <c>GetAll</c> then <c>DeleteByID</c> for each row.
+        /// Clears every row of a UD table, one row at a time. Calls
+        /// <c>QueryAsync</c> then <c>DeleteByIDAsync</c> for each row.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// This operation is destructive and removes <b>all</b> rows of the
-        /// named table. <paramref name="UDTable"/> is required and must be
-        /// supplied explicitly — unlike the read methods, this method does
-        /// <b>not</b> fall back to <see cref="UDTableDefault"/>. A null, empty,
-        /// or whitespace value throws <see cref="ArgumentException"/> rather
+        /// <b>Intended for pre-production and proof-of-concept work.</b>
+        /// When iterating on a UD table's data shape — running write code,
+        /// inspecting the result, deciding the row layout is wrong, wanting
+        /// a clean slate to try again — this method resets the table to
+        /// empty. It is not appropriate for production tables carrying
+        /// historical data: a UD table that's seen real use should not
+        /// reach for this method.
+        /// </para>
+        /// <para>
+        /// The implementation is a loop of single-row deletes — not a true
+        /// SQL-style truncate. It is non-atomic and can partially complete
+        /// on failure. For the small test-table sizes this method is meant
+        /// for, that's fine; for anything larger, it's a sign the table
+        /// has graduated past the audience this method is designed for.
+        /// </para>
+        /// <para>
+        /// <paramref name="UDTable"/> is required and must be supplied
+        /// explicitly — unlike the read methods, this method does <b>not</b>
+        /// fall back to <see cref="UDTableDefault"/>. A null, empty, or
+        /// whitespace value throws <see cref="ArgumentException"/> rather
         /// than defaulting, so a missing table name fails fast instead of
         /// silently clearing whichever table the default happens to point at.
         /// </para>
         /// <para>
         /// Because clearing an entire table is unrecoverable, the call is
-        /// gated: <paramref name="confirmDeleteAllRows"/> must be explicitly
-        /// set to <c>true</c>, otherwise the method throws
+        /// gated: <paramref name="confirmTruncate"/> must be explicitly set
+        /// to <c>true</c>, otherwise the method throws
         /// <see cref="ArgumentException"/> and deletes nothing. Pass it as a
-        /// named argument — <c>confirmDeleteAllRows: true</c> — so the intent
-        /// is visible at the call site and the operation cannot be invoked by
-        /// reflex or autocomplete.
+        /// named argument — <c>confirmTruncate: true</c> — so the intent
+        /// is visible at the call site and the operation cannot be invoked
+        /// by reflex or autocomplete.
         /// </para>
         /// </remarks>
         /// <param name="UDTable">
-        /// The target UD table whose rows are deleted. Required; must be a
+        /// The target UD table whose rows are cleared. Required; must be a
         /// non-blank table name. There is no default — passing null, empty,
         /// or whitespace throws <see cref="ArgumentException"/>.
         /// </param>
-        /// <param name="confirmDeleteAllRows">
+        /// <param name="confirmTruncate">
         /// Must be <c>true</c> to confirm that every row of
-        /// <paramref name="UDTable"/> should be deleted. Any other value
+        /// <paramref name="UDTable"/> should be cleared. Any other value
         /// throws <see cref="ArgumentException"/> and no rows are touched.
         /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the number of rows
-        /// deleted. Fails if the initial <c>GetAll</c> fails.
+        /// cleared. Fails if the initial <c>QueryAsync</c> fails.
         /// </returns>
         /// <exception cref="ArgumentException">
         /// <paramref name="UDTable"/> is null, empty, or whitespace, or
-        /// <paramref name="confirmDeleteAllRows"/> is not <c>true</c>.
+        /// <paramref name="confirmTruncate"/> is not <c>true</c>.
         /// </exception>
-        public async Task<OperationResult<int>> DeleteAllAsync(
+        public async Task<OperationResult<int>> TruncateAsync(
             string UDTable,
-            bool confirmDeleteAllRows,
+            bool confirmTruncate,
             CancellationToken ct = default)
         {
             string table = ResolveTableForDelete(UDTable, nameof(UDTable));
 
-            if (!confirmDeleteAllRows)
+            if (!confirmTruncate)
                 throw new ArgumentException(
-                    "Deleting all rows of '" + table + "' must be confirmed — " +
-                    "pass confirmDeleteAllRows: true to proceed.",
-                    nameof(confirmDeleteAllRows));
+                    "Truncating '" + table + "' must be confirmed — " +
+                    "pass confirmTruncate: true to proceed.",
+                    nameof(confirmTruncate));
 
-            var all = await GetAllAsync(null, table, 5000, ct).ConfigureAwait(false);
+            var all = await QueryAsync(null, table, 5000, ct).ConfigureAwait(false);
             if (all.IsFailure)
                 return OperationResult<int>.Failure(
                     all.ErrorMessage, all.StatusCode, all.ResourcePath, all.RawResponse);

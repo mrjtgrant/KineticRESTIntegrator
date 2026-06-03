@@ -12,7 +12,7 @@ namespace EpicorSvcPOCs
     /// <para>
     /// <b>The default is OFF.</b> Read-only POCs (UserCodes, Part list) ignore
     /// this flag and always execute against the live server — they just read
-    /// data. Write POCs (UDX upsert, SalesOrder create) check the flag first:
+    /// data. Write POCs (UDTable upsert, SalesOrder create) check the flag first:
     /// when off, they run the entire setup, print the exact payload they
     /// <i>would</i> send and the endpoint they <i>would</i> hit, and stop
     /// before the actual write call.

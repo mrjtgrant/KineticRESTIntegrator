@@ -9,7 +9,7 @@ namespace KineticRESTIntegrator.Tests
     /// Tests for <see cref="UDRow"/> serialization behavior. <see cref="UDRow"/>
     /// is the one DTO in the library that carries <c>[JsonProperty]</c>
     /// attributes — the unset <c>Date</c> columns must drop out of the
-    /// serialized object so <see cref="EpicorSvcs.UDXSvc"/>'s
+    /// serialized object so <see cref="EpicorSvcs.UDTableSvc"/>'s
     /// "which columns did the caller touch" detection keeps working. These
     /// tests pin that behavior down. Pure, offline.
     /// </summary>
@@ -22,7 +22,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // Date01..Date19 are nullable and attributed so that a date the
             // caller never set is ABSENT from the JObject — not present-as-null.
-            // This is what lets UDXSvc tell "untouched" from "set".
+            // This is what lets UDTableSvc tell "untouched" from "set".
             var row = new UDRow();
 
             JObject json = JObject.FromObject(row);
@@ -67,7 +67,7 @@ namespace KineticRESTIntegrator.Tests
         public void StringAndValueColumns_AlwaysSerialize()
         {
             // Only the Date columns carry the attribute. Everything else
-            // serializes normally — UDXSvc handles "untouched" for those by
+            // serializes normally — UDTableSvc handles "untouched" for those by
             // their empty/zero defaults instead.
             var row = new UDRow();
 
@@ -80,17 +80,6 @@ namespace KineticRESTIntegrator.Tests
         }
 
         // -- Reserved-column defaults (the "strong suggestion" conventions) --
-
-        [Fact]
-        public void Key1_DefaultsToRowIndicatorPlaceholder()
-        {
-            // Key1 is the reserved "row category" column. It defaults to a
-            // visible placeholder so the convention is discoverable; callers
-            // are expected to replace it with their own category.
-            var row = new UDRow();
-
-            Assert.Equal("ROW_INDICATOR", row.Key1);
-        }
 
         [Fact]
         public void Date20_DefaultsToApproximatelyNow()
@@ -110,14 +99,24 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void EmptyStringColumns_DefaultToEmptyNotNull()
         {
-            // The string columns default to "" (not null) so callers can
+            // Most string columns default to "" (not null) so callers can
             // append/compare without null checks, and so "untouched" reads
-            // as empty rather than absent.
+            // as empty rather than absent. Key1 and Key2 are the exceptions:
+            // they have no default and come out as null. That asymmetry is
+            // deliberate — Key1 (row category) and Key2 (specific row) are
+            // the two key segments a meaningful row must carry, and an unset
+            // null is a clearer "you forgot to set this" signal than an
+            // accidentally-saved empty string. Key3/4/5 default to "" like
+            // the other string columns.
             var row = new UDRow();
 
+            Assert.Null(row.Key1);
+            Assert.Null(row.Key2);
+            Assert.Equal(string.Empty, row.Key3);
+            Assert.Equal(string.Empty, row.Key4);
+            Assert.Equal(string.Empty, row.Key5);
             Assert.Equal(string.Empty, row.Character01);
             Assert.Equal(string.Empty, row.ShortChar01);
-            Assert.Equal(string.Empty, row.Key3);
         }
 
         // -- Round-trip ------------------------------------------------------

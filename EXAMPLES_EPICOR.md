@@ -19,6 +19,7 @@ calling an Epicor endpoint Keri doesn't wrap, see
 2. [Using a single service directly](#2-using-a-single-service-directly)
 3. [Writing data into Epicor (UD-row upsert)](#3-writing-data-into-epicor-ud-row-upsert)
 4. [UD-row conventions](#4-ud-row-conventions)
+5. [Typed UD-table access](#5-typed-ud-table-access)
 
 ---
 
@@ -79,11 +80,11 @@ multiple calls (`GetByPONumAsync` queries `SalesOrders` for the OrderNum then
 calls `GetByIDAsync` for the full dataset; `GetUDCodeDescriptionAsync` fetches
 a code type and returns one description string).
 
-**One generalization to be aware of: `UDXSvc`.** Epicor has a separate
+**One generalization to be aware of: `UDTableSvc`.** Epicor has a separate
 service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`,
 `Ice.BO.UDCodesSvc`, and so on — 30+ in total). Wrapping each one as its own
 Keri class would be tedious and unhelpful since they share an interface.
-`UDXSvc` instead parameterizes over the table — `client.UDX.GetAllAsync(top: 25, udTable: "UD22")` —
+`UDTableSvc` instead parameterizes over the table — `client.UDTable.QueryAsync(top: 25, udTable: "UD22")` —
 so one Keri class covers the family. The class-matches-Svc-name rule is
 deliberately broken here to keep the surface manageable.
 
@@ -215,8 +216,8 @@ JObject payload = JObject.FromObject(p);
 await part.UpdateAsync(BuildDatasetWith(payload));
 ```
 
-For `UDXSvc` specifically, the same applies — `UDRow.ExtraData` captures custom
-columns on UD tables, and `UpdateAsync`/`GetAllAsync`/`GetByIDAsync` send and
+For `UDTableSvc` specifically, the same applies — `UDRow.ExtraData` captures custom
+columns on UD tables, and `UpdateAsync`/`QueryAsync`/`GetByIDAsync` send and
 select them automatically.
 
 `ExtraData` is for *columns on this row* that the DTO doesn't model.
@@ -362,7 +363,7 @@ using EpicorSvcs.Dtos;
 var session = new EpicorRESTSessionKey { /* ... */ };
 
 using (var part = new PartSvc(session))
-using (var udx  = new UDXSvc(session))
+using (var udTable = new UDTableSvc(session))
 {
     var parts = await part.PartsAsync(
         filters: new List<string> { "NonStock eq false" }, top: 10);
@@ -370,7 +371,7 @@ using (var udx  = new UDXSvc(session))
 
     foreach (var p in parts.Value)
     {
-        var meta = await udx.GetByIDAsync(
+        var meta = await udTable.GetByIDAsync(
             new UDRow { Key1 = "PART_META", Key2 = p.PartNum }, "UD22");
         // ...
     }
@@ -397,10 +398,10 @@ that touches one or two services — direct construction is the simpler shape.
 ## 3. Writing data into Epicor (UD-row upsert)
 
 Most examples in the README read data. This one writes it — pushing a row into
-an Epicor user-defined (UD) table through `UDXSvc`.
+an Epicor user-defined (UD) table through `UDTableSvc`.
 
 The pattern, and the safety habit worth keeping: **build the row, inspect the
-payload, then send.** The `EpicorSvcPOCs` UDX example does exactly this — it
+payload, then send.** The `EpicorSvcPOCs` UDTable example does exactly this — it
 serializes and prints the row it is about to write, and only sends when writes
 are explicitly armed. Mirror that in your own code: a write you can see before
 it leaves is a write you can catch a mistake in.
@@ -413,7 +414,7 @@ using Newtonsoft.Json;
 using (var client = new EpicorClient("pilot"))
 {
     // Choose the target UD table for this service instance.
-    client.UDX.UDTableDefault = "UD22";
+    client.UDTable.UDTableDefault = "UD22";
 
     // Construct the row. Key1-Key5 identify the record; the generic
     // columns (Character/Number/CheckBox/ShortChar/Date) carry the data.
@@ -432,7 +433,7 @@ using (var client = new EpicorClient("pilot"))
 
     // Upsert. UpdateAsync targets Ice.BO.{UDTable}Svc; the table comes
     // from UDTableDefault unless a UDTable argument is passed per call.
-    var result = await client.UDX.UpdateAsync(row);
+    var result = await client.UDTable.UpdateAsync(row);
 
     if (result.IsFailure)
     {
@@ -449,47 +450,71 @@ using `Value`, the same contract as every other service call.
 
 ### Reading UD rows back
 
-`GetAllAsync` returns every row of a table as typed `UDRow` objects;
-`GetByIDAsync` returns the rows matching a given row's `Key1`–`Key5`:
+`QueryAsync` returns rows from a UD table as typed `UDRow` objects;
+`GetByIDAsync` returns the single row matching a given row's full `Key1`–`Key5`:
 
 ```csharp
-var rows = await client.UDX.GetAllAsync(top: 25);
+var rows = await client.UDTable.QueryAsync(top: 25);
 if (rows.IsSuccess)
     foreach (var r in rows.Value)
         Console.WriteLine($"{r.Key1} / {r.Key2}");
 ```
 
-### A note on deletion
+`QueryAsync` accepts an optional filter row that drives both column
+projection and row filtering. Populated key columns (`Key1`–`Key5`) become
+OData `$filter` clauses, joined with `and`; an unset (null or empty) key
+contributes no filter on that level — so you can narrow by `Key1` alone,
+by `Key1` + `Key2`, etc., without specifying trailing empty keys. Non-key
+columns drive `$select` projection only; they are not used for filtering
+(to avoid type-default ambiguity — is `Number01 = 0` a filter or an unset
+default?).
 
-`UDXSvc` also exposes `DeleteByIDAsync` (one row, by its keys) and
-`DeleteAllAsync` (every row of a table). Both are destructive, and a delete
-pointed at the wrong table is an easy and unrecoverable mistake — so the
-methods are built to make that mistake hard. Each requires its target table to
-be named explicitly, and `DeleteAllAsync` additionally requires an explicit
-confirmation flag before it will clear a table. The example below shows the
-safe shape of each call.
+```csharp
+// All rows whose Key1 = "ORDER_TRACKING":
+var byCategory = await client.UDTable.QueryAsync(
+    new UDRow { Key1 = "ORDER_TRACKING" }, "UD22", top: 100);
 
-Unlike the read methods, the delete methods do **not** fall back to
-`UDTableDefault`. The `UDTable` argument is required and must be named on every
-call; passing null, empty, or whitespace throws `ArgumentException` before any
-rows are touched — a missing table name fails fast rather than silently
-deleting from whichever table the default happens to point at.
+// All rows for one specific order:
+var byOrder = await client.UDTable.QueryAsync(
+    new UDRow { Key1 = "ORDER_TRACKING", Key2 = "12345" }, "UD22");
+```
 
-`DeleteAllAsync` carries the extra guard: because it clears an entire table, it
-requires a `confirmDeleteAllRows: true` argument and throws `ArgumentException`
-without it. Name the table, and confirm it, before the call:
+### A note on destructive operations
+
+`UDTableSvc` exposes two destructive methods: `DeleteByIDAsync` for removing
+a single row by its keys, and `TruncateAsync` for clearing every row of a
+table. Each has a distinct audience.
+
+`DeleteByIDAsync` is the everyday single-row delete: same shape as the
+other Keri delete methods, table required, fails fast if pointed at the
+wrong table.
+
+`TruncateAsync` is intended for **pre-production and proof-of-concept work**
+— iterating on a UD table's data shape, clearing junk from test runs,
+resetting between experiments. It is not appropriate for production tables
+carrying historical data. The implementation is a loop of single-row deletes
+(non-atomic; partial failures possible), which is fine at test-table sizes
+but a sign the table has graduated past this method's audience for anything
+larger.
+
+Both methods require their target table to be named explicitly and do
+**not** fall back to `UDTableDefault`. A null, empty, or whitespace table
+name throws `ArgumentException` before any rows are touched.
+`TruncateAsync` additionally requires a `confirmTruncate: true` argument to
+confirm the wipe — passing it as a named argument keeps the intent visible
+at the call site.
 
 ```csharp
 // A single row — the table is required and explicit.
 // UDXX is a placeholder — replace it with your real UD table name.
-var one = await client.UDX.DeleteByIDAsync(row, "UDXX");
+var one = await client.UDTable.DeleteByIDAsync(row, "UDXX");
 
-// Every row of a table — also requires explicit confirmation.
+// Every row of a test table — pre-prod / POC use only.
 // UDXX is a placeholder — replace it with your real UD table name.
-var all = await client.UDX.DeleteAllAsync("UDXX", confirmDeleteAllRows: true);
+var all = await client.UDTable.TruncateAsync("UDXX", confirmTruncate: true);
 
 if (all.IsFailure)
-    Console.WriteLine($"Delete failed: {all.ErrorMessage}");
+    Console.WriteLine($"Truncate failed: {all.ErrorMessage}");
 ```
 
 ---
@@ -520,7 +545,7 @@ means — encoded into `Character10`. The purpose of each column then travels
 with the record, rather than living in documentation elsewhere.
 
 The legend is a `|`-separated list of `column:meaning` pairs. Two static
-helpers on `UDXSvc` build and parse it:
+helpers on `UDTableSvc` build and parse it:
 
 ```csharp
 using System.Collections.Generic;
@@ -534,10 +559,10 @@ var legend = new Dictionary<string, string>
     ["CheckBox01"]  = "WasCounted"
 };
 
-string encoded = UDXSvc.BuildColumnLegend(legend);
+string encoded = UDTableSvc.BuildColumnLegend(legend);
 // "ShortChar01:PartNum|ShortChar02:WarehouseCode|Number01:QtyOnHand|CheckBox01:WasCounted"
 
-Dictionary<string, string> decoded = UDXSvc.ParseColumnLegend(encoded);
+Dictionary<string, string> decoded = UDTableSvc.ParseColumnLegend(encoded);
 ```
 
 Store the encoded string in a row's `Character10`, and a row that carries a
@@ -585,3 +610,343 @@ carry a legend, use `Key1` as a category, or treat the `*20` columns as
 reserved — and any of those columns remains free for another use if your design
 calls for it. Keep the column size limits in mind (`Character` columns hold up
 to 1000 characters, `ShortChar` columns up to 100).
+
+---
+
+## 5. Typed UD-table access
+
+The UD-row examples up to this point work with the generic `UDRow` DTO —
+fine for one-off scripts, awkward for an application that uses a UD table
+heavily. The typed-DTO API lets you define your own class for a specific
+UD-table use case, map its properties to UD columns with attributes, and
+call the table using your own type instead of `UDRow`. Save direction,
+read direction, query — all generic.
+
+This section covers the moving pieces (`[UDTableColumn]`, the three
+typed wrappers, validation, capacity checks, the auto-emitted legend),
+the key conventions you'll want to know about, and four progressively
+complete worked examples.
+
+### The attribute
+
+`[UDTableColumn("ColumnName")]` on a public property tells the typed
+mapper which UD column the property reads from and writes to. The
+column name must match a real property on `UDRow` exactly — `Key1`
+through `Key5`, `Character01` through `Character10`, `ShortChar01`
+through `ShortChar20`, `Number01` through `Number20`, `Date01` through
+`Date20`, or `CheckBox01` through `CheckBox20`.
+
+The property's type must be compatible with the column's family:
+
+| Column family | Valid property types |
+|---|---|
+| `Key1`–`Key5` | `string` |
+| `Character01`–`Character10` | `string` |
+| `ShortChar01`–`ShortChar20` | `string` |
+| `Number01`–`Number20` | `int`, `long`, `float`, `double`, or `decimal` |
+| `Date01`–`Date20` | `DateTime` or `DateTime?` |
+| `CheckBox01`–`CheckBox20` | `bool` |
+
+Map type mismatches, duplicate columns, and unknown column names all
+fail at the first use of the DTO type with `InvalidOperationException`
+listing every error in one message — fix all of them in one pass.
+
+### The three wrappers on `UDTableSvc`
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `SaveAsync<T>(udTable, row)` | `OperationResult<JObject>` | Map `row` to a `UDRow` and upsert it. Same shape as every other Keri `UpdateAsync`. |
+| `GetByIDAsync<T>(keys, udTable)` | `OperationResult<T>` | Pass a `T` with key properties populated; receive a `T` reconstructed from the row. |
+| `QueryAsync<T>(filter, udTable, top)` | `OperationResult<List<T>>` | Pass a `T` with key properties populated (or `null`); receive matching rows projected to `T`. |
+
+`SaveAsync` and `QueryAsync` are direct typed equivalents of the
+underlying raw methods. `GetByIDAsync<T>` takes a `T` (rather than
+separate `key1`, `key2`, ... arguments) so the property names on your
+DTO carry the meaning of each key — calling
+`GetByIDAsync<OrderTracking>(new OrderTracking { Category = "X", OrderNum = "1" }, ...)`
+reads as the lookup it is.
+
+### Key conventions for typed DTOs
+
+Epicor identifies a UD row by the composite of all five keys
+(`Key1` + `Key2` + `Key3` + `Key4` + `Key5`). The five keys give you
+**2⁵ = 32 grain levels** — coarse-to-fine identification you choose for
+your data shape:
+
+- **One key** — `Key1` only. Useful when `Key2`–`Key5` carry no
+  meaning, but every row competes for the same `Key1` value — rare in
+  practice.
+- **Two keys** — `Key1` + `Key2`. The common case: `Key1` identifies
+  the row's *category* (a row indicator), `Key2` identifies the
+  *specific instance* within that category.
+- **Three or more keys** — adds finer-grained dimensions. A natural
+  shape is `Key1 = "category", Key2 = "instance", Key3 = "year"` for
+  rows that recycle the same instance ID across years.
+- **All five keys** — when uniqueness needs all five dimensions.
+
+**The framework requires `Key1` and `Key2` to be mapped on every typed
+DTO.** A DTO without one or both fails validation at first use. The
+reasoning is upstream of typed DTOs: `UDRow.Key1` and `UDRow.Key2`
+carry no default value, so a row that doesn't set them is rejected by
+Epicor.
+
+**`Key3`, `Key4`, and `Key5` are optional.** If your DTO doesn't map
+them, `UDRow.Key3`, `Key4`, and `Key5` default to empty strings —
+which is Epicor's native "no value at this grain level" convention.
+If your DTO *does* map one of them, you become responsible for setting
+that property on every saved row; a null value will be written through
+to the saved row.
+
+Key1 by convention identifies the row's category — "the kind of thing
+this row is." Examples: `"ORDER_TRACKING"`, `"WEBSITE_INQUIRY"`,
+`"REPAIR_INTAKE"`. The framework doesn't enforce that convention;
+it's strongly recommended because a UD table without categorized rows
+is hard to organize or query later.
+
+### The auto-emitted column legend
+
+When your typed DTO does *not* map a property to `Character10`, the
+mapper writes a column-legend string into `Character10` on save —
+something like `"Key1:Category|Key2:OrderNum|ShortChar01:CustomerName"`.
+This lets someone opening the row in Epicor's UI see what each generic
+column means in this row's shape.
+
+If you *do* map a property to `Character10`, the framework backs off
+and uses your value unchanged — you've taken ownership.
+
+### Capacity checks
+
+Epicor's column-storage limits are fixed: keys hold up to 50
+characters, `ShortChar*` columns hold up to 100, `Character*` columns
+hold up to 1000. If a string value on your DTO exceeds the column's
+limit at save time, `SaveAsync<T>` throws
+`UDTableColumnCapacityException` *before* the request reaches the wire
+— the exception carries the property name, the column it was mapped
+to, the value's length, and the column's capacity. The fix is one of:
+shorten the value, map the property to a larger-capacity column
+(e.g. `Character01` instead of `ShortChar01`), or split the data
+across multiple columns.
+
+---
+
+### Four worked DTOs
+
+The examples progress from minimum-viable to full-featured. Each
+illustrates one or two specific design points.
+
+#### `MinimalNote` — the smallest legal DTO
+
+The minimum required is `Key1` + `Key2` mapped, plus at least one
+data-bearing column for the DTO to be useful:
+
+```csharp
+public class MinimalNote
+{
+    [UDTableColumn("Key1")]        public string Category { get; set; }
+    [UDTableColumn("Key2")]        public string NoteID { get; set; }
+    [UDTableColumn("ShortChar01")] public string NoteText { get; set; }
+}
+
+// Save:
+await client.UDTable.SaveAsync("UD22", new MinimalNote
+{
+    Category = "USER_PREF",
+    NoteID = "DASHBOARD_LAYOUT_V2",
+    NoteText = "two-column compact"
+});
+```
+
+`MinimalNote` shows the floor: required keys, one data column, nothing
+more. The mapper auto-emits a `Character10` legend, so anyone opening
+the row in Epicor's UI sees `"Key1:Category|Key2:NoteID|ShortChar01:NoteText"`.
+
+#### `OrderTracking` — the canonical worked example
+
+A typical application DTO that exercises every column family at the
+practical-core level:
+
+```csharp
+public class OrderTracking
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string OrderNum { get; set; }
+    [UDTableColumn("ShortChar01")]  public string CustomerName { get; set; }
+    [UDTableColumn("Character01")]  public string Notes { get; set; }
+    [UDTableColumn("Number01")]     public decimal TotalValue { get; set; }
+    [UDTableColumn("Date01")]       public DateTime SubmittedDate { get; set; }
+    [UDTableColumn("CheckBox01")]   public bool IsExpedited { get; set; }
+}
+
+// Round-trip:
+await client.UDTable.SaveAsync("UD22", new OrderTracking
+{
+    Category = "ORDER_TRACKING",
+    OrderNum = "12345",
+    CustomerName = "Acme Corp",
+    Notes = "Customer requested expedited handling.",
+    TotalValue = 15000.50m,
+    SubmittedDate = DateTime.Now,
+    IsExpedited = true
+});
+
+var one = await client.UDTable.GetByIDAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
+
+if (one.IsSuccess && one.Value != null)
+    Console.WriteLine($"{one.Value.CustomerName}: ${one.Value.TotalValue:N2}");
+
+// All open tracking rows:
+var byCategory = await client.UDTable.QueryAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING" }, "UD22", top: 500);
+```
+
+This DTO is what the rest of the section is loosely calibrated to.
+Note the decimal `TotalValue` — at the C# boundary you can use `int`,
+`long`, `float`, `double`, or `decimal`; the mapper converts to
+`double` for `UDRow.Number01` and back to your type on read.
+
+#### `PartMetadata` — finer key grain
+
+When `Key1` + `Key2` aren't enough to identify a row uniquely, add
+`Key3`. This DTO tracks part metadata that may recycle the same part
+number across years, so the year becomes part of the row's identity:
+
+```csharp
+public class PartMetadata
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string PartNum { get; set; }
+    [UDTableColumn("Key3")]         public string Year { get; set; }
+    [UDTableColumn("ShortChar01")]  public string Supplier { get; set; }
+    [UDTableColumn("Number01")]     public decimal QtyOnHand { get; set; }
+}
+```
+
+A `QueryAsync<PartMetadata>` for `Category = "PART_META"` + `PartNum = "WIDGET-001"`
+returns every year of metadata for that part, sorted by Epicor's
+return order; passing `Year = "2026"` in the filter narrows to that
+specific year.
+
+Note that once `Key3` is mapped to a property, you own it: leaving
+`Year` unset will write `null` into the saved row's `Key3`, which
+Epicor may reject or store as null depending on the table. Document
+the expectation on your DTO.
+
+#### `WorkLog` — a reserved column put to work
+
+A practical pattern: use `ShortChar20` as a tag column for search and
+filtering. The column has no special meaning to Epicor, but treating
+one column as a stable "search keyword" lets queries (or human eyes
+scanning the table) filter by tag without parsing prose out of a notes
+column:
+
+```csharp
+public class WorkLog
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string EntryID { get; set; }
+    [UDTableColumn("ShortChar01")]  public string Author { get; set; }
+    [UDTableColumn("Character01")]  public string Description { get; set; }
+    [UDTableColumn("Date01")]       public DateTime LogDate { get; set; }
+    [UDTableColumn("ShortChar20")]  public string Tag { get; set; }
+}
+
+// Tagged save:
+await client.UDTable.SaveAsync("UD22", new WorkLog
+{
+    Category = "WORK_LOG",
+    EntryID = Guid.NewGuid().ToString("N"),
+    Author = "jgrant",
+    Description = "Renamed UDXSvc to UDTableSvc, updated all callers.",
+    LogDate = DateTime.Now,
+    Tag = "REFACTOR"
+});
+```
+
+`ShortChar20` is documented in `UDRow.cs` as a *reserved* column with
+this kind of tag-search use case in mind; the framework doesn't
+enforce it, and the convention is yours to follow or ignore. If you
+have a different reserved use for `ShortChar20`, map it accordingly —
+the framework's recommendations are documentation, not constraints.
+
+### ExtraData on typed DTOs — install-specific columns
+
+Epicor installations often add custom columns (the `_c` suffix convention)
+to UD tables. The standard Keri DTOs can't model these — `_c` columns are
+specific to one installation by definition — so the library carries them
+through transparently using a `[JsonExtensionData]` dictionary, the same
+pattern every Epicor-table DTO (`Customer`, `Part`, `OrderHed`, `UDRow`,
+etc.) already uses.
+
+To round-trip `_c` columns through your typed UD-table DTO, add an
+`ExtraData` property to the class:
+
+```csharp
+public class OrderTracking
+{
+    [UDTableColumn("Key1")]         public string Category { get; set; }
+    [UDTableColumn("Key2")]         public string OrderNum { get; set; }
+    [UDTableColumn("ShortChar01")]  public string CustomerName { get; set; }
+    // ...
+
+    [JsonExtensionData]
+    public IDictionary<string, JToken> ExtraData { get; set; }
+}
+
+// Save: install-specific custom columns ride along with the typed save.
+var dto = new OrderTracking
+{
+    Category = "ORDER_TRACKING",
+    OrderNum = "12345",
+    CustomerName = "Acme Corp",
+    ExtraData = new Dictionary<string, JToken>
+    {
+        ["Region_c"]         = "WEST",
+        ["WarrantyMonths_c"] = 12,
+        ["IsKitParent_c"]    = true
+    }
+};
+await client.UDTable.SaveAsync("UD22", dto);
+
+// Read: the same columns come back through ExtraData on the projected DTO.
+var read = await client.UDTable.GetByIDAsync<OrderTracking>(
+    new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
+if (read.IsSuccess && read.Value != null)
+{
+    string region = (string)read.Value.ExtraData["Region_c"];
+    int months    = (int)read.Value.ExtraData["WarrantyMonths_c"];
+}
+```
+
+Primitive values (`string`, `int`, `bool`, `DateTime`, `decimal`, etc.)
+assign and read with no ceremony — `JToken` defines implicit conversions
+for the common cases. Arrays and nested objects need `JToken.FromObject(...)`
+on the way in.
+
+A few rules the mapper enforces on `ExtraData`:
+
+- **At most one `[JsonExtensionData]` property per DTO.** Newtonsoft.Json
+  itself errors on multiple; the mapper matches.
+- **The property must be `IDictionary<string, JToken>`** (or the concrete
+  `Dictionary<string, JToken>`) with a public getter and setter.
+- **Keys that match standard UD-column names are filtered out on save.**
+  If you put `"ShortChar01"` in `ExtraData`, the typed mapping for
+  ShortChar01 wins and the dictionary entry is dropped — no duplicate
+  JSON properties are emitted to Epicor.
+
+The feature is opt-in. DTOs without an `[JsonExtensionData]` property
+continue to discard unmodeled columns on the typed projection; the data
+remains accessible through `result.RawResponse` for callers who need it.
+
+### When to reach for the typed API vs raw `UDRow`
+
+| Use case | Preferred shape |
+|---|---|
+| One-off script, reading rows whose schema you don't control | Raw `UDRow` + `ToMappedValues()` if the row carries a legend |
+| Application code where one UD-table use case has a stable shape | Typed DTO + `SaveAsync<T>` / `GetByIDAsync<T>` / `QueryAsync<T>` |
+| Inspecting attachments / extension tables in the `GetByID` response | Either API — read `result.RawResponse` for the full multi-table dataset |
+| Custom `_c` columns | Either API — `UDRow.ExtraData` captures them; typed DTOs flow them through the same way when an `ExtraData` property is added to the DTO (see below) |
+
+The two APIs share the underlying raw `UDTableSvc` methods, so you can
+mix them in the same application without ceremony — use whichever fits
+the specific call site.

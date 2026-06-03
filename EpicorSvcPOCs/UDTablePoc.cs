@@ -21,7 +21,7 @@ namespace EpicorSvcPOCs
     /// <list type="number">
     ///   <item><description>
     ///     How to retrieve UD rows as typed <see cref="UDRow"/> DTOs via
-    ///     <see cref="UDXSvc.GetAllAsync"/>.
+    ///     <see cref="UDTableSvc.QueryAsync"/>.
     ///   </description></item>
     ///   <item><description>
     ///     The column-legend convention — encoding "what does column N mean"
@@ -30,16 +30,16 @@ namespace EpicorSvcPOCs
     ///   </description></item>
     ///   <item><description>
     ///     The gated write path: how to construct a row and upsert via
-    ///     <see cref="UDXSvc.UpdateAsync"/>. With writes disabled (default),
+    ///     <see cref="UDTableSvc.UpdateAsync"/>. With writes disabled (default),
     ///     the POC prints the exact payload it <i>would</i> send and stops.
     ///   </description></item>
     /// </list>
     /// </remarks>
-    internal static class UdxPoc
+    internal static class UDTablePoc
     {
         // Pick a UD table that exists on your Epicor install. UD22 is a
         // common starting choice. Override at runtime by setting
-        // client.UDX.UDTableDefault before calling, or by passing UDTable
+        // client.UDTable.UDTableDefault before calling, or by passing UDTable
         // per call.
         private const string DemoUDTable = "UD22";
 
@@ -50,22 +50,22 @@ namespace EpicorSvcPOCs
 
         public static async Task RunAsync(EpicorClient client)
         {
-            PocBanner.Section("UDX POC (read-only + GATED write)");
+            PocBanner.Section("UDTable POC (read-only + GATED write)");
 
-            // Point this client's UDX at our demo table for the rest of the run.
-            client.UDX.UDTableDefault = DemoUDTable;
-            Console.WriteLine($"Targeting UD table: {client.UDX.UDTableDefault}");
+            // Point this client's UDTable at our demo table for the rest of the run.
+            client.UDTable.UDTableDefault = DemoUDTable;
+            Console.WriteLine($"Targeting UD table: {client.UDTable.UDTableDefault}");
             Console.WriteLine();
 
-            // ---- 1) Read: GetAllAsync ---------------------------------------
+            // ---- 1) Read: QueryAsync ---------------------------------------
 
             Console.WriteLine($"Fetching all rows from {DemoUDTable} (top 25)...");
-            var allRows = await client.UDX.GetAllAsync(top: 25).ConfigureAwait(false);
+            var allRows = await client.UDTable.QueryAsync(top: 25).ConfigureAwait(false);
 
             if (allRows.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {allRows.ErrorMessage}");
-                Console.WriteLine("  (table may not exist on this install — change DemoUDTable in UdxPoc.cs)");
+                Console.WriteLine("  (table may not exist on this install — change DemoUDTable in UDTablePoc.cs)");
                 return;
             }
 
@@ -106,10 +106,10 @@ namespace EpicorSvcPOCs
                 ["Number01"] = "QtyOnHand",
                 ["CheckBox01"] = "WasCounted"
             };
-            string built = UDXSvc.BuildColumnLegend(legend);
+            string built = UDTableSvc.BuildColumnLegend(legend);
             Console.WriteLine($"  Built:   {built}");
 
-            var parsed = UDXSvc.ParseColumnLegend(built);
+            var parsed = UDTableSvc.ParseColumnLegend(built);
             Console.WriteLine($"  Parsed:  {parsed.Count} entries — round-trip succeeded");
 
             // ---- 3) Write — GATED -------------------------------------------
@@ -145,7 +145,7 @@ namespace EpicorSvcPOCs
 
             // Writes are armed — actually execute.
             PocConfig.PrintLiveWriteBanner(endpoint);
-            var upsert = await client.UDX.UpdateAsync(rowToUpsert).ConfigureAwait(false);
+            var upsert = await client.UDTable.UpdateAsync(rowToUpsert).ConfigureAwait(false);
 
             if (upsert.IsFailure)
             {
