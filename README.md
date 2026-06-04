@@ -36,7 +36,7 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**v0.2.2 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, one hundred and eight unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
+**v0.2.2 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, one hundred and nine unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
 
 ---
 
@@ -61,7 +61,7 @@ The one place where target framework matters internally is `FileHandling.Emailer
 | `FileHandling` | `FileHandling.dll` | Excel generation (ClosedXML), CSV writer, and SMTP email sender. |
 | `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
-| `KineticRESTIntegrator.Tests` | xUnit test project | 108 offline unit tests covering the framework's deterministic surface. |
+| `KineticRESTIntegrator.Tests` | xUnit test project | 109 offline unit tests covering the framework's deterministic surface. |
 
 ---
 
@@ -409,7 +409,7 @@ The library has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 52 tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 109 tests, all green.
 
 Test Explorer in Visual Studio also discovers and runs them.
 
