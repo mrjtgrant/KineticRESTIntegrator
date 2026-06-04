@@ -38,4 +38,26 @@
     <ProjectReference Include="..\RESTServices\RESTServices.csproj" />
   </ItemGroup>
 
+  <!-- Ship the demo BAQ alongside the executable so the program can locate it
+       (via AppContext.BaseDirectory) and offer it for import. The SDK already
+       globs it as a None item; this only adds the copy-to-output behavior. -->
+  <ItemGroup>
+    <None Update="Parts_BAQ.baq">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Auto-create App.config from App.config.template on first build. This is
+       the one place in the solution that materializes config: the demo is the
+       startup project, so its App.config is the only one read at runtime (it
+       carries both the EpicorSvcs and FileHandling settings sections). The
+       guard copies only when App.config doesn't yet exist, so a developer's
+       filled-in values are never overwritten by a later build. The build fails
+       once with a clear message after seeding, then succeeds once edited. -->
+  <Target Name="CreateAppConfigFromTemplate" BeforeTargets="PrepareForBuild" Condition="!Exists('App.config') And Exists('App.config.template')">
+    <Copy SourceFiles="App.config.template" DestinationFiles="App.config" />
+    <Message Importance="high" Text="*** Created App.config from App.config.template. Edit it with your settings, then rebuild. ***" />
+    <Error Text="App.config was just created from template. Edit it with your settings before continuing." />
+  </Target>
+
 </Project>

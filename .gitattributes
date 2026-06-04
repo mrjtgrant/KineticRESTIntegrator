@@ -77,6 +77,7 @@ README*     text eol=lf
 *.nupkg     binary
 *.snupkg    binary
 *.zip       binary
+*.baq       binary
 *.7z        binary
 *.gz        binary
 *.tar       binary

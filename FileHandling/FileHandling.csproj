@@ -94,13 +94,4 @@
     </None>
   </ItemGroup>
 
-  <!-- Auto-create App.config from App.config.template on first build.
-       Build will fail once with a clear message telling the developer to
-       fill in their settings, then succeed on subsequent builds. -->
-  <Target Name="CreateAppConfigFromTemplate" BeforeTargets="PrepareForBuild" Condition="!Exists('App.config') And Exists('App.config.template')">
-    <Copy SourceFiles="App.config.template" DestinationFiles="App.config" />
-    <Message Importance="high" Text="*** Created App.config from App.config.template. Edit it with your settings, then rebuild. ***" />
-    <Error Text="App.config was just created from template. Edit it with your settings before continuing." />
-  </Target>
-
 </Project>

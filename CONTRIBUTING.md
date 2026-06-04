@@ -20,9 +20,9 @@ The library multi-targets `net48` and `net8.0`. `dotnet build` produces both tar
 
 The single most important rule:
 
-> **`App.config` is gitignored. Don't remove the gitignore rule. Don't commit `App.config` directly. Use `App.config.template` for any new settings.**
+> **`App.config` is gitignored. Don't remove the gitignore rule. Don't commit `App.config` directly. Add any new settings to the single template, `EpicorSvcDemo/App.config.template`.**
 
-`App.config` holds credentials, internal URLs, and SMTP host details. A committed `App.config` exposes all three. The repo's `.gitignore` excludes both `EpicorSvcs/App.config` and `FileHandling/App.config`; if you add a new project that needs config, add its `App.config` to `.gitignore` *before* the first commit and ship an `App.config.template` alongside.
+`App.config` holds credentials, internal URLs, and SMTP host details. A committed `App.config` exposes all three. The repo's `.gitignore` excludes every `App.config` (via `**/App.config`) while keeping every `*.template`. The startup project's config (`EpicorSvcDemo/App.config`) is the only one read at runtime, and it holds both the Epicor connection and email/SMTP sections. There is a single template, `EpicorSvcDemo/App.config.template`; add any new setting there. If you add another startup or consumer project that needs its own config, the glob already ignores its `App.config` too.
 
 The same logic extends:
 
