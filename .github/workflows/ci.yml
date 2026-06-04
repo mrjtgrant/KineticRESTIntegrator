@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    # net48 is one of the target frameworks, and building it requires the
+    # .NET Framework reference assemblies — those ship on the Windows runner.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # The demo's CreateAppConfigFromTemplate target fails the build once on a
+      # fresh checkout that has no App.config (by design, to make a developer
+      # fill it in). CI is always a fresh checkout, so seed a placeholder config
+      # first — the target then sees App.config already exists and skips. The
+      # offline test suite needs no real connection values.
+      - name: Seed placeholder App.config
+        shell: pwsh
+        run: Copy-Item EpicorSvcDemo/App.config.template EpicorSvcDemo/App.config -Force
+
+      - name: Restore
+        run: dotnet restore KineticRESTIntegrator.sln
+
+      - name: Build
+        run: dotnet build KineticRESTIntegrator.sln --configuration Release --no-restore
+
+      - name: Test (offline, deterministic)
+        run: dotnet test KineticRESTIntegrator.Tests --configuration Release --no-build --verbosity normal
