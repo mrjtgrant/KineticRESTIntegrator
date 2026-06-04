@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.2.3] — 2026-06-04
+
+### Changed
+
+- **Configuration loading is now explicit.** Reading `App.config` / environment variables moved out of the `EpicorClient` constructor into a named factory: use `EpicorClient.FromConfiguration(env)` (or `EpicorConfiguration.BuildSession(env)` directly) instead of `new EpicorClient()`. The new `EpicorConfiguration` class is the single place the library reads configuration; `EpicorClient` is otherwise built from a session. Behavior is unchanged — same settings, same env-var-first/App.config-second resolution, same environment selector, same validation message.
+
+  *Breaking (source):* the parameterless `new EpicorClient()` / `new EpicorClient(env)` constructor is removed; callers move to `EpicorClient.FromConfiguration()`. No runtime behavior change. No migration shim provided (pre-1.0, no external consumers). Direct service construction (`new PartSvc(env)`) is unaffected.
+
+---
+
 ## [0.2.2] — 2026-06-03
 
 ### Changed

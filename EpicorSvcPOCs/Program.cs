@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using EpicorSvcs;
 
@@ -22,7 +22,7 @@ namespace EpicorSvcPOCs
     /// </para>
     /// <para>
     /// Connection configuration is read from your <c>EpicorSvcs/App.config</c>
-    /// or environment variables — the same as every other Keri service.
+    /// or environment variables â€” the same as every other Keri service.
     /// Optionally pass an environment override as the first command-line
     /// argument (e.g. <c>dotnet run -- pilot</c>).
     /// </para>
@@ -31,14 +31,14 @@ namespace EpicorSvcPOCs
     {
         private static async Task<int> Main(string[] args)
         {
-            PocBanner.Header("Kinetic REST Integrator — Proof-of-Concept Examples");
+            PocBanner.Header("Kinetic REST Integrator â€” Proof-of-Concept Examples");
 
             // Print the write-gate state up front so the user is never
             // surprised by what does or doesn't happen below.
             Console.WriteLine();
             Console.WriteLine($"  Write gate (KERI_POC_ALLOW_WRITES): {(PocConfig.AllowWrites ? "ARMED" : "off (dry-run)")}");
             if (!PocConfig.AllowWrites)
-                Console.WriteLine("  → Write POCs will build payloads and stop before sending.");
+                Console.WriteLine("  â†’ Write POCs will build payloads and stop before sending.");
 
             // Optional environment override from the command line.
             // 'null' means: use DefaultEnvironment from config / env vars.
@@ -49,13 +49,13 @@ namespace EpicorSvcPOCs
                 // Construct the facade from App.config / env vars. One client,
                 // one session, all services lazy-constructed and disposed
                 // together at the end of the using block.
-                using (var client = new EpicorClient(envOverride))
+                using (var client = EpicorClient.FromConfiguration(envOverride))
                 {
                     Console.WriteLine($"  Connected to: {client.Session.Environment}");
                     Console.WriteLine($"  Company:      {client.Session.Company}");
 
                     // Run each POC in turn. If one fails, log it and keep going
-                    // — a connection issue with one service shouldn't prevent
+                    // â€” a connection issue with one service shouldn't prevent
                     // the others from demonstrating their behavior.
                     await SafeRun("UserCodes", () => UserCodesPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("Part",      () => PartPoc.RunAsync(client)).ConfigureAwait(false);
@@ -83,7 +83,7 @@ namespace EpicorSvcPOCs
             }
             catch (Exception ex)
             {
-                // Top-level failsafe — anything that escaped the per-POC
+                // Top-level failsafe â€” anything that escaped the per-POC
                 // SafeRun gets logged here.
                 Console.Error.WriteLine();
                 Console.Error.WriteLine("Unexpected error:");

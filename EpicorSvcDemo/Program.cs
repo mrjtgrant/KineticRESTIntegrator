@@ -80,10 +80,11 @@ namespace EpicorSvcDemo
                 return;
             }
 
-            // EpicorClient with no arguments loads connection settings from
-            // App.config (copy App.config.template to App.config first) or from
-            // environment variables. It owns an HttpClient and must be disposed.
-            using (var epicor = new EpicorClient())
+            // EpicorClient.FromConfiguration() reads connection settings from
+            // App.config (the demo seeds it from App.config.template on first
+            // build) or from environment variables. It owns an HttpClient and
+            // must be disposed.
+            using (var epicor = EpicorClient.FromConfiguration())
             {
                 // =============================================================
                 // PHASE 1 — pick the target UD table

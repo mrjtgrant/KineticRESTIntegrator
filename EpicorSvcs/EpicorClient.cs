@@ -86,26 +86,23 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Construct an EpicorClient from <c>App.config</c> / environment
-        /// variables, with optional environment override. Validates that
-        /// configuration is present and complete; throws
-        /// <see cref="InvalidOperationException"/> if not.
+        /// Constructs an EpicorClient by reading connection settings from
+        /// <c>App.config</c> / environment variables, with optional environment
+        /// override. This is the explicit entry point for config-based
+        /// construction: it reads and validates configuration via
+        /// <see cref="EpicorConfiguration.BuildSession"/> and throws
+        /// <see cref="InvalidOperationException"/> if configuration is missing
+        /// or incomplete.
         /// </summary>
         /// <param name="env">
         /// Optional environment selector that overrides
         /// <c>DefaultEnvironment</c> from config. Typical values:
         /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
         /// </param>
-        public EpicorClient(string env = null)
+        /// <returns>A client bound to the configured session.</returns>
+        public static EpicorClient FromConfiguration(string env = null)
         {
-            // Construct a throwaway base service to trigger validation and
-            // produce a session key. We use the existing BAQSvc constructor
-            // path since it's the lightest service and the validation lives
-            // in EpicorSvc's base.
-            using (var probe = new BAQSvc(env))
-            {
-                _session = (EpicorRESTSessionKey)probe.sesh;
-            }
+            return new EpicorClient(EpicorConfiguration.BuildSession(env));
         }
 
         /// <summary>
