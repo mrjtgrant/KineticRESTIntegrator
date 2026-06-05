@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   *Breaking (source):* the parameterless `new EpicorClient()` / `new EpicorClient(env)` constructor is removed; callers move to `EpicorClient.FromConfiguration()`. No runtime behavior change. No migration shim provided (pre-1.0, no external consumers). Direct service construction (`new PartSvc(env)`) is unaffected.
 
+- **FileHandling configuration loading is now explicit (config-agnostic email).** SMTP settings and the default developer-recipient address are no longer read from `App.config` as a side effect of constructing `EmailSpecs` / `SmtpSettings`. `SmtpSettings` now carries neutral defaults; the new `SmtpSettings.FromConfiguration()` reads SMTP settings from configuration, and `FileProcessing.EmailReport` calls it (and loads the developer email) explicitly — making `EmailReport` the single place the email path reads configuration. This is the FileHandling half of the same config-agnostic boundary as the `EpicorClient.FromConfiguration` change above. Behavior is unchanged for callers, since `EmailReport` is the public entry point and resolves the same settings it always did. FileHandling synced to 0.2.3.
+
+  *Breaking (source, internal only):* `SmtpSettings` is `internal`, so no public signatures change. A plain `new EmailSpecs()` now carries neutral SMTP defaults rather than config-sourced ones — this affects only code calling `Emailer.Send(new EmailSpecs())` directly instead of via `EmailReport`, and a codebase check found no such callers (`smtpspecs` being `internal` made that path unconfigurable from outside the assembly regardless).
+
 ---
 
 ## [0.2.2] — 2026-06-03
