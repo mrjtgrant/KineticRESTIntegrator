@@ -13,7 +13,7 @@
     <Description>Generic REST client library. Provides session, authentication (Basic auth or API key), environment selection, and JSON error handling. Vendor-agnostic.</Description>
     <Company></Company>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
-    <Version>0.2.0</Version>
+    <Version>0.2.5</Version>
     <AssemblyVersion>0.2.0.0</AssemblyVersion>
     <FileVersion>0.2.0.0</FileVersion>
 
