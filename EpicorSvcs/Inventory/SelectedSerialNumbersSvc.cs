@@ -29,8 +29,8 @@ namespace EpicorSvcs
     public class SelectedSerialNumbersSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public SelectedSerialNumbersSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public SelectedSerialNumbersSvc(EpicorRESTSessionKey session) : base(session) { }
 
         /// <summary>
         /// Retrieves the serial numbers available for a transaction. Calls

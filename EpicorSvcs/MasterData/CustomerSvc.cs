@@ -15,8 +15,8 @@ namespace EpicorSvcs
     public class CustomerSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public CustomerSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public CustomerSvc(EpicorRESTSessionKey session) : base(session) { }
 
         // A practical default $select for Customers queries — chosen to
         // populate the typed properties on the Customer DTO. Widen by

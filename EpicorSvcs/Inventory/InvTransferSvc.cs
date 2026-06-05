@@ -33,8 +33,8 @@ namespace EpicorSvcs
     public partial class InvTransferSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public InvTransferSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public InvTransferSvc(EpicorRESTSessionKey session) : base(session) { }
 
         // Inner service for serial-number handling. Constructed lazily so it
         // shares this service's session — important for callers that pass a

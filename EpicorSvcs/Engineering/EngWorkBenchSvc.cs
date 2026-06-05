@@ -36,8 +36,8 @@ namespace EpicorSvcs
     public partial class EngWorkBenchSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public EngWorkBenchSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public EngWorkBenchSvc(EpicorRESTSessionKey session) : base(session) { }
 
         // Inner service for BOM lookups. Constructed lazily so it shares this
         // service's session — important for callers that pass a programmatic

@@ -22,8 +22,8 @@ namespace EpicorSvcs
     public partial class UDTableSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public UDTableSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public UDTableSvc(EpicorRESTSessionKey session) : base(session) { }
 
         /// <summary>
         /// The UD table every method on this service targets when its

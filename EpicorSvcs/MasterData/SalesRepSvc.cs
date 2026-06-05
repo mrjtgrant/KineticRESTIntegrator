@@ -14,8 +14,8 @@ namespace EpicorSvcs
     public class SalesRepSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public SalesRepSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public SalesRepSvc(EpicorRESTSessionKey session) : base(session) { }
 
         /// <summary>
         /// Retrieves all active sales reps. Calls

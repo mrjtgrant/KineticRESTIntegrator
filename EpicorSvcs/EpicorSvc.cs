@@ -34,11 +34,11 @@ namespace EpicorSvcs
         /// <see cref="EpicorRESTSessionKey"/> directly. Sets the v1 / v2 URL
         /// modifiers on the session's auth object before use.
         /// </summary>
-        /// <param name="env">A fully-configured session.</param>
-        public EpicorSvc(EpicorRESTSessionKey env) : base(env)
+        /// <param name="session">A fully-configured session.</param>
+        public EpicorSvc(EpicorRESTSessionKey session) : base(session)
         {
-            env.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
-            env.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", env.Company);
+            session.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
+            session.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", session.Company);
         }
 
         /// <summary>

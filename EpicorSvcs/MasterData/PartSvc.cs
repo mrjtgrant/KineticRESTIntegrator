@@ -21,8 +21,8 @@ namespace EpicorSvcs
     public partial class PartSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public PartSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public PartSvc(EpicorRESTSessionKey session) : base(session) { }
 
         // ---------------------------------------------------------------
         // OData entity-set wrappers

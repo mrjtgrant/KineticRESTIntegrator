@@ -22,8 +22,8 @@ namespace EpicorSvcs
     public class GenxDataSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public GenxDataSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public GenxDataSvc(EpicorRESTSessionKey session) : base(session) { }
 
         /// <summary>
         /// Queries the <c>GenXData</c> table. Calls

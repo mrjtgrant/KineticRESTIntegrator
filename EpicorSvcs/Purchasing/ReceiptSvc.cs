@@ -59,8 +59,8 @@ namespace EpicorSvcs
     public partial class ReceiptSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public ReceiptSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public ReceiptSvc(EpicorRESTSessionKey session) : base(session) { }
 
         // ---------------------------------------------------------------
         // OData entity-set wrappers

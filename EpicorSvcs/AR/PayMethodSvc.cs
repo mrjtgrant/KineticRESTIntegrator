@@ -14,8 +14,8 @@ namespace EpicorSvcs
     public class PayMethodSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public PayMethodSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public PayMethodSvc(EpicorRESTSessionKey session) : base(session) { }
 
         // A practical default $select for PayMethods queries — chosen to
         // populate the core columns of the PayMethod DTO. Widen by passing

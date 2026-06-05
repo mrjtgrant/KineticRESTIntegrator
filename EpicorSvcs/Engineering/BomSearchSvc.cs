@@ -14,8 +14,8 @@ namespace EpicorSvcs
     public class BomSearchSvc : EpicorSvc
     {
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
-        /// <param name="env">A fully-configured session.</param>
-        public BomSearchSvc(EpicorRESTSessionKey env) : base(env) { }
+        /// <param name="session">A fully-configured session.</param>
+        public BomSearchSvc(EpicorRESTSessionKey session) : base(session) { }
 
         /// <summary>
         /// Retrieves the BOM tree dataset for a part, with part validation.
