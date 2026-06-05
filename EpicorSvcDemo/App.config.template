@@ -31,7 +31,7 @@
 		       or Windows Credential Manager.
 		     ================================================================ -->
 
-		<!-- ---------- Epicor REST connection (EpicorSvcs) ---------- -->
+		<!-- ===== Epicor REST connection (EpicorSvcs) ===== -->
 		<EpicorSvcs.Properties.Settings>
 
 			<!-- Epicor user with REST access. A service account is recommended
@@ -70,7 +70,7 @@
 			</setting>
 		</EpicorSvcs.Properties.Settings>
 
-		<!-- ---------- Email / SMTP (FileHandling) ---------- -->
+		<!-- ===== Email / SMTP (FileHandling) ===== -->
 		<FileHandling.Properties.Settings>
 
 			<!-- Default "From:" on outbound mail. Often a no-reply or service mailbox. -->

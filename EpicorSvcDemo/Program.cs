@@ -48,15 +48,6 @@ namespace EpicorSvcDemo
         /// </summary>
         private const string DefaultCandidateTables = "UD22,UD23,UD24,UD25";
 
-        // ---- Email config — EDIT before running ----------------------------
-        // The demo emails the rows it read back. Set these to a real relay and
-        // recipient. Left as example.com, the send step will fail gracefully and
-        // the demo continues to the verify/delete gate (the UD round-trip is the
-        // real showcase; email is a downstream consumer of it).
-        private const string EmailFrom    = "reports@example.com";
-        private const string EmailTo      = "recipient@example.com";
-        private const string EmailSmtpHost = "smtp.example.com";
-
         static async Task Main(string[] args)
         {
             Console.WriteLine("=== EpicorSvcDemo — typed UD-table round-trip ===");
@@ -313,35 +304,52 @@ namespace EpicorSvcDemo
                         Console.WriteLine($"  {row.PartNum,-20} {row.TypeCode,-6} {row.PartDescription}");
 
                     // =========================================================
-                    // PHASE 7 — email the read-back rows as an attachment
+                    // PHASE 7 — optionally email the read-back rows as an attachment
                     // =========================================================
                     Console.WriteLine();
-                    Console.WriteLine("Emailing the read-back rows...");
-                    var mailMeta = new EMailMeta
+                    if (!FileProcessing.IsEmailConfigured())
                     {
-                        From                 = EmailFrom,
-                        To                   = EmailTo,
-                        CC                   = "",
-                        BCC                  = "",
-                        SMTPHost             = EmailSmtpHost,
-                        RecipientName        = "Demo Recipient",
-                        ExcelSheetName       = "Demo Parts",
-                        AttachmentName       = "KERI_DEMO_PARTS",
-                        AttachmentType       = "xlsx",
-                        AttachmentDateFormat = "yyyy-MM-dd",
-                        AttachmentHeaderMap  = AttachmentColHeaderMap,
-                        AttachmentData       = JArray.FromObject(rows),
-                        Subject              = $"Keri demo — {rows.Count} part rows from {demoTable}",
-                        Body                 = $"<p>Attached are {rows.Count} demo part rows written to "
-                                             + $"UD table {demoTable} (category \"{DemoCategory}\").</p>"
-                    };
+                        Console.WriteLine("Skipping the email step — no SMTP host is configured.");
+                        Console.WriteLine("  With SMTP settings in App.config (SMTPHost and FromEmail), this step");
+                        Console.WriteLine("  would email the generated spreadsheet to a recipient of your choice.");
+                        Console.WriteLine("  The UD round-trip above is the heart of the demo; emailing is an");
+                        Console.WriteLine("  optional downstream step you can enable by filling in those settings.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Who would you like to email this report to? (press Enter to skip)");
+                        Console.Write("  To: ");
+                        string toAddress = Console.ReadLine()?.Trim();
 
-                    if (EmailSmtpHost.Contains("example.com"))
-                        Console.WriteLine("  (SMTP host is still the example.com placeholder — the send "
-                                        + "will likely fail; edit the email constants to send for real.)");
+                        if (string.IsNullOrEmpty(toAddress))
+                        {
+                            Console.WriteLine("  No recipient entered — skipping the email step.");
+                        }
+                        else
+                        {
+                            // From and SMTPHost are intentionally left unset so they resolve
+                            // from configuration (FromEmail / SMTPHost). Only the recipient —
+                            // which is per-run — is supplied here.
+                            var mailMeta = new EMailMeta
+                            {
+                                To                   = toAddress,
+                                RecipientName        = "Demo Recipient",
+                                ExcelSheetName       = "Demo Parts",
+                                AttachmentName       = "KERI_DEMO_PARTS",
+                                AttachmentType       = "xlsx",
+                                AttachmentDateFormat = "yyyy-MM-dd",
+                                AttachmentHeaderMap  = AttachmentColHeaderMap,
+                                AttachmentData       = JArray.FromObject(rows),
+                                Subject              = $"Keri demo — {rows.Count} part rows from {demoTable}",
+                                Body                 = $"<p>Attached are {rows.Count} demo part rows written to "
+                                                     + $"UD table {demoTable} (category \"{DemoCategory}\").</p>"
+                            };
 
-                    List<string> emailLog = FileProcessing.EmailReport(mailMeta);
-                    Console.WriteLine(string.Join(Environment.NewLine, emailLog));
+                            Console.WriteLine($"Emailing the read-back rows to {toAddress}...");
+                            List<string> emailLog = FileProcessing.EmailReport(mailMeta);
+                            Console.WriteLine(string.Join(Environment.NewLine, emailLog));
+                        }
+                    }
 
                     // =========================================================
                     // PHASE 8 — verify, then the delete gate (second gate)
