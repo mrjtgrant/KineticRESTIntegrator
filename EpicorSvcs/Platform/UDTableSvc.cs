@@ -446,16 +446,19 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Upserts a single UD-table row. Calls
-        /// <c>Ice.BO.{UDTable}Svc/{UDTable}s</c> in Epicor (or
-        /// <c>DeleteByID</c> when <paramref name="delete"/> is true).
+        /// Writes a single UD-table row using Epicor's GetaNew → Update idiom:
+        /// fetches a fresh template row from <c>GetaNew{UDTable}</c>, merges the
+        /// caller's values onto it, and commits the dataset via
+        /// <c>Ice.BO.{UDTable}Svc/Update</c> (or <c>DeleteByID</c> when
+        /// <paramref name="delete"/> is true). The row is committed as an insert
+        /// (<c>RowMod "A"</c>).
         /// </summary>
         /// <remarks>
         /// When <paramref name="delete"/> is true the call is destructive and
         /// <paramref name="UDTable"/> becomes required: the delete path does
         /// <b>not</b> fall back to <see cref="UDTableDefault"/>, and a null,
         /// empty, or whitespace table throws <see cref="ArgumentException"/>.
-        /// The upsert path (the default) still falls back to
+        /// The write path (the default) still falls back to
         /// <see cref="UDTableDefault"/> when <paramref name="UDTable"/> is null.
         /// </remarks>
         /// <param name="udrow">The UD-column values to write.</param>
@@ -495,28 +498,63 @@ namespace EpicorSvcs
 
             string table = ResolveTable(UDTable);
 
-            string svc = String.Format("Ice.BO.{0}Svc/{0}s", table);
+            // Epicor's UD write idiom: fetch a fresh row from GetaNew{table}
+            // (which populates system columns and server defaults), merge the
+            // caller's values onto it, then commit the whole dataset via Update.
+            // This replaces POSTing a hand-built row to the OData entity set,
+            // which the typed entity binder rejected ("Unable to deserialize
+            // entity") because every column was serialized as a string.
+            var template = await GetaNewUDAsync(table, ct).ConfigureAwait(false);
+            if (template.IsFailure)
+                return template;
+
+            // GetaNew returns the multi-table dataset (the UD table plus its
+            // Attch / ExtensionTables siblings). HandleResponse normalizes the
+            // returnObj/parameters/ds wrapping to a { "ds": { ... } } envelope;
+            // we mutate the new row in place and send that same envelope back.
+            JObject ds = HandleResponse(template.Value);
+            JArray rows = ds["ds"]?[table] as JArray;
+            if (rows == null || rows.Count == 0)
+                return OperationResult<JObject>.Failure(
+                    String.Format("GetaNew{0} returned no row to populate.", table),
+                    template.StatusCode, template.ResourcePath, template.RawResponse);
+
+            JObject newRow = (JObject)rows[0];
+
+            // Merge the caller's populated columns onto the template row,
+            // preserving each value's native JSON type (numbers as numbers,
+            // booleans as booleans, dates as ISO strings) instead of coercing
+            // everything to text. Unset/min-value dates are skipped so they
+            // don't overwrite the template's null with 0001-01-01.
             JObject lineObject = JObject.FromObject(udrow);
-
-            // The single iteration over the serialized DTO drives the
-            // payload. Key1–Key5 flow through it like every other column;
-            // Company (caller-or-session-sourced) and RowMod
-            // (operation-sourced) are the only properties set explicitly here.
-            JObject ds = new JObject
-            {
-                new JProperty("Company", ResolveCompany(udrow)),
-                new JProperty("RowMod", "U")
-            };
-
+            newRow["Company"] = ResolveCompany(udrow);
             foreach (var prop in lineObject.Properties())
             {
                 if (nonColumnProperties.Contains(prop.Name))
                     continue;
-                ds.Add(new JProperty(prop.Name, prop.Value.ToString()));
+                if (IsUnsetValue(prop.Value))
+                    continue;
+                newRow[prop.Name] = prop.Value;
             }
 
+            // A fresh row committed through Update is an insert.
+            newRow["RowMod"] = "A";
+
+            string svc = String.Format("Ice.BO.{0}Svc/Update", table);
             JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
+        }
+
+        // Treats a JSON null or a min-value date as "not set", so merging a
+        // caller's row onto a GetaNew template doesn't overwrite a column with
+        // an empty placeholder (notably 0001-01-01 for an unset DateTime).
+        private static bool IsUnsetValue(JToken value)
+        {
+            if (value == null || value.Type == JTokenType.Null)
+                return true;
+            if (value.Type == JTokenType.Date)
+                return value.Value<DateTime>() == DateTime.MinValue;
+            return false;
         }
 
         // ---------------------------------------------------------------
