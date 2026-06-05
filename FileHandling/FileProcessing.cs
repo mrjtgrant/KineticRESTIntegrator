@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using FileHandling.Dtos;
+using FileHandling.Properties;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -23,6 +24,13 @@ namespace FileHandling
                     EmailSubject = mailMeta.Subject,
                     EmailBody = mailMeta.Body
                 };
+
+                // Load email configuration explicitly (App.config via Properties.Settings).
+                // Construction no longer reads config as a side effect; this is the
+                // single place the email path pulls its settings.
+                EmailSpecs.smtpspecs = SmtpSettings.FromConfiguration();
+                EmailSpecs.EmailRecipientDefault = new List<string> { Settings.Default.DeveloperEmail };
+                EmailSpecs.EmailFrom = Settings.Default.FromEmail;
 
                 steplist.Add(2.ToString() + " Create " + mailMeta.AttachmentType);
                 EmailSpecs.FileAddress = mailMeta.AttachmentType == "csv" ?
@@ -70,6 +78,19 @@ namespace FileHandling
             }
 
             return steplist; 
+        }
+
+        /// <summary>
+        /// Returns true when an SMTP host is configured — a non-blank
+        /// <c>SMTPHost</c> setting that isn't still the template placeholder.
+        /// Lets a caller decide whether to offer an email step before
+        /// attempting a send.
+        /// </summary>
+        public static bool IsEmailConfigured()
+        {
+            string host = SmtpSettings.FromConfiguration().host;
+            return !string.IsNullOrWhiteSpace(host)
+                && !host.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
         }
 
         public static string WriteDataToCSVFile(JArray data, string filename, Dictionary<string, string> ColumnMapping = null)

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using FileHandling.Properties;
 
 namespace FileHandling.Dtos
 {
@@ -61,9 +60,11 @@ namespace FileHandling.Dtos
 
         /// <summary>
         /// Default recipient list — the developer address. Also the sole
-        /// recipient when <see cref="IsDebug"/> is true.
+        /// recipient when <see cref="IsDebug"/> is true. Populated from
+        /// configuration by <see cref="FileHandling.FileProcessing.EmailReport"/>;
+        /// empty on a bare instance.
         /// </summary>
-        public List<string> EmailRecipientDefault { get; set; } = new List<string> { Settings.Default.DeveloperEmail };
+        public List<string> EmailRecipientDefault { get; set; } = new List<string>();
 
         /// <summary>The email subject line.</summary>
         public string EmailSubject { get; set; } = "Generic Subject";
@@ -96,7 +97,9 @@ namespace FileHandling.Dtos
 
         /// <summary>
         /// SMTP-connection parameters for this message. Internal — populated
-        /// from configuration; <c>host</c> may be overridden per message.
+        /// from configuration by <see cref="FileHandling.FileProcessing.EmailReport"/>
+        /// (via <see cref="SmtpSettings.FromConfiguration"/>); <c>host</c> may be
+        /// overridden per message. A bare instance carries neutral defaults.
         /// </summary>
         internal SmtpSettings smtpspecs { get; set; } = new SmtpSettings();
     }
