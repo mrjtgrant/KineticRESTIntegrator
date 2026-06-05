@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using RESTServices;
 using EpicorSvcs.Dtos;
 
@@ -112,6 +115,47 @@ namespace EpicorSvcs
 
         /// <summary>True after <see cref="Dispose"/> has been called.</summary>
         public bool IsDisposed => _disposed;
+
+        // ---------------------------------------------------------------------
+        // Diagnostics
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Verifies that this client's session can reach Epicor and authenticate,
+        /// by issuing a minimal read (top&#160;1 <c>PartNum</c> from the Part
+        /// service). A lightweight connectivity probe — it does not validate any
+        /// particular data, only that a real request round-trips successfully.
+        /// </summary>
+        /// <remarks>
+        /// On success the result wraps <c>true</c>. On failure the underlying
+        /// <see cref="OperationResult{T}"/> carries the diagnostic detail —
+        /// inspect <see cref="OperationResult{T}.StatusCode"/> to distinguish
+        /// causes: <c>401</c> (bad credentials), <c>404</c> (bad base URL or
+        /// company), or a null status with a socket-level
+        /// <see cref="OperationResult{T}.ErrorMessage"/> (host unreachable).
+        /// </remarks>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// A successful <see cref="OperationResult{T}"/> wrapping <c>true</c>
+        /// when the round-trip succeeds; otherwise a failure carrying the probe's
+        /// status code, resource path, error message, and raw response.
+        /// </returns>
+        public async Task<OperationResult<bool>> TestConnectionAsync(CancellationToken ct = default)
+        {
+            ThrowIfDisposed();
+
+            var probe = await Part
+                .PartsAsync(select: new List<string> { "PartNum" }, top: 1, ct: ct)
+                .ConfigureAwait(false);
+
+            return probe.IsSuccess
+                ? OperationResult<bool>.Success(true, probe.RawResponse)
+                : OperationResult<bool>.Failure(
+                    probe.ErrorMessage,
+                    probe.StatusCode,
+                    probe.ResourcePath,
+                    probe.RawResponse);
+        }
 
         // ---------------------------------------------------------------------
         // Platform services
