@@ -1,0 +1,45 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="KeriConfigurator.Properties" GeneratedClassName="Settings">
+  <Profiles />
+  <Settings>
+    <Setting Name="DefaultUser" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_EPICOR_USERNAME</Value>
+    </Setting>
+    <Setting Name="DefaultPasskey" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_EPICOR_PASSWORD</Value>
+    </Setting>
+    <Setting Name="DefaultCompany" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_COMPANY_ID</Value>
+    </Setting>
+    <Setting Name="DefaultBaseUrl" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_EPICOR_BASE_URL</Value>
+    </Setting>
+    <Setting Name="DefaultApiKey" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_EPICOR_APIKEY</Value>
+    </Setting>
+    <Setting Name="FromEmail" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_FROM_EMAIL@example.com</Value>
+    </Setting>
+    <Setting Name="DeveloperEmail" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_DEVELOPER_EMAIL@example.com</Value>
+    </Setting>
+    <Setting Name="GroupEmail" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_GROUP_EMAIL@example.com</Value>
+    </Setting>
+    <Setting Name="SMTPHost" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_SMTP_HOST</Value>
+    </Setting>
+    <Setting Name="SMTPPort" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">25</Value>
+    </Setting>
+    <Setting Name="SMTPEnableSsl" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="SMTPUsername" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="SMTPPassword" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+  </Settings>
+</SettingsFile>
