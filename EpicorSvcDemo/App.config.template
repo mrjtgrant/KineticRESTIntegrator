@@ -59,6 +59,13 @@
 			<setting name="DefaultBaseUrl" serializeAs="String">
 				<value>YOUR_EPICOR_BASE_URL</value>
 			</setting>
+
+			<!-- Optional API key. Leave the placeholder for Basic auth (v1, with
+			     DefaultUser + DefaultPasskey); set a real key to switch to
+			     API-key auth (v2 OData). Env-var override: EPICOR_APIKEY. -->
+			<setting name="DefaultApiKey" serializeAs="String">
+				<value>YOUR_EPICOR_APIKEY</value>
+			</setting>
 		</EpicorSvcs.Properties.Settings>
 
 		<!-- ===== Email / SMTP (FileHandling) ===== -->

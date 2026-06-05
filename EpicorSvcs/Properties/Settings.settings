@@ -14,5 +14,8 @@
     <Setting Name="DefaultBaseUrl" Type="System.String" Scope="User">
       <Value Profile="(Default)">YOUR_EPICOR_BASE_URL</Value>
     </Setting>
+    <Setting Name="DefaultApiKey" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_EPICOR_APIKEY</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

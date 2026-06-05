@@ -70,5 +70,17 @@ namespace EpicorSvcs.Properties {
                 this["DefaultBaseUrl"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("YOUR_EPICOR_APIKEY")]
+        public string DefaultApiKey {
+            get {
+                return ((string)(this["DefaultApiKey"]));
+            }
+            set {
+                this["DefaultApiKey"] = value;
+            }
+        }
     }
 }

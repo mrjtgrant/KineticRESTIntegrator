@@ -46,7 +46,7 @@ namespace EpicorSvcs
                 {
                     Username = Setting("EPICOR_USER", Properties.Settings.Default.DefaultUser),
                     Userkey = Setting("EPICOR_PASS", Properties.Settings.Default.DefaultPasskey),
-                    ApiKey = Setting("EPICOR_APIKEY", ""),
+                    ApiKey = ResolveApiKey(),
                     DynamicURLModifier_Basic = "/api/v1/"
                 },
                 BaseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.DefaultBaseUrl)
@@ -61,6 +61,21 @@ namespace EpicorSvcs
         {
             var fromEnv = Environment.GetEnvironmentVariable(envVarName);
             return string.IsNullOrWhiteSpace(fromEnv) ? configValue : fromEnv;
+        }
+
+        /// <summary>
+        /// Resolves the API key: environment variable (<c>EPICOR_APIKEY</c>) first,
+        /// then the <c>DefaultApiKey</c> config setting. An unset or still-placeholder
+        /// (<c>YOUR_*</c>) value resolves to empty, which keeps the transport on Basic
+        /// auth (v1); a real key switches it to API-key auth (v2 OData).
+        /// </summary>
+        private static string ResolveApiKey()
+        {
+            string apiKey = Setting("EPICOR_APIKEY", Properties.Settings.Default.DefaultApiKey);
+            if (string.IsNullOrWhiteSpace(apiKey) ||
+                apiKey.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+            return apiKey;
         }
 
         /// <summary>
@@ -84,7 +99,7 @@ namespace EpicorSvcs
 
             string user = Setting("EPICOR_USER", Properties.Settings.Default.DefaultUser);
             string pass = Setting("EPICOR_PASS", Properties.Settings.Default.DefaultPasskey);
-            string apiKey = Setting("EPICOR_APIKEY", "");
+            string apiKey = Setting("EPICOR_APIKEY", Properties.Settings.Default.DefaultApiKey);
             string company = Setting("EPICOR_COMPANY", Properties.Settings.Default.DefaultCompany);
             string baseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.DefaultBaseUrl);
 

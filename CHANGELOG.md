@@ -8,11 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`UDTableSvc.SaveAsync(UDRow, RowMod mode = Automatic, …)`** — a convenience over the raw `UpdateAsync(ds)` primitive. It fetches a correctly-shaped dataset (`GetaNew` for an add, `GetByID` for an update — never hand-built), merges the row's populated columns onto it, sets `RowMod`, and commits via `Update`. `mode` selects the operation: `Add`, `Update`, `Delete`, or `Automatic` (the default), which updates the row when it already exists and adds it otherwise. `Delete` is routed through `DeleteByID` (a `"D"` through `Update` does not take on UD tables). The typed `SaveAsync<T>` gained the same `mode` parameter (optional, so existing calls are unaffected).
+
+- **`RowMod` enum** (`EpicorSvcs.Dtos.RowMod`) — `Automatic` / `Add` / `Update` / `Delete`, mapping to Epicor's wire `RowMod` values, as the operation selector for `SaveAsync`. Distinct from the per-row `RowMod` string the raw dataset primitive reads.
+
 ### Changed
 
 - **Config setting `EpicorBaseUrl` renamed to `DefaultBaseUrl`** to match the `Default*` naming of its siblings (`DefaultUser`, `DefaultPasskey`, `DefaultCompany`) in the `EpicorSvcs.Properties.Settings` node — the node name already scopes it to Epicor, so the `Epicor` prefix on the setting was redundant. The `EPICOR_BASE_URL` environment-variable override is unchanged. *Breaking (config):* rename `EpicorBaseUrl` to `DefaultBaseUrl` in any `App.config`.
 
 - **Service constructor parameter `env` renamed to `session`.** The base `EpicorSvc` constructor and all 23 service constructors took an `EpicorRESTSessionKey` still named `env` — a leftover from the removed environment selector. Renamed to `session` to match the parameter's type and the `EpicorClient` session constructor. *Source-breaking only* for the unlikely named-argument caller (`new PartSvc(env: …)`); positional calls are unaffected.
+
+- **`UDTableSvc.UpdateAsync` is now a pure dataset primitive.** It previously took a `UDRow`, fetched a `GetaNew` template, merged, and committed as a hard-coded insert (`RowMod "A"`). It now takes a `JObject ds` and posts it to `Ice.BO.{table}Svc/Update` verbatim — mirroring every other service's `UpdateAsync(ds)` — so the caller owns each row's `RowMod` and one dataset can carry a mix of add/update/delete rows. *Breaking (source):* `UDTable.UpdateAsync(udRow)` no longer compiles; call `SaveAsync(udRow, …)` instead.
+
+- **`UDTableSvc` source split into partials** — native Epicor endpoints and shared resolvers stay in `UDTableSvc.cs`; composed operations (`SaveAsync`, `TruncateAsync`) move to `UDTableSvc.Workflows.cs`; the `Character10` legend helpers move to `UDTableSvc.ColumnLegend.cs`. Follows the existing `.Workflows.cs` convention. No API or behavior change — purely organizational.
+
+### Fixed
+
+- **`DefaultApiKey` config setting is now honored.** It was referenced in the validation message, CONFIGURATION.md, and README, but never existed in `Settings` and `BuildSession` hard-coded the API-key fallback to an empty string — so an API key could only be supplied via the `EPICOR_APIKEY` environment variable, never `App.config`. The `DefaultApiKey` user setting now exists (placeholder `YOUR_EPICOR_APIKEY`), and the API key resolves env-var-first then `DefaultApiKey`, mirroring every other `Default*` setting. An unset or still-placeholder value resolves to empty so Basic-auth (v1) deployments are unaffected; a real key switches the transport to API-key auth (v2 OData), which is what determines the auth mode.
 
 ---
 
