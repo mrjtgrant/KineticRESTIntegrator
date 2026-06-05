@@ -23,9 +23,12 @@ namespace EpicorSvcs
     /// services yourself when accessing them through this facade.
     /// </para>
     /// <para>
-    /// Direct service construction (<c>new BAQSvc()</c>, etc.) still works
-    /// as before for callers who prefer one-off, short-lived usage. The
-    /// facade is additive, not a replacement.
+    /// Direct service construction still works for callers who prefer
+    /// one-off, short-lived usage, but services are now session-only —
+    /// e.g. <c>new BAQSvc(session)</c>, where the session comes from
+    /// <see cref="FromConfiguration"/> /
+    /// <see cref="EpicorConfiguration.BuildSession"/> or is built directly.
+    /// The facade is additive, not a replacement.
     /// </para>
     /// <example>
     /// <code>

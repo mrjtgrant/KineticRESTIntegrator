@@ -36,14 +36,6 @@ namespace EpicorSvcs
     /// </remarks>
     public class MenuSvc : EpicorSvc
     {
-        /// <summary>Construct using settings from <c>App.config</c> / env vars.</summary>
-        /// <param name="env">
-        /// Optional environment selector that overrides
-        /// <c>DefaultEnvironment</c> from config. Typical values:
-        /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
-        /// </param>
-        public MenuSvc(string env = null) : base(env) { }
-
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="env">A fully-configured session.</param>
         public MenuSvc(EpicorRESTSessionKey env) : base(env) { }

@@ -28,21 +28,11 @@ namespace EpicorSvcs
         public JObject NewDS = new JObject { new JProperty("ds", new JObject()) };
 
         /// <summary>
-        /// Construct using settings from <c>App.config</c> / environment
-        /// variables, optionally overriding the selected environment.
-        /// </summary>
-        /// <param name="env">
-        /// Optional environment selector (<c>"prod"</c>, <c>"pilot"</c>,
-        /// <c>"test"</c>, or a literal URL). When null, the configured
-        /// default environment is used.
-        /// </param>
-        public EpicorSvc(string env = null) : base(EpicorConfiguration.BuildSession(env))
-        { }
-
-        /// <summary>
-        /// Construct with a programmatic session — bypasses config-file
-        /// lookup. Sets the v1 / v2 URL modifiers on the session's auth
-        /// object before use.
+        /// Construct with a programmatic session. Build one from configuration
+        /// via <see cref="EpicorConfiguration.BuildSession"/> (or the
+        /// <see cref="EpicorClient.FromConfiguration"/> facade), or assemble an
+        /// <see cref="EpicorRESTSessionKey"/> directly. Sets the v1 / v2 URL
+        /// modifiers on the session's auth object before use.
         /// </summary>
         /// <param name="env">A fully-configured session.</param>
         public EpicorSvc(EpicorRESTSessionKey env) : base(env)
