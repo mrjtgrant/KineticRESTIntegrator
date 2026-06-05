@@ -24,7 +24,7 @@
 		       Don't ship App.config. Supply the same values as environment
 		       variables so nothing sensitive lands on disk:
 		         - Epicor connection : EPICOR_* (e.g. EPICOR_USER, EPICOR_PASS,
-		           EPICOR_COMPANY, EPICOR_ENV, EPICOR_APIKEY, EPICOR_ENV_PILOT)
+		           EPICOR_COMPANY, EPICOR_BASE_URL, EPICOR_APIKEY)
 		         - Email / SMTP      : SMTP_ / EMAIL_ prefixed
 		       See CONFIGURATION.md for the full migration guide, and for using
 		       an EpicorRESTSessionKey to broker credentials from a web portal
@@ -40,8 +40,9 @@
 				<value>YOUR_EPICOR_USERNAME</value>
 			</setting>
 
-			<!-- Password for DefaultUser. If using API-key auth (v2 OData),
-			     leave this blank and set ApiKey on RESTAuthenticationObject. -->
+			<!-- Password for DefaultUser, for HTTP Basic auth. Basic and API-key
+			     auth are independent: set both if your Epicor requires it. Only
+			     DefaultApiKey decides the URL shape (set = v2 OData, unset = v1). -->
 			<setting name="DefaultPasskey" serializeAs="String">
 				<value>YOUR_EPICOR_PASSWORD</value>
 			</setting>
@@ -60,9 +61,10 @@
 				<value>YOUR_EPICOR_BASE_URL</value>
 			</setting>
 
-			<!-- Optional API key. Leave the placeholder for Basic auth (v1, with
-			     DefaultUser + DefaultPasskey); set a real key to switch to
-			     API-key auth (v2 OData). Env-var override: EPICOR_APIKEY. -->
+			<!-- Optional API key. Its presence alone selects the URL shape: unset
+			     = v1, set = v2 OData. Independent of Basic auth — set this and
+			     DefaultUser/DefaultPasskey together if your Epicor needs both.
+			     Env-var override: EPICOR_APIKEY. -->
 			<setting name="DefaultApiKey" serializeAs="String">
 				<value>YOUR_EPICOR_APIKEY</value>
 			</setting>
