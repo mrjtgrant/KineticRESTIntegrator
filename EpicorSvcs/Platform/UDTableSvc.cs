@@ -367,8 +367,9 @@ namespace EpicorSvcs
         // Fetches a fresh template dataset (GetaNew) normalized to a
         // { "ds": { ... } } envelope, ready to populate and post.
         private async Task<OperationResult<JObject>> GetaNewDatasetAsync(
-            string table, CancellationToken ct)
+            string UDTable = null, CancellationToken ct = default)
         {
+            string table = ResolveTable(UDTable);
             var raw = await GetaNewUDAsync(table, ct).ConfigureAwait(false);
             if (raw.IsFailure) return raw;
             return OperationResult<JObject>.Success(HandleResponse(raw.Value), raw.RawResponse);
@@ -378,8 +379,9 @@ namespace EpicorSvcs
         // { "ds": { ... } } envelope. A miss yields success with an empty table
         // array, which HasRow detects.
         private async Task<OperationResult<JObject>> GetByIDDatasetAsync(
-            UDRow keys, string table, CancellationToken ct)
+            UDRow keys, string UDTable = null, CancellationToken ct = default)
         {
+            string table = ResolveTable(UDTable);
             string svc = String.Format("Ice.BO.{0}Svc/GetByID", table);
             svc += String.Format("?key1={0}", UrlEncode(keys.Key1 ?? string.Empty));
             svc += String.Format("&key2={0}", UrlEncode(keys.Key2 ?? string.Empty));
