@@ -11,35 +11,17 @@ Severity legend:
 
 ## Future work
 
-### 1. CI setup — GitHub Actions: build + test on push and PR
-
-**🔭 Future.** Once the repo is public, a basic CI workflow would catch regressions before they land on `main` and give external contributors confidence that their PRs are sane.
-
-**Suggested scope (minimal):**
-- One workflow file at `.github/workflows/build.yml`
-- Triggered on `push` to `main` and on `pull_request`
-- Sets up .NET, runs `dotnet build` for the solution (both target frameworks), runs `dotnet test KineticRESTIntegrator.Tests`
-- Status badge in the README
-
-No integration tests in CI — the existing tests are offline by design and that should stay. Live-Epicor testing remains a manual step.
-
-This is the one item in this document that isn't repairing existing code but adding new infrastructure, and it's "future" — not committed to.
-
----
-
-### 2. Finish the config-agnostic library boundary — remove `EpicorSvc(string env)`
-
-**🩹 Smell.** `0.2.3` made configuration loading explicit on both libraries: `EpicorClient.FromConfiguration(env)` replaced the implicit-config `new EpicorClient()` (read/validate logic centralized in `EpicorConfiguration`), and FileHandling's email path moved off config-in-field-initializers onto `SmtpSettings.FromConfiguration()` plus an explicit load in `EmailReport` (see Recently addressed). One residual keeps the library from being *fully* config-agnostic.
-
-The base service still has an `EpicorSvc(string env)` constructor that calls `EpicorConfiguration.BuildSession(env)`, so `new PartSvc("pilot")` still reads config implicitly — the same "construction reaches into config as a side effect" smell that `0.2.3` removed from the client, one level down. It was kept deliberately: removing it breaks the `(string env)` constructor on the ~23 service classes that chain `: base(env)`, and those weren't in scope. The fix is to delete `EpicorSvc(string env)` and the ~23 service-level `(string env)` constructors, leaving services session-only — callers obtain a session from `EpicorConfiguration.BuildSession()` (or build the client via `FromConfiguration()` and go through the facade). Mechanical but touches ~24 files.
-
-**Why it's worth doing (pre-1.0 / pre-public):** it removes the last of the inverted-dependency smell a careful reviewer flags — a library reaching out to *find* config rather than being handed it — and makes direct service construction as config-agnostic as the client and email paths already are. The session-only path already exists; this just makes it the only way in. Do it as one breaking change with a CHANGELOG note, the same way `0.2.3` was framed.
+_Nothing open at the moment — recently completed items are listed below._
 
 ---
 
 ## Recently addressed (kept here briefly as project history)
 
-- **Configuration loading made explicit across both libraries — shipped in 0.2.3.** Reading `App.config` / environment variables moved out of constructor and field-initializer side effects into named factories. `EpicorClient.FromConfiguration(env)` replaced `new EpicorClient()`, with the read/validate logic centralized in the new `EpicorConfiguration` class (the parameterless/`(env)` client constructor was removed; the demo and `EpicorSvcPOCs` moved to `FromConfiguration`). In FileHandling, `SmtpSettings.FromConfiguration()` replaced the per-field `Settings.Default.*` initializers and `FileProcessing.EmailReport` now loads SMTP settings plus the developer-recipient address explicitly — making `EmailReport` the single config-read point for the email path. A codebase check confirmed nothing built `EmailSpecs` or called `Emailer.Send` outside `EmailReport`, so neutralizing the implicit defaults stranded no caller. FileHandling synced to 0.2.3 to match EpicorSvcs. The one remaining piece — removing the `EpicorSvc(string env)` service constructor — is tracked as Future-work #2 above.
+- **CI — GitHub Actions build + offline tests on push and PR.** A `ci.yml` workflow at `.github/workflows/` builds the solution and runs the offline test suite on `windows-latest` (which carries the .NET Framework 4.8 reference assemblies the `net48` target needs) on every push and pull request to `main`. It seeds a placeholder `App.config` from the template before building, so the demo's seed-then-fail-the-build target — which fires on a fresh checkout — doesn't trip CI; the offline tests need no real connection values. This was Future-work #1.
+
+- **Services made session-only — shipped in 0.2.4.** The `EpicorSvc(string env)` constructor and the matching `(string env)` constructor on all 23 service classes were removed; services are now built only from an `EpicorRESTSessionKey`, and configuration is read in exactly one place (`EpicorConfiguration.BuildSession()` / `EpicorClient.FromConfiguration()`). This was Future-work #2 and completes the config-agnostic boundary begun in 0.2.3 — a service no longer reaches into config as a side effect of construction. A repo-wide check confirmed every direct service construction (the `EpicorClient` facade, service-to-service calls) already passed a session, so nothing downstream broke. *Breaking (source):* `new PartSvc("pilot")` no longer compiles; build a session via `BuildSession(env)` or go through `FromConfiguration(env)` and the facade.
+
+- **Configuration loading made explicit across both libraries — shipped in 0.2.3.** Reading `App.config` / environment variables moved out of constructor and field-initializer side effects into named factories. `EpicorClient.FromConfiguration(env)` replaced `new EpicorClient()`, with the read/validate logic centralized in the new `EpicorConfiguration` class (the parameterless/`(env)` client constructor was removed; the demo and `EpicorSvcPOCs` moved to `FromConfiguration`). In FileHandling, `SmtpSettings.FromConfiguration()` replaced the per-field `Settings.Default.*` initializers and `FileProcessing.EmailReport` now loads SMTP settings plus the developer-recipient address explicitly — making `EmailReport` the single config-read point for the email path. A codebase check confirmed nothing built `EmailSpecs` or called `Emailer.Send` outside `EmailReport`, so neutralizing the implicit defaults stranded no caller. FileHandling synced to 0.2.3 to match EpicorSvcs. The one remaining piece — removing the `EpicorSvc(string env)` service constructor — shipped in 0.2.4 (see below).
 
 - **Typed-DTO API for UD-table access, plus surrounding service/method renames — shipped in 0.2.0.** The feature design was outlined here at length earlier in the cycle (one of the longer Future-work entries this document has ever carried) and shipped across nine commits on `feature/typed-dto-mapping`. End state: `UDTableSvc.SaveAsync<T>`, `GetByIDAsync<T>`, and `QueryAsync<T>` let callers define a typed DTO for a UD-table use case, decorate properties with `[UDTableColumn("Key1")]` / `[UDTableColumn("ShortChar03")]` etc., and round-trip rows as their own type instead of the generic `UDRow`. Validation at first use, capacity checks before save, auto-emitted `Character10` column-legend when the DTO doesn't own that column, and ExtraData round-tripping for install-specific `_c` custom columns when the DTO declares an `[JsonExtensionData] IDictionary<string, JToken>` property. Surrounding renames: `UDXSvc` → `UDTableSvc`, `EpicorClient.UDX` → `EpicorClient.UDTable`, `UdxPoc` → `UDTablePoc`, `GetAllAsync` → `QueryAsync`, `DeleteAllAsync` → `TruncateAsync` (with pre-prod/POC framing). `GetByIDAsync` rewritten to call Epicor's real `GetByID` BO action (single round trip with query parameters) instead of the previous OData filtered-read approximation; return type narrowed from `List<UDRow>` to `UDRow`. Also: `UDRow.Key1` lost its placeholder default (now null, forcing the caller to set it); `Number20` "checksum" reservation dropped from documentation; the column-allowlist in `UDXSvc` write/read paths replaced with a property-exclusion approach that lets `ExtraData` `_c` columns flow through. Added 56 new tests (108 total). See the `[0.2.0]` block in `CHANGELOG.md` for the full per-change rundown and migration notes.
 

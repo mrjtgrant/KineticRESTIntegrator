@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.2.4] — 2026-06-05
+
+### Changed
+
+- **Services are session-only (config-agnostic boundary complete).** The `EpicorSvc(string env)` constructor and the matching `(string env)` constructor on all 23 service classes are removed; services are now constructed only from an `EpicorRESTSessionKey`. Configuration is read in exactly one place — `EpicorConfiguration.BuildSession()` / `EpicorClient.FromConfiguration()` — so constructing a service no longer reaches into config as a side effect. This completes the config-agnostic boundary begun in 0.2.3 (the client and email halves).
+
+  *Breaking (source):* `new PartSvc()` / `new PartSvc("pilot")` — and the same on every service — no longer compile. Obtain a session via `EpicorConfiguration.BuildSession(env)` and pass it in, or build the client with `EpicorClient.FromConfiguration(env)` and use the facade. No runtime behavior change; the session-only path already existed and is now the only way in. Pre-1.0, no migration shim.
+
+### Fixed
+
+- **UD-table writes now use Epicor's GetaNew → merge → Update idiom.** `UDTableSvc.UpdateAsync` previously hand-built a row and POSTed it to the OData entity set with every column coerced to a string, which Epicor's typed entity binder rejected with "Unable to deserialize entity." It now fetches a fresh template row from `GetaNew{table}`, merges the caller's populated columns onto it preserving native JSON types (numbers, booleans, dates), skips unset/min-value dates so they don't overwrite server defaults, and commits the dataset via `Ice.BO.{table}Svc/Update` with `RowMod "A"` (insert semantics). Reads, the five-string `GetByID`/`DeleteByID`, and the delete branch are unchanged. Proven end-to-end against a live instance.
+
+---
+
 ## [0.2.3] — 2026-06-04
 
 ### Changed
