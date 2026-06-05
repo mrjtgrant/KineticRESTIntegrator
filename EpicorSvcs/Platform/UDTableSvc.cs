@@ -438,103 +438,206 @@ namespace EpicorSvcs
         }
 
         /// <summary>
-        /// Writes a single UD-table row using Epicor's GetaNew → Update idiom:
-        /// fetches a fresh template row from <c>GetaNew{UDTable}</c>, merges the
-        /// caller's values onto it, and commits the dataset via
-        /// <c>Ice.BO.{UDTable}Svc/Update</c> (or <c>DeleteByID</c> when
-        /// <paramref name="delete"/> is true). The row is committed as an insert
-        /// (<c>RowMod "A"</c>).
+        /// Posts a UD-table dataset to <c>Ice.BO.{UDTable}Svc/Update</c> exactly
+        /// as given — the pure transport primitive, mirroring Epicor's
+        /// <c>Update</c> method. The dataset is sent verbatim; the caller owns
+        /// each row's <c>RowMod</c> (<c>"A"</c> add, <c>"U"</c> update,
+        /// <c>"D"</c> delete), so one dataset may carry a mix of operations.
         /// </summary>
         /// <remarks>
-        /// When <paramref name="delete"/> is true the call is destructive and
-        /// <paramref name="UDTable"/> becomes required: the delete path does
-        /// <b>not</b> fall back to <see cref="UDTableDefault"/>, and a null,
-        /// empty, or whitespace table throws <see cref="ArgumentException"/>.
-        /// The write path (the default) still falls back to
-        /// <see cref="UDTableDefault"/> when <paramref name="UDTable"/> is null.
+        /// Use this when you already hold a correctly-shaped dataset — typically
+        /// one returned by <c>GetByID</c> or <see cref="GetaNewUDAsync"/> whose
+        /// rows you have mutated and tagged with <c>RowMod</c>. To save a single
+        /// <see cref="UDRow"/> without managing the envelope yourself, use
+        /// <c>SaveAsync</c>.
         /// </remarks>
-        /// <param name="udrow">The UD-column values to write.</param>
-        /// <param name="UDTable">
-        /// The target UD table. For an upsert, null falls back to
-        /// <see cref="UDTableDefault"/>. For a delete
-        /// (<paramref name="delete"/> true) this is required and must be a
-        /// non-blank table name — there is no default, and null, empty, or
-        /// whitespace throws <see cref="ArgumentException"/>.
+        /// <param name="ds">
+        /// The dataset to commit, in the shape Epicor's <c>Update</c> expects
+        /// (a <c>{ "ds": { "{UDTable}": [ ... ] } }</c> envelope). Sent as-is.
         /// </param>
-        /// <param name="delete">When true, deletes the row instead of upserting.</param>
+        /// <param name="UDTable">
+        /// The target UD table, used to build the BO endpoint. When null,
+        /// <see cref="UDTableDefault"/> is used.
+        /// </param>
         /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the raw Epicor
-        /// response. On failure, <c>ErrorMessage</c> describes what went wrong.
-        /// </returns>
-        /// <exception cref="ArgumentException">
-        /// <paramref name="delete"/> is true and <paramref name="UDTable"/> is
-        /// null, empty, or whitespace.
-        /// </exception>
+        /// <returns>An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="ds"/> is null.</exception>
         public async Task<OperationResult<JObject>> UpdateAsync(
-            UDRow udrow,
+            JObject ds,
             string UDTable = null,
-            bool delete = false,
             CancellationToken ct = default)
         {
-            // The delete branch is destructive: it requires an explicit table
-            // and does not fall back to UDTableDefault. The upsert branch keeps
-            // the lenient fallback.
-            if (delete)
+            if (ds == null) throw new ArgumentNullException(nameof(ds));
+
+            string table = ResolveTable(UDTable);
+            string svc = String.Format("Ice.BO.{0}Svc/Update", table);
+            JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Saves a single <see cref="UDRow"/>, choosing the operation from
+        /// <paramref name="mode"/>. A convenience over the pure
+        /// <see cref="UpdateAsync(JObject, string, CancellationToken)"/>: it
+        /// fetches a correctly-shaped dataset (never hand-built), merges the
+        /// row's values onto it, sets <c>RowMod</c>, and commits.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>RowMod</c> is set from <paramref name="mode"/>, never read off the
+        /// row — so a stale value on <paramref name="row"/> cannot change the
+        /// operation. <see cref="Dtos.RowMod.Add"/> fetches a fresh template from
+        /// <c>GetaNew{UDTable}</c> and commits as <c>"A"</c>;
+        /// <see cref="Dtos.RowMod.Update"/> fetches the existing row via
+        /// <c>GetByID</c>, merges the set columns onto it, and commits as
+        /// <c>"U"</c>; <see cref="Dtos.RowMod.Delete"/> is routed to
+        /// <c>DeleteByID</c> (a <c>"D"</c> through Update does not take on UD
+        /// tables) and, being destructive, requires an explicit
+        /// <paramref name="UDTable"/>; <see cref="Dtos.RowMod.Automatic"/> (the
+        /// default) probes with <c>GetByID</c> and updates if the row exists,
+        /// otherwise adds — one extra round trip on the add path, which an
+        /// explicit mode avoids.
+        /// </para>
+        /// <para>
+        /// The merge skips unset values (JSON null, min-value dates) so it never
+        /// overwrites a column with an empty placeholder. For a multi-row or
+        /// mixed-operation dataset, use the pure
+        /// <see cref="UpdateAsync(JObject, string, CancellationToken)"/> instead.
+        /// </para>
+        /// </remarks>
+        /// <param name="row">The UD-column values to save.</param>
+        /// <param name="mode">The operation to perform. Defaults to <see cref="Dtos.RowMod.Automatic"/>.</param>
+        /// <param name="UDTable">
+        /// The target UD table. For add/update/automatic, null falls back to
+        /// <see cref="UDTableDefault"/>. For <see cref="Dtos.RowMod.Delete"/> it
+        /// is required and must be non-blank.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>An <see cref="OperationResult{T}"/> wrapping the raw Epicor response.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="row"/> is null.</exception>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="mode"/> is <see cref="Dtos.RowMod.Delete"/> and
+        /// <paramref name="UDTable"/> is null, empty, or whitespace.
+        /// </exception>
+        public async Task<OperationResult<JObject>> SaveAsync(
+            UDRow row,
+            Dtos.RowMod mode = Dtos.RowMod.Automatic,
+            string UDTable = null,
+            CancellationToken ct = default)
+        {
+            if (row == null) throw new ArgumentNullException(nameof(row));
+
+            // Delete is destructive and routed through DeleteByID: a "D" through
+            // Update does not take on UD tables. Requires an explicit table.
+            if (mode == Dtos.RowMod.Delete)
             {
                 string deleteTable = ResolveTableForDelete(UDTable, nameof(UDTable));
                 return await DeleteByIDAsync(
-                    udrow.Key1, udrow.Key2, udrow.Key3, udrow.Key4, udrow.Key5,
+                    row.Key1, row.Key2, row.Key3, row.Key4, row.Key5,
                     deleteTable, ct).ConfigureAwait(false);
             }
 
             string table = ResolveTable(UDTable);
 
-            // Epicor's UD write idiom: fetch a fresh row from GetaNew{table}
-            // (which populates system columns and server defaults), merge the
-            // caller's values onto it, then commit the whole dataset via Update.
-            // This replaces POSTing a hand-built row to the OData entity set,
-            // which the typed entity binder rejected ("Unable to deserialize
-            // entity") because every column was serialized as a string.
-            var template = await GetaNewUDAsync(table, ct).ConfigureAwait(false);
-            if (template.IsFailure)
-                return template;
+            // Resolve add-vs-update and fetch the correctly-shaped base dataset.
+            // We never hand-build the { "ds": { ... } } envelope: GetaNew (add)
+            // and GetByID (update) return it in the exact shape Update expects,
+            // including the Attch / ExtensionTables siblings.
+            bool add;
+            OperationResult<JObject> baseResult;
 
-            // GetaNew returns the multi-table dataset (the UD table plus its
-            // Attch / ExtensionTables siblings). HandleResponse normalizes the
-            // returnObj/parameters/ds wrapping to a { "ds": { ... } } envelope;
-            // we mutate the new row in place and send that same envelope back.
-            JObject ds = HandleResponse(template.Value);
+            if (mode == Dtos.RowMod.Add)
+            {
+                add = true;
+                baseResult = await GetaNewDatasetAsync(table, ct).ConfigureAwait(false);
+            }
+            else if (mode == Dtos.RowMod.Update)
+            {
+                add = false;
+                baseResult = await GetByIDDatasetAsync(row, table, ct).ConfigureAwait(false);
+            }
+            else // Automatic: update if the row exists, otherwise add.
+            {
+                var existing = await GetByIDDatasetAsync(row, table, ct).ConfigureAwait(false);
+                if (existing.IsFailure) return existing;
+
+                if (HasRow(existing.Value, table))
+                {
+                    add = false;
+                    baseResult = existing;
+                }
+                else
+                {
+                    add = true;
+                    baseResult = await GetaNewDatasetAsync(table, ct).ConfigureAwait(false);
+                }
+            }
+
+            if (baseResult.IsFailure) return baseResult;
+
+            JObject ds = baseResult.Value;
             JArray rows = ds["ds"]?[table] as JArray;
             if (rows == null || rows.Count == 0)
                 return OperationResult<JObject>.Failure(
-                    String.Format("GetaNew{0} returned no row to populate.", table),
-                    template.StatusCode, template.ResourcePath, template.RawResponse);
+                    String.Format("{0} for {1} returned no row to populate.",
+                        add ? "GetaNew" : "GetByID", table),
+                    baseResult.StatusCode, baseResult.ResourcePath, baseResult.RawResponse);
 
-            JObject newRow = (JObject)rows[0];
+            JObject targetRow = (JObject)rows[0];
 
-            // Merge the caller's populated columns onto the template row,
-            // preserving each value's native JSON type (numbers as numbers,
-            // booleans as booleans, dates as ISO strings) instead of coercing
-            // everything to text. Unset/min-value dates are skipped so they
-            // don't overwrite the template's null with 0001-01-01.
-            JObject lineObject = JObject.FromObject(udrow);
-            newRow["Company"] = ResolveCompany(udrow);
+            // Merge the row's populated columns onto the base row, preserving
+            // native JSON types and skipping unset values so an empty placeholder
+            // never clobbers a real value. On add, set Company explicitly (the
+            // template carries none); on update the existing row's Company stays.
+            JObject lineObject = JObject.FromObject(row);
+            if (add) targetRow["Company"] = ResolveCompany(row);
             foreach (var prop in lineObject.Properties())
             {
-                if (nonColumnProperties.Contains(prop.Name))
-                    continue;
-                if (IsUnsetValue(prop.Value))
-                    continue;
-                newRow[prop.Name] = prop.Value;
+                if (nonColumnProperties.Contains(prop.Name)) continue;
+                if (IsUnsetValue(prop.Value)) continue;
+                targetRow[prop.Name] = prop.Value;
             }
 
-            // A fresh row committed through Update is an insert.
-            newRow["RowMod"] = "A";
+            // RowMod is operation-controlled, set from the resolved mode — never
+            // read off the row.
+            targetRow["RowMod"] = add ? "A" : "U";
 
             string svc = String.Format("Ice.BO.{0}Svc/Update", table);
             JObject response = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
+        }
+
+        // Fetches a fresh template dataset (GetaNew) normalized to a
+        // { "ds": { ... } } envelope, ready to populate and post.
+        private async Task<OperationResult<JObject>> GetaNewDatasetAsync(
+            string table, CancellationToken ct)
+        {
+            var raw = await GetaNewUDAsync(table, ct).ConfigureAwait(false);
+            if (raw.IsFailure) return raw;
+            return OperationResult<JObject>.Success(HandleResponse(raw.Value), raw.RawResponse);
+        }
+
+        // Fetches an existing row's dataset (GetByID) normalized to a
+        // { "ds": { ... } } envelope. A miss yields success with an empty table
+        // array, which HasRow detects.
+        private async Task<OperationResult<JObject>> GetByIDDatasetAsync(
+            UDRow keys, string table, CancellationToken ct)
+        {
+            string svc = String.Format("Ice.BO.{0}Svc/GetByID", table);
+            svc += String.Format("?key1={0}", UrlEncode(keys.Key1 ?? string.Empty));
+            svc += String.Format("&key2={0}", UrlEncode(keys.Key2 ?? string.Empty));
+            svc += String.Format("&key3={0}", UrlEncode(keys.Key3 ?? string.Empty));
+            svc += String.Format("&key4={0}", UrlEncode(keys.Key4 ?? string.Empty));
+            svc += String.Format("&key5={0}", UrlEncode(keys.Key5 ?? string.Empty));
+
+            JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
+            return response.ToOperationResult(r => HandleResponse(r));
+        }
+
+        // True when the normalized dataset carries at least one row for the table.
+        private static bool HasRow(JObject ds, string table)
+        {
+            return (ds["ds"]?[table] as JArray)?.Count > 0;
         }
 
         // Treats a JSON null or a min-value date as "not set", so merging a

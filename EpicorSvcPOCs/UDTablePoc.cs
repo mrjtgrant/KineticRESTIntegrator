@@ -145,7 +145,7 @@ namespace EpicorSvcPOCs
 
             // Writes are armed — actually execute.
             PocConfig.PrintLiveWriteBanner(endpoint);
-            var upsert = await client.UDTable.UpdateAsync(rowToUpsert).ConfigureAwait(false);
+            var upsert = await client.UDTable.SaveAsync(rowToUpsert).ConfigureAwait(false);
 
             if (upsert.IsFailure)
             {

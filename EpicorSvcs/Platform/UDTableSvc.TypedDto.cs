@@ -44,7 +44,7 @@ namespace EpicorSvcs
         /// <summary>
         /// Saves a typed DTO to a UD table. Maps the DTO to a
         /// <see cref="UDRow"/> via <see cref="UDTableMapping{T}"/> and
-        /// posts it through the raw <see cref="UpdateAsync"/> path.
+        /// posts it through the raw <c>SaveAsync(UDRow, ...)</c> path.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -92,6 +92,7 @@ namespace EpicorSvcs
         public async Task<OperationResult<JObject>> SaveAsync<T>(
             string UDTable,
             T row,
+            Dtos.RowMod mode = Dtos.RowMod.Automatic,
             CancellationToken ct = default) where T : class, new()
         {
             if (row == null) throw new ArgumentNullException(nameof(row));
@@ -99,7 +100,7 @@ namespace EpicorSvcs
             var mapping = UDTableMapping<T>.Get();
             UDRow udRow = mapping.ToUDRow(row);
 
-            return await UpdateAsync(udRow, UDTable, ct: ct).ConfigureAwait(false);
+            return await SaveAsync(udRow, mode, UDTable, ct).ConfigureAwait(false);
         }
 
         // ---------------------------------------------------------------

@@ -217,7 +217,7 @@ await part.UpdateAsync(BuildDatasetWith(payload));
 ```
 
 For `UDTableSvc` specifically, the same applies — `UDRow.ExtraData` captures custom
-columns on UD tables, and `UpdateAsync`/`QueryAsync`/`GetByIDAsync` send and
+columns on UD tables, and `SaveAsync`/`QueryAsync`/`GetByIDAsync` send and
 select them automatically.
 
 `ExtraData` is for *columns on this row* that the DTO doesn't model.
@@ -431,9 +431,10 @@ using (var client = EpicorClient.FromConfiguration())
     // Inspect the payload before sending it.
     Console.WriteLine(JsonConvert.SerializeObject(row, Formatting.Indented));
 
-    // Upsert. UpdateAsync targets Ice.BO.{UDTable}Svc; the table comes
-    // from UDTableDefault unless a UDTable argument is passed per call.
-    var result = await client.UDTable.UpdateAsync(row);
+    // Upsert. SaveAsync with the default Automatic mode updates the row if
+    // it exists, otherwise adds it. It targets Ice.BO.{UDTable}Svc; the table
+    // comes from UDTableDefault unless a UDTable argument is passed per call.
+    var result = await client.UDTable.SaveAsync(row);
 
     if (result.IsFailure)
     {
@@ -445,8 +446,13 @@ using (var client = EpicorClient.FromConfiguration())
 }
 ```
 
-`UpdateAsync` returns `OperationResult<JObject>` — check `IsFailure` before
+`SaveAsync` returns `OperationResult<JObject>` — check `IsFailure` before
 using `Value`, the same contract as every other service call.
+
+Pass a `RowMod` to force the operation — `RowMod.Add`, `RowMod.Update`, or
+`RowMod.Delete` — instead of the default `RowMod.Automatic` upsert. For a
+multi-row or mixed-operation write, use the raw `UpdateAsync(ds)` primitive
+(it posts the dataset verbatim) and set each row's `RowMod` yourself.
 
 ### Reading UD rows back
 
@@ -657,7 +663,7 @@ listing every error in one message — fix all of them in one pass.
 
 | Method | Returns | Purpose |
 |---|---|---|
-| `SaveAsync<T>(udTable, row)` | `OperationResult<JObject>` | Map `row` to a `UDRow` and upsert it. Same shape as every other Keri `UpdateAsync`. |
+| `SaveAsync<T>(udTable, row, mode)` | `OperationResult<JObject>` | Map `row` to a `UDRow` and save it (default `RowMod.Automatic` upsert; pass a `mode` to force add/update/delete). Same `OperationResult<JObject>` contract as the rest of the library. |
 | `GetByIDAsync<T>(keys, udTable)` | `OperationResult<T>` | Pass a `T` with key properties populated; receive a `T` reconstructed from the row. |
 | `QueryAsync<T>(filter, udTable, top)` | `OperationResult<List<T>>` | Pass a `T` with key properties populated (or `null`); receive matching rows projected to `T`. |
 | `DeleteByIDAsync<T>(keys, udTable)` | `OperationResult<JObject>` | Pass a `T` with key properties populated; delete the matching row. `udTable` is required — there is no `UDTableDefault` fallback for a destructive call. |

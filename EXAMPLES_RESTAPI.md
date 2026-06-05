@@ -209,8 +209,8 @@ When you go through `EpicorSvc` (or any service that derives from it), the
 constructor populates the two URL-modifier fields on the auth object for you:
 
 ```csharp
-env.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
-env.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", env.Company);
+session.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
+session.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", session.Company);
 ```
 
 …and the transport picks between them automatically: when `ApiKey` is empty

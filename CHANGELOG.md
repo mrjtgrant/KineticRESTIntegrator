@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Config setting `EpicorBaseUrl` renamed to `DefaultBaseUrl`** to match the `Default*` naming of its siblings (`DefaultUser`, `DefaultPasskey`, `DefaultCompany`) in the `EpicorSvcs.Properties.Settings` node — the node name already scopes it to Epicor, so the `Epicor` prefix on the setting was redundant. The `EPICOR_BASE_URL` environment-variable override is unchanged. *Breaking (config):* rename `EpicorBaseUrl` to `DefaultBaseUrl` in any `App.config`.
+
+- **Service constructor parameter `env` renamed to `session`.** The base `EpicorSvc` constructor and all 23 service constructors took an `EpicorRESTSessionKey` still named `env` — a leftover from the removed environment selector. Renamed to `session` to match the parameter's type and the `EpicorClient` session constructor. *Source-breaking only* for the unlikely named-argument caller (`new PartSvc(env: …)`); positional calls are unaffected.
+
+---
+
+## [0.2.5] — 2026-06-05
+
+### Changed
+
+- **Collapsed to a single configured environment; `RESTSessionKey.Environment` renamed to `BaseUrl`.** The three-environment selector is gone. `Environment` — a selector that resolved a literal URL out of a Live/Pilot/Development set — is now `BaseUrl`, a plain literal base URL with no selector logic. Configuration holds one URL (`EpicorBaseUrl`, env override `EPICOR_BASE_URL`) in place of `DefaultEnvironment` + `EnvLive`/`EnvPilot`/`EnvTest` (and the `EPICOR_ENV*` overrides). To target more than one environment, build a full `EpicorRESTSessionKey` per environment in code — a base URL on its own can't carry the credentials and company a real environment switch needs. `RESTServices` changed this cycle and synced to 0.2.5.
+
+  *Breaking:* `RESTSessionKey.Environment` (and `EpicorRESTSessionKey.Environment`) → `BaseUrl`. The config schema changes — replace `DefaultEnvironment`/`EnvLive`/`EnvPilot`/`EnvTest` in `App.config` with a single `EpicorBaseUrl`.
+
+### Removed
+
+- **`RESTEnvironments` class** — it existed only to hold the three selector URLs the `Environment` setter chose between.
+
+- **The environment parameter on the config factories.** `EpicorClient.FromConfiguration()` and `EpicorConfiguration.BuildSession()` no longer take an `env` argument; they read the single configured URL. *Breaking (source):* `FromConfiguration("pilot")` / `BuildSession(env)` no longer compile — call with no argument, or pass a full `EpicorRESTSessionKey` to the `EpicorClient` constructor to reach a different server.
+
+---
+
 ## [0.2.4] — 2026-06-05
 
 ### Changed

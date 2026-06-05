@@ -77,7 +77,7 @@ namespace EpicorSvcs.Dtos
     ///     ShortChar20 = "REPRINT",
     ///     // Date20, CheckBox20 default to DateTime.Now / true
     /// };
-    /// await client.UDTable.UpdateAsync(row, UDTable: "UD22");
+    /// await client.UDTable.SaveAsync(row, UDTable: "UD22");
     /// </code>
     /// </para>
     /// <para>
