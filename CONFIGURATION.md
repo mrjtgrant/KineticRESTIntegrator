@@ -36,7 +36,7 @@ These stack rather than being mutually exclusive: environment variables override
 | `DefaultPasskey` | Password for `DefaultUser` (Basic auth) |
 | `DefaultApiKey` | API key for v2 OData auth |
 | `DefaultCompany` | Company ID, e.g. `EPIC01` |
-| `EpicorBaseUrl` | Full base URL of your Epicor app server, no trailing slash — e.g. `https://yourco-pilot.epicorsaas.com/server` |
+| `DefaultBaseUrl` | Full base URL of your Epicor app server, no trailing slash — e.g. `https://yourco-pilot.epicorsaas.com/server` |
 
 Authentication uses Basic (`DefaultUser` + `DefaultPasskey`) and/or an API key (`DefaultApiKey`) for v2 OData. The first service construction validates what's present and names anything missing — no silent 401s.
 
@@ -56,7 +56,7 @@ Then `EpicorClient.FromConfiguration()` reads the connection settings automatica
 
 ### Multiple environments
 
-Configuration describes **one** environment — the single `EpicorBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login — not a real environment switch.
+Configuration describes **one** environment — the single `DefaultBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login — not a real environment switch.
 
 To work against more than one environment, build a full `EpicorRESTSessionKey` per environment in code and hand it to the client — each session carries its own URL *and* its own credentials. The [programmatic section](#programmatic-epicorrestsessionkey) below shows how (Windows Credential Manager, a vault, or a portal that brokers credentials per environment). For a one-off run pointed at a different server *with the same credentials*, override just the URL for that run via the `EPICOR_BASE_URL` environment variable.
 
@@ -92,7 +92,7 @@ The names mirror the settings with an `EPICOR_` prefix. The exact list is whatev
 | `DefaultUser` | `EPICOR_USER` |
 | `DefaultPasskey` | `EPICOR_PASS` |
 | `DefaultCompany` | `EPICOR_COMPANY` |
-| `EpicorBaseUrl` | `EPICOR_BASE_URL` |
+| `DefaultBaseUrl` | `EPICOR_BASE_URL` |
 | API key (if used) | `EPICOR_APIKEY` |
 
 With these set, `EpicorClient.FromConfiguration()` resolves the connection with no config file present. Environment variables take precedence over `App.config` row by row, so you can also leave `App.config` in place and override just a few values (for example, point a local build at prod) through the environment.

@@ -62,12 +62,12 @@ namespace EpicorSvcs.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("YOUR_EPICOR_BASE_URL")]
-        public string EpicorBaseUrl {
+        public string DefaultBaseUrl {
             get {
-                return ((string)(this["EpicorBaseUrl"]));
+                return ((string)(this["DefaultBaseUrl"]));
             }
             set {
-                this["EpicorBaseUrl"] = value;
+                this["DefaultBaseUrl"] = value;
             }
         }
     }

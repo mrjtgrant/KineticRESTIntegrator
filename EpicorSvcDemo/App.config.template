@@ -56,7 +56,7 @@
 			     https://yourcompany-pilot.epicorsaas.com/server
 			     For multiple environments, build an EpicorRESTSessionKey per
 			     environment in code (see CONFIGURATION.md) — config holds one. -->
-			<setting name="EpicorBaseUrl" serializeAs="String">
+			<setting name="DefaultBaseUrl" serializeAs="String">
 				<value>YOUR_EPICOR_BASE_URL</value>
 			</setting>
 		</EpicorSvcs.Properties.Settings>

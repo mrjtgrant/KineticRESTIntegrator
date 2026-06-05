@@ -49,7 +49,7 @@ namespace EpicorSvcs
                     ApiKey = Setting("EPICOR_APIKEY", ""),
                     DynamicURLModifier_Basic = "/api/v1/"
                 },
-                BaseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.EpicorBaseUrl)
+                BaseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.DefaultBaseUrl)
             };
         }
 
@@ -86,7 +86,7 @@ namespace EpicorSvcs
             string pass = Setting("EPICOR_PASS", Properties.Settings.Default.DefaultPasskey);
             string apiKey = Setting("EPICOR_APIKEY", "");
             string company = Setting("EPICOR_COMPANY", Properties.Settings.Default.DefaultCompany);
-            string baseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.EpicorBaseUrl);
+            string baseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.DefaultBaseUrl);
 
             // Either Basic auth (user+pass) or API key auth is acceptable.
             // Only complain if neither is configured.
@@ -101,7 +101,7 @@ namespace EpicorSvcs
             }
 
             Check("DefaultCompany", company, "e.g. EPIC01");
-            Check("EpicorBaseUrl", baseUrl, "https://your-epicor.example.com/server");
+            Check("DefaultBaseUrl", baseUrl, "https://your-epicor.example.com/server");
 
             if (problems.Count > 0)
             {

@@ -133,15 +133,15 @@ These sources stack — you don't pick *one*. A programmatic session, if supplie
 | `DefaultPasskey` | `EPICOR_PASS` | Password for that account. | (secret) |
 | `DefaultApiKey` | `EPICOR_APIKEY` | API key for v2 OData auth. Set in addition to user+passkey. | (secret) |
 | `DefaultCompany` | `EPICOR_COMPANY` | Epicor company ID. | `EPIC01` |
-| `EpicorBaseUrl` | `EPICOR_BASE_URL` | Epicor app server base URL, no trailing slash. | `https://company-pilot.example.com/server` |
+| `DefaultBaseUrl` | `EPICOR_BASE_URL` | Epicor app server base URL, no trailing slash. | `https://company-pilot.example.com/server` |
 
 `DefaultUser` and `DefaultPasskey` are always required. For API-key (v2 OData) authentication, also set `DefaultApiKey` — it is an addition to the username and passkey, not a replacement for them.
 
-For `EpicorBaseUrl`: use the URL shown in the upper-right corner of your Epicor client. The framework treats it as an opaque string — copy it as-is, including the protocol and trailing path.
+For `DefaultBaseUrl`: use the URL shown in the upper-right corner of your Epicor client. The framework treats it as an opaque string — copy it as-is, including the protocol and trailing path.
 
 ### Multiple environments
 
-Configuration describes **one** environment — the single `EpicorBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login — not a real environment switch.
+Configuration describes **one** environment — the single `DefaultBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login — not a real environment switch.
 
 To work against more than one environment, build a full `EpicorRESTSessionKey` per environment in code and hand it to the client — each session carries its own URL *and* its own credentials (see the programmatic-session example below, and CONFIGURATION.md). For a one-off run pointed at a different server *with the same credentials*, override just the URL for that run:
 
