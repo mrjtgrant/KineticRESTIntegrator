@@ -131,11 +131,11 @@ These sources stack — you don't pick *one*. A programmatic session, if supplie
 |---|---|---|---|
 | `DefaultUser` | `EPICOR_USER` | Epicor username for Basic auth. | `your_epicor_user` |
 | `DefaultPasskey` | `EPICOR_PASS` | Password for that account. | (secret) |
-| `DefaultApiKey` | `EPICOR_APIKEY` | API key for v2 OData auth. Set in addition to user+passkey. | (secret) |
+| `DefaultApiKey` | `EPICOR_APIKEY` | API key. Its presence selects v2 OData (else v1 Basic); use alone or alongside user+passkey. | (secret) |
 | `DefaultCompany` | `EPICOR_COMPANY` | Epicor company ID. | `EPIC01` |
 | `DefaultBaseUrl` | `EPICOR_BASE_URL` | Epicor app server base URL, no trailing slash. | `https://company-pilot.example.com/server` |
 
-`DefaultUser` and `DefaultPasskey` are always required. For API-key (v2 OData) authentication, also set `DefaultApiKey` — it is an addition to the username and passkey, not a replacement for them.
+Supply Basic (`DefaultUser` + `DefaultPasskey`), an API key (`DefaultApiKey`), or both — whichever your Epicor requires. The API key's presence is the only thing that selects v2 OData; without it the transport uses v1 Basic, and Basic and API-key credentials are independent (sent together if both are set). `DefaultCompany` and `DefaultBaseUrl` are always required.
 
 For `DefaultBaseUrl`: use the URL shown in the upper-right corner of your Epicor client. The framework treats it as an opaque string — copy it as-is, including the protocol and trailing path.
 

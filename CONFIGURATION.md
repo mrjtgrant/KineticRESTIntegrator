@@ -114,7 +114,7 @@ var session = new EpicorRESTSessionKey
     {
         Username = user,
         Userkey  = password,
-        ApiKey   = ""                            // set ApiKey instead for v2 OData auth
+        ApiKey   = ""                            // set a key here for v2 OData; independent of Basic above
     }
 };
 

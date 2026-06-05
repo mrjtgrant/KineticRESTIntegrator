@@ -40,9 +40,7 @@
 				<value>YOUR_EPICOR_USERNAME</value>
 			</setting>
 
-			<!-- Password for DefaultUser, for HTTP Basic auth. Basic and API-key
-			     auth are independent: set both if your Epicor requires it. Only
-			     DefaultApiKey decides the URL shape (set = v2 OData, unset = v1). -->
+			<!-- Password for DefaultUser (HTTP Basic auth). -->
 			<setting name="DefaultPasskey" serializeAs="String">
 				<value>YOUR_EPICOR_PASSWORD</value>
 			</setting>
