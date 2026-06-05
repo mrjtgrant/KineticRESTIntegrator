@@ -45,7 +45,7 @@ the right tool as it stands today.
 ## A GET request
 
 Construct a `RESTConnect` with a `RESTSessionKey`. For a non-Epicor API, set
-`Environment` to the API's base URL:
+`BaseUrl` to the API's base URL:
 
 ```csharp
 using RESTServices;
@@ -53,7 +53,7 @@ using Newtonsoft.Json.Linq;
 
 var session = new RESTSessionKey
 {
-    Environment = "https://api.example.com/",
+    BaseUrl = "https://api.example.com/",
     AuthObject  = new RESTAuthenticationObject
     {
         Username = "api-user",
@@ -63,7 +63,7 @@ var session = new RESTSessionKey
 
 using (var rest = new RESTConnect(session))
 {
-    // The request URL is Environment + the path you pass here.
+    // The request URL is BaseUrl + the path you pass here.
     JObject result = await rest.RESTCallAsync("v1/widgets?limit=10");
 
     if (result["ErrorMessage"] != null)
@@ -78,9 +78,9 @@ using (var rest = new RESTConnect(session))
 }
 ```
 
-**How the URL is built:** the request URL is `Environment` joined to the path
+**How the URL is built:** the request URL is `BaseUrl` joined to the path
 you pass to `RESTCallAsync`. The seam between them is normalized to a single
-`/` — a trailing slash on `Environment`, a leading slash on the path, both, or
+`/` — a trailing slash on `BaseUrl`, a leading slash on the path, both, or
 neither all produce the same correct URL, so you don't have to babysit the
 slashes.
 
@@ -123,7 +123,7 @@ default `X-API-Key` — `ApiKeyHeaderName`:
 ```csharp
 var session = new RESTSessionKey
 {
-    Environment = "https://api.example.com/",
+    BaseUrl = "https://api.example.com/",
     AuthObject  = new RESTAuthenticationObject
     {
         ApiKey           = "your-api-key-value",
@@ -153,7 +153,7 @@ string token = await GetTokenFromYourIdentityProvider();
 
 var session = new RESTSessionKey
 {
-    Environment = "https://api.example.com/",
+    BaseUrl = "https://api.example.com/",
     AuthObject  = new RESTAuthenticationObject
     {
         BearerToken = token
@@ -202,8 +202,8 @@ Epicor only when there is no wrapper for what you need.
 Epicor's REST endpoints live under one of two URL shapes, depending on which
 API version you call:
 
-- **v1, Basic auth** — `{Environment}/api/v1/{service-path}`
-- **v2 OData, API-key auth** — `{Environment}/api/v2/odata/{Company}/{service-path}`
+- **v1, Basic auth** — `{BaseUrl}/api/v1/{service-path}`
+- **v2 OData, API-key auth** — `{BaseUrl}/api/v2/odata/{Company}/{service-path}`
 
 When you go through `EpicorSvc` (or any service that derives from it), the
 constructor populates the two URL-modifier fields on the auth object for you:
@@ -221,7 +221,7 @@ populate those fields yourself, and the same pick-by-`ApiKey` logic applies.
 ### v1 + Basic auth
 
 `ApiKey` empty, `DynamicURLModifier_Basic` set, `Username` and `Userkey`
-populated. The request URL becomes `{Environment}/api/v1/{path}`.
+populated. The request URL becomes `{BaseUrl}/api/v1/{path}`.
 
 ```csharp
 using RESTServices;
@@ -229,7 +229,7 @@ using Newtonsoft.Json.Linq;
 
 var session = new RESTSessionKey
 {
-    Environment = "https://company-pilot.example.com/server",
+    BaseUrl = "https://company-pilot.example.com/server",
     AuthObject  = new RESTAuthenticationObject
     {
         Username                 = "YOUR_USER",
@@ -253,7 +253,7 @@ using (var rest = new RESTConnect(session))
 ### v2 OData + API key
 
 `ApiKey` set, `DynamicURLModifier_OAuth` set with the company substituted in.
-The request URL becomes `{Environment}/api/v2/odata/{Company}/{path}`. This is
+The request URL becomes `{BaseUrl}/api/v2/odata/{Company}/{path}`. This is
 the path Epicor's `Company` segment lives in — going direct, you interpolate
 your company into the modifier yourself (the wrapper does the same thing,
 using `EpicorRESTSessionKey.Company` as the source).
@@ -264,7 +264,7 @@ using Newtonsoft.Json.Linq;
 
 var session = new RESTSessionKey
 {
-    Environment = "https://company-pilot.example.com/server",
+    BaseUrl = "https://company-pilot.example.com/server",
     AuthObject  = new RESTAuthenticationObject
     {
         ApiKey                   = "YOUR_API_KEY",

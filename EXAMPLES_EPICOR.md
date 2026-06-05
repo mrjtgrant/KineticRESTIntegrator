@@ -411,7 +411,7 @@ using EpicorSvcs;
 using EpicorSvcs.Dtos;
 using Newtonsoft.Json;
 
-using (var client = new EpicorClient("pilot"))
+using (var client = EpicorClient.FromConfiguration())
 {
     // Choose the target UD table for this service instance.
     client.UDTable.UDTableDefault = "UD22";

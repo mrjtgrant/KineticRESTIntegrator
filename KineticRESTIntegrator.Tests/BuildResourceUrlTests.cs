@@ -18,7 +18,7 @@ namespace KineticRESTIntegrator.Tests
     /// <list type="bullet">
     ///   <item><description>
     ///     <b>Environment</b> — the application-server base URL, owned by
-    ///     <c>RESTSessionKey.Environment</c>. Configured per-environment
+    ///     <c>RESTSessionKey.BaseUrl</c>. Configured per-environment
     ///     (live/pilot/test) and copied verbatim from the URL shown in the
     ///     Epicor client's address bar. For non-Epicor REST APIs it's
     ///     whatever base URL the caller chose. Treated as an opaque string;

@@ -90,22 +90,18 @@ namespace EpicorSvcs
 
         /// <summary>
         /// Constructs an EpicorClient by reading connection settings from
-        /// <c>App.config</c> / environment variables, with optional environment
-        /// override. This is the explicit entry point for config-based
-        /// construction: it reads and validates configuration via
-        /// <see cref="EpicorConfiguration.BuildSession"/> and throws
-        /// <see cref="InvalidOperationException"/> if configuration is missing
-        /// or incomplete.
+        /// <c>App.config</c> / environment variables. This is the explicit entry
+        /// point for config-based construction: it reads and validates
+        /// configuration via <see cref="EpicorConfiguration.BuildSession"/> and
+        /// throws <see cref="InvalidOperationException"/> if configuration is
+        /// missing or incomplete. To connect to a different server, supply a
+        /// fully-configured <see cref="EpicorRESTSessionKey"/> to the
+        /// constructor instead.
         /// </summary>
-        /// <param name="env">
-        /// Optional environment selector that overrides
-        /// <c>DefaultEnvironment</c> from config. Typical values:
-        /// <c>"prod"</c>, <c>"pilot"</c>, <c>"test"</c>, or a literal URL.
-        /// </param>
         /// <returns>A client bound to the configured session.</returns>
-        public static EpicorClient FromConfiguration(string env = null)
+        public static EpicorClient FromConfiguration()
         {
-            return new EpicorClient(EpicorConfiguration.BuildSession(env));
+            return new EpicorClient(EpicorConfiguration.BuildSession());
         }
 
         /// <summary>

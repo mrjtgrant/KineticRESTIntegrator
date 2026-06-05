@@ -215,7 +215,7 @@ namespace RESTServices
             // Build one absolute URL from environment + modifier + svc,
             // tolerant of stray or missing slashes at each seam.
             string resource = BuildResourceUrl(
-                sesh.Environment, sesh.AuthObject.DynamicURLModifier, svc);
+                sesh.BaseUrl, sesh.AuthObject.DynamicURLModifier, svc);
 
             JObject result = await RESTTransactionAsync(resource, payload, ct).ConfigureAwait(false);
 

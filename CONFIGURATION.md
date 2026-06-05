@@ -36,8 +36,7 @@ These stack rather than being mutually exclusive: environment variables override
 | `DefaultPasskey` | Password for `DefaultUser` (Basic auth) |
 | `DefaultApiKey` | API key for v2 OData auth |
 | `DefaultCompany` | Company ID, e.g. `EPIC01` |
-| `DefaultEnvironment` | Selector for which environment to use — see [Switching environments](#switching-environments) |
-| `EnvLive` / `EnvPilot` / `EnvTest` | Base URL for each environment, no trailing slash |
+| `EpicorBaseUrl` | Full base URL of your Epicor app server, no trailing slash — e.g. `https://yourco-pilot.epicorsaas.com/server` |
 
 Authentication uses Basic (`DefaultUser` + `DefaultPasskey`) and/or an API key (`DefaultApiKey`) for v2 OData. The first service construction validates what's present and names anything missing — no silent 401s.
 
@@ -53,32 +52,13 @@ Authentication uses Basic (`DefaultUser` + `DefaultPasskey`) and/or an API key (
 | `SMTPEnableSsl` | `False` for plain port-25 relay; `True` for STARTTLS on 587 |
 | `SMTPUsername` / `SMTPPassword` | SMTP auth; leave empty for anonymous relay |
 
-Then `new EpicorClient()` reads the connection settings automatically, and the email helpers read theirs.
+Then `EpicorClient.FromConfiguration()` reads the connection settings automatically, and the email helpers read theirs.
 
-### Switching environments
+### Multiple environments
 
-`DefaultEnvironment` is a **selector**, not a URL — it names which of `EnvLive` / `EnvPilot` / `EnvTest` to use for the run. The URLs are defined once in those rows and stay put, so switching is a one-line change (or a single environment variable):
+Configuration describes **one** environment — the single `EpicorBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login — not a real environment switch.
 
-```
-# edit DefaultEnvironment in App.config, or override for one run:
-set EPICOR_ENV=prod
-dotnet run --project EpicorSvcDemo
-```
-
-It also accepts a **literal URL** when none of the named environments fit — handy for a one-off sandbox or someone else's server without adding it to the `Env*` rows:
-
-```
-set EPICOR_ENV=https://other-pilot.example.com/server
-```
-
-Or pass the override straight to the constructor, scoped to one block of code without touching config at all:
-
-```csharp
-using (var client = new EpicorClient("prod"))   // one-time override, equivalent to EPICOR_ENV=prod
-{
-    /* ... */
-}
-```
+To work against more than one environment, build a full `EpicorRESTSessionKey` per environment in code and hand it to the client — each session carries its own URL *and* its own credentials. The [programmatic section](#programmatic-epicorrestsessionkey) below shows how (Windows Credential Manager, a vault, or a portal that brokers credentials per environment). For a one-off run pointed at a different server *with the same credentials*, override just the URL for that run via the `EPICOR_BASE_URL` environment variable.
 
 ---
 
@@ -91,7 +71,7 @@ Keri is a library, so the connection config lives in **your application**, not i
 3. Fill in your values and use the client:
 
 ```csharp
-using (var epicor = new EpicorClient())          // reads App.config / env vars
+using (var epicor = EpicorClient.FromConfiguration())   // reads App.config / env vars
 {
     var parts = await epicor.Part.PartsAsync();
 }
@@ -112,11 +92,10 @@ The names mirror the settings with an `EPICOR_` prefix. The exact list is whatev
 | `DefaultUser` | `EPICOR_USER` |
 | `DefaultPasskey` | `EPICOR_PASS` |
 | `DefaultCompany` | `EPICOR_COMPANY` |
-| `DefaultEnvironment` | `EPICOR_ENV` |
+| `EpicorBaseUrl` | `EPICOR_BASE_URL` |
 | API key (if used) | `EPICOR_APIKEY` |
-| `EnvLive` / `EnvPilot` / `EnvTest` | `EPICOR_ENV_LIVE` / `EPICOR_ENV_PILOT` / `EPICOR_ENV_TEST` |
 
-With these set, `new EpicorClient()` resolves the connection with no config file present. Environment variables take precedence over `App.config` row by row, so you can also leave `App.config` in place and override just a few values (for example, point a local build at prod) through the environment.
+With these set, `EpicorClient.FromConfiguration()` resolves the connection with no config file present. Environment variables take precedence over `App.config` row by row, so you can also leave `App.config` in place and override just a few values (for example, point a local build at prod) through the environment.
 
 The email/SMTP settings have their own override convention: each can be supplied by an environment variable with an `SMTP_` / `EMAIL_` prefix (e.g. the SMTP host, port, and credentials), so production email config also stays off disk. The template's comments are the source of truth for the exact names; prefer this over committing `SMTPPassword` into a config file.
 
@@ -130,7 +109,7 @@ When credentials shouldn't sit in a file or environment at all — a web portal 
 var session = new EpicorRESTSessionKey
 {
     Company     = company,
-    Environment = environmentUrl,                // a literal base URL or a configured env name
+    BaseUrl     = baseUrl,                        // the Epicor app-server base URL
     AuthObject  = new RESTAuthenticationObject
     {
         Username = user,
@@ -154,7 +133,7 @@ The hosting portal authenticates the user, then builds a session per request or 
 var session = new EpicorRESTSessionKey
 {
     Company     = portalUser.Company,
-    Environment = config.EpicorUrl,
+    BaseUrl     = config.EpicorUrl,
     AuthObject  = new RESTAuthenticationObject
     {
         Username = portalUser.EpicorUser,
@@ -177,7 +156,7 @@ var (user, pass) = ReadWindowsCredential("Keri:Epicor");
 var session = new EpicorRESTSessionKey
 {
     Company     = "EPIC01",
-    Environment = "https://erp-live.example.com/server",
+    BaseUrl     = "https://erp-live.example.com/server",
     AuthObject  = new RESTAuthenticationObject { Username = user, Userkey = pass }
 };
 using (var epicor = new EpicorClient(session)) { /* ... */ }

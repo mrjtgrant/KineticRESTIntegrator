@@ -25,18 +25,6 @@ namespace EpicorSvcs.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("pilot")]
-        public string DefaultEnvironment {
-            get {
-                return ((string)(this["DefaultEnvironment"]));
-            }
-            set {
-                this["DefaultEnvironment"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("YOUR_EPICOR_USERNAME")]
         public string DefaultUser {
             get {
@@ -73,37 +61,13 @@ namespace EpicorSvcs.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("https://erp-live.example.com/server")]
-        public string EnvLive {
+        [global::System.Configuration.DefaultSettingValueAttribute("YOUR_EPICOR_BASE_URL")]
+        public string EpicorBaseUrl {
             get {
-                return ((string)(this["EnvLive"]));
+                return ((string)(this["EpicorBaseUrl"]));
             }
             set {
-                this["EnvLive"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("https://erp-pilot.example.com/server")]
-        public string EnvPilot {
-            get {
-                return ((string)(this["EnvPilot"]));
-            }
-            set {
-                this["EnvPilot"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("https://erp-dev.example.com/server")]
-        public string EnvTest {
-            get {
-                return ((string)(this["EnvTest"]));
-            }
-            set {
-                this["EnvTest"] = value;
+                this["EpicorBaseUrl"] = value;
             }
         }
     }

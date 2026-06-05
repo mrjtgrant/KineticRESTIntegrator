@@ -51,22 +51,13 @@
 				<value>YOUR_COMPANY_ID</value>
 			</setting>
 
-			<!-- Which environment to use by default when no env is passed to a
-			     service constructor. Valid values: "prod" / "live", "pilot",
-			     "test" / "third", or any literal URL. -->
-			<setting name="DefaultEnvironment" serializeAs="String">
-				<value>pilot</value>
-			</setting>
-
-			<!-- Full base URL for each environment, no trailing slash. -->
-			<setting name="EnvLive" serializeAs="String">
-				<value>https://erp-live.example.com/server</value>
-			</setting>
-			<setting name="EnvPilot" serializeAs="String">
-				<value>https://erp-pilot.example.com/server</value>
-			</setting>
-			<setting name="EnvTest" serializeAs="String">
-				<value>https://erp-dev.example.com/server</value>
+			<!-- Full base URL of your Epicor app server, no trailing slash —
+			     copied verbatim from the Epicor client's address bar, e.g.
+			     https://yourcompany-pilot.epicorsaas.com/server
+			     For multiple environments, build an EpicorRESTSessionKey per
+			     environment in code (see CONFIGURATION.md) — config holds one. -->
+			<setting name="EpicorBaseUrl" serializeAs="String">
+				<value>YOUR_EPICOR_BASE_URL</value>
 			</setting>
 		</EpicorSvcs.Properties.Settings>
 

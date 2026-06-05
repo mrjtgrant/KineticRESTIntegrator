@@ -21,10 +21,9 @@ namespace EpicorSvcPOCs
     /// exact payload they would send, and stop. See <see cref="PocConfig"/>.
     /// </para>
     /// <para>
-    /// Connection configuration is read from your <c>EpicorSvcs/App.config</c>
-    /// or environment variables â€” the same as every other Keri service.
-    /// Optionally pass an environment override as the first command-line
-    /// argument (e.g. <c>dotnet run -- pilot</c>).
+    /// Connection configuration is read from <c>App.config</c> or the
+    /// <c>EPICOR_*</c> environment variables — the same as every other Keri
+    /// service. See CONFIGURATION.md.
     /// </para>
     /// </remarks>
     internal class Program
@@ -40,18 +39,14 @@ namespace EpicorSvcPOCs
             if (!PocConfig.AllowWrites)
                 Console.WriteLine("  â†’ Write POCs will build payloads and stop before sending.");
 
-            // Optional environment override from the command line.
-            // 'null' means: use DefaultEnvironment from config / env vars.
-            string envOverride = args.Length > 0 ? args[0] : null;
-
             try
             {
                 // Construct the facade from App.config / env vars. One client,
                 // one session, all services lazy-constructed and disposed
                 // together at the end of the using block.
-                using (var client = EpicorClient.FromConfiguration(envOverride))
+                using (var client = EpicorClient.FromConfiguration())
                 {
-                    Console.WriteLine($"  Connected to: {client.Session.Environment}");
+                    Console.WriteLine($"  Connected to: {client.Session.BaseUrl}");
                     Console.WriteLine($"  Company:      {client.Session.Company}");
 
                     // Run each POC in turn. If one fails, log it and keep going
@@ -77,7 +72,7 @@ namespace EpicorSvcPOCs
                 Console.Error.WriteLine("Configuration error:");
                 Console.Error.WriteLine("  " + ex.Message);
                 Console.Error.WriteLine();
-                Console.Error.WriteLine("Make sure EpicorSvcs/App.config is populated, or set the");
+                Console.Error.WriteLine("Make sure App.config is populated, or set the");
                 Console.Error.WriteLine("corresponding EPICOR_* environment variables.");
                 return 1;
             }

@@ -2,9 +2,6 @@
 <SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="EpicorSvcs.Properties" GeneratedClassName="Settings">
   <Profiles />
   <Settings>
-    <Setting Name="DefaultEnvironment" Type="System.String" Scope="User">
-      <Value Profile="(Default)">pilot</Value>
-    </Setting>
     <Setting Name="DefaultUser" Type="System.String" Scope="User">
       <Value Profile="(Default)">YOUR_EPICOR_USERNAME</Value>
     </Setting>
@@ -14,14 +11,8 @@
     <Setting Name="DefaultCompany" Type="System.String" Scope="User">
       <Value Profile="(Default)">YOUR_COMPANY_ID</Value>
     </Setting>
-    <Setting Name="EnvLive" Type="System.String" Scope="User">
-      <Value Profile="(Default)">https://erp-live.example.com/server</Value>
-    </Setting>
-    <Setting Name="EnvPilot" Type="System.String" Scope="User">
-      <Value Profile="(Default)">https://erp-pilot.example.com/server</Value>
-    </Setting>
-    <Setting Name="EnvTest" Type="System.String" Scope="User">
-      <Value Profile="(Default)">https://erp-dev.example.com/server</Value>
+    <Setting Name="EpicorBaseUrl" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_EPICOR_BASE_URL</Value>
     </Setting>
   </Settings>
 </SettingsFile>

@@ -28,20 +28,14 @@ namespace EpicorSvcs
     public static class EpicorConfiguration
     {
         /// <summary>
-        /// Builds a validated session from configuration, optionally overriding
-        /// the selected environment.
+        /// Builds a validated session from configuration.
         /// </summary>
-        /// <param name="env">
-        /// Optional environment selector (<c>"prod"</c>, <c>"pilot"</c>,
-        /// <c>"test"</c>, or a literal URL). When null, the configured
-        /// <c>DefaultEnvironment</c> is used.
-        /// </param>
         /// <returns>A fully-configured <see cref="EpicorRESTSessionKey"/>.</returns>
         /// <exception cref="InvalidOperationException">
         /// Thrown with an actionable message when required settings are missing
         /// or still hold template placeholder values.
         /// </exception>
-        public static EpicorRESTSessionKey BuildSession(string env = null)
+        public static EpicorRESTSessionKey BuildSession()
         {
             ValidateSettings();   // throws if app.config / env vars are not configured
 
@@ -55,13 +49,7 @@ namespace EpicorSvcs
                     ApiKey = Setting("EPICOR_APIKEY", ""),
                     DynamicURLModifier_Basic = "/api/v1/"
                 },
-                EnvironmentOptions = new RESTEnvironments
-                {
-                    Live = Setting("EPICOR_ENV_LIVE", Properties.Settings.Default.EnvLive),
-                    Pilot = Setting("EPICOR_ENV_PILOT", Properties.Settings.Default.EnvPilot),
-                    Development = Setting("EPICOR_ENV_TEST", Properties.Settings.Default.EnvTest)
-                },
-                Environment = env ?? Setting("EPICOR_ENV", Properties.Settings.Default.DefaultEnvironment)
+                BaseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.EpicorBaseUrl)
             };
         }
 
@@ -98,10 +86,7 @@ namespace EpicorSvcs
             string pass = Setting("EPICOR_PASS", Properties.Settings.Default.DefaultPasskey);
             string apiKey = Setting("EPICOR_APIKEY", "");
             string company = Setting("EPICOR_COMPANY", Properties.Settings.Default.DefaultCompany);
-            string envSel = Setting("EPICOR_ENV", Properties.Settings.Default.DefaultEnvironment);
-            string envProd = Setting("EPICOR_ENV_LIVE", Properties.Settings.Default.EnvLive);
-            string envPilo = Setting("EPICOR_ENV_PILOT", Properties.Settings.Default.EnvPilot);
-            string envTest = Setting("EPICOR_ENV_TEST", Properties.Settings.Default.EnvTest);
+            string baseUrl = Setting("EPICOR_BASE_URL", Properties.Settings.Default.EpicorBaseUrl);
 
             // Either Basic auth (user+pass) or API key auth is acceptable.
             // Only complain if neither is configured.
@@ -116,23 +101,7 @@ namespace EpicorSvcs
             }
 
             Check("DefaultCompany", company, "e.g. EPIC01");
-            Check("DefaultEnvironment", envSel, "prod / pilot / test");
-
-            // Only require the URL for the environment that's actually selected.
-            switch ((envSel ?? "").ToLowerInvariant())
-            {
-                case "prod":
-                case "live":
-                    Check("EnvLive", envProd, "https://erp-live.example.com/server");
-                    break;
-                case "pilot":
-                    Check("EnvPilot", envPilo, "https://erp-pilot.example.com/server");
-                    break;
-                case "test":
-                case "third":
-                    Check("EnvTest", envTest, "https://erp-test.example.com/server");
-                    break;
-            }
+            Check("EpicorBaseUrl", baseUrl, "https://your-epicor.example.com/server");
 
             if (problems.Count > 0)
             {
@@ -146,7 +115,7 @@ namespace EpicorSvcs
                 msg.AppendLine("                        EpicorSvcDemo project folder and fill in values.");
                 msg.AppendLine("  Option 2 (CI / prod): set environment variables of the same name");
                 msg.AppendLine("                        prefixed EPICOR_ (e.g. EPICOR_USER, EPICOR_PASS,");
-                msg.AppendLine("                        EPICOR_COMPANY, EPICOR_ENV, EPICOR_ENV_PILOT).");
+                msg.AppendLine("                        EPICOR_COMPANY, EPICOR_BASE_URL).");
                 msg.AppendLine();
                 msg.AppendLine("See CONFIGURATION.md for details.");
 
