@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.4.0] — 2026-06-06
+
+This release surfaces Epicor's error feedback as first-class data, collapses the REST transport into a single class, and renames the client factory to state its purpose. *Breaking* for `EpicorSvcs` (the content of `OperationResult.ErrorMessage` changes) and `KeriConfigurator` (the factory rename); `RESTServices` syncs to 0.3.0 (transport collapse plus new error fields); `FileHandling` is unchanged at 0.3.0.
+
+### Added
+
+- **`OperationResult<T>.ErrorType` and `OperationResult<T>.CorrelationId`.** First-class error fields. `ErrorType` is Epicor's fully-qualified exception class (e.g. `Ice.Common.RecordNotFoundException`); `CorrelationId` is Epicor's per-call id, which matches a failure to a server-side log entry. Both are populated by parsing Epicor's error envelope, and both are null on success or for non-Epicor errors. Branch on `ErrorType` rather than scraping `ErrorMessage` text.
+
+- **Structured error fields on the transport response.** *(RESTServices)* On an HTTP error, `RESTConnect` now returns `statusCode` (numeric), `reasonPhrase`, and `httpResponseBody` (the raw body, verbatim) as properties alongside `ErrorMessage`. The transport stays vendor-neutral — it carries the body, it does not parse it.
+
+- **Demo and POCs print `CorrelationId` on failure.** Every failure path in `EpicorSvcDemo` and the `EpicorSvcPOCs` prints the correlation id beneath the error message (when one is present), so a failed run shows the id to match against Epicor's logs.
+
+### Changed
+
+- **Epicor error feedback is parsed and surfaced.** *Breaking.* `OperationResult.ErrorMessage` now carries Epicor's clean message (e.g. `Record not found.`) instead of the raw `HTTP {status} {reason} calling {uri} — {body}` string the transport previously produced. The work is layered: `RESTServices` emits the numeric status and raw body (vendor-neutral); `EpicorSvcs` parses Epicor's flat error envelope (`ErrorMessage` / `ErrorType` / `CorrelationId` / `HttpStatus`) from that body and stores the parsed envelope (with `ErrorDetails`) in `RawResponse`. A consumer that logged or matched on the old message string will see different text. `EpicorSvcs` — 0.4.0.
+
+- **`RESTHttpClient` collapsed into `RESTConnect`.** *(RESTServices) Breaking.* The `RESTConnect` / `RESTHttpClient` inheritance pair merged into a single `public class RESTConnect` in `RESTServices.Transport` — an internal seam with nothing on the other side of it. `EpicorSvc` still derives from `RESTConnect` (unchanged); the internal static helpers (`BuildResourceUrl`, `ResolveApiKeyHeaderName`) remain internal and are still reached by the test project via `InternalsVisibleTo`. `RESTServices` — 0.3.0.
+
+- **`KeriConfig.CreateClient()` renamed to `KeriConfig.BuildEpicorClient()`.** *Breaking (in-solution).* The factory now names what it returns — your connection to the Epicor/Kinetic REST API — and joins the `BuildSession()` / `BuildSmtpSettings()` family. In-solution callers (the demo and POCs) were updated. `KeriConfigurator` — 0.4.0.
+
+- **`UDTableSvc.IsRecordNotFound` keys on `ErrorType`.** Not-found detection now matches `ErrorType == "Ice.Common.RecordNotFoundException"` (with a bare-404 fallback), replacing the previous status-code-or-message-text sniff. The Automatic upsert's add-vs-update fall-through is unchanged in behavior, more robust in mechanism.
+
+- **Version bumps.** `EpicorSvcs` 0.3.0 — 0.4.0 (driver; breaking error-message content). `RESTServices` 0.2.5 — 0.3.0 (transport collapse, breaking; plus the additive error fields). `KeriConfigurator` 0.3.0 — 0.4.0 (breaking factory rename). `FileHandling` is unchanged at 0.3.0.
+
+### Fixed
+
+- **`OperationResult.StatusCode` was always null.** The transport baked the HTTP status into the `ErrorMessage` string only and never exposed it as a value, so `StatusCode` never populated. It now reads the numeric status the transport emits (falling back to the envelope's `HttpStatus`), so status-code checks work.
+
+### Removed
+
+- **`RESTHttpClient` (public type).** *(RESTServices) Breaking.* Merged into `RESTConnect`; see Changed. No external reference to the type survives in the solution.
+
+---
+
 ## [0.3.0] — 2026-06-06
 
 Configuration moves out of the libraries into a dedicated composition root. `EpicorSvcs` and `FileHandling` no longer read configuration at all; the new `KeriConfigurator` project owns the unified settings, builds the sessions/clients and email settings, and onboards them interactively with live tests. *Breaking* for both libraries — they sync to 0.3.0; `RESTServices` is unchanged at 0.2.5.
