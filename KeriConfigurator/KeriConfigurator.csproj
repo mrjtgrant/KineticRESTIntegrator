@@ -14,11 +14,10 @@
     <Company></Company>
     <Copyright>Copyright (c) 2025-2026 Justin Grant</Copyright>
 
-    <!-- Placeholder initial version. The official initial version is a
-         versioning decision for the 0.3.0 batch (Step 5) - see CHANGELOG. -->
-    <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
+    <!-- Initial version, aligned with the coordinated 0.3.0 release - see CHANGELOG. -->
+    <Version>0.3.0</Version>
+    <AssemblyVersion>0.3.0.0</AssemblyVersion>
+    <FileVersion>0.3.0.0</FileVersion>
 
     <!-- Keep a stable ProjectGuid so the .sln reference resolves. -->
     <ProjectGuid>{3AD2BFD9-D816-4648-9F91-F0B31CD8D172}</ProjectGuid>
