@@ -17,7 +17,7 @@ using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinet
 
     // BAQ rows are returned as JObject — a BAQ's columns can change
     // whenever the query is edited, so results aren't bound to a DTO.
-    var result = await epicorClient.BAQ.BAQResultsAsync<JObject>("MyOpenOrders_BAQ", parameters);
+    var result = await epicorClient.BAQ.ExecuteAsync<JObject>("MyOpenOrders_BAQ", parameters);
     if (result.IsFailure)
     {
         Console.WriteLine($"BAQ failed: {result.ErrorMessage}");
