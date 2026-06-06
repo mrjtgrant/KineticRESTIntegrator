@@ -192,6 +192,78 @@ namespace FileHandling
             return report;
         }
 
+        /// <summary>
+        /// Tests whether the SMTP relay in <paramref name="smtp"/> is reachable:
+        /// opens a TCP connection to <c>host:port</c> and reads the server's
+        /// greeting line, with a short timeout. This is a connectivity probe, not
+        /// a send — it does not authenticate, negotiate TLS, or transmit a
+        /// message, so it verifies host/port/firewall but not credentials. The
+        /// same behavior applies on both target frameworks.
+        /// </summary>
+        /// <param name="smtp">The SMTP settings to probe.</param>
+        /// <returns><c>null</c> on success; otherwise a human-readable error.</returns>
+        public static string TestConnection(SmtpSettings smtp)
+        {
+            string validationError = ValidateSmtpConfig(smtp);
+            if (validationError != null)
+                return validationError;
+
+            if (string.IsNullOrWhiteSpace(smtp.host))
+                return "No SMTP host is configured.";
+
+            const int timeoutMs = 10000;
+            try
+            {
+                using (var tcp = new System.Net.Sockets.TcpClient())
+                {
+                    var connect = tcp.ConnectAsync(smtp.host, smtp.port);
+                    if (!connect.Wait(timeoutMs))
+                        return "Timed out connecting to " + smtp.host + ":" + smtp.port
+                             + " (after " + (timeoutMs / 1000) + "s). Check the host, port, and firewall.";
+                    if (connect.IsFaulted)
+                        return (connect.Exception?.GetBaseException() ?? (Exception)connect.Exception)?.Message
+                             ?? ("Could not connect to " + smtp.host + ":" + smtp.port + ".");
+
+                    // Read the SMTP greeting (a line starting with "220") to confirm
+                    // something is actually speaking SMTP, not just an open port.
+                    using (var stream = tcp.GetStream())
+                    {
+                        stream.ReadTimeout = timeoutMs;
+                        var sb = new StringBuilder();
+                        var buffer = new byte[512];
+                        try
+                        {
+                            int read = stream.Read(buffer, 0, buffer.Length);
+                            if (read > 0)
+                                sb.Append(Encoding.ASCII.GetString(buffer, 0, read));
+                        }
+                        catch (Exception)
+                        {
+                            // Connected but no greeting within the timeout. The port is
+                            // open; treat the connection as reachable rather than failing.
+                            return null;
+                        }
+
+                        string greeting = sb.ToString().TrimStart();
+                        if (greeting.Length == 0)
+                            return null; // open, silent: reachable
+                        if (greeting.StartsWith("220"))
+                            return null; // proper SMTP greeting
+                        if (greeting.StartsWith("421") || greeting.StartsWith("554"))
+                            return "Connected, but the server refused service: "
+                                 + greeting.Split('\n')[0].Trim();
+
+                        // Reachable but unexpected banner - still a successful connect.
+                        return null;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                return (e.GetBaseException() ?? e).Message;
+            }
+        }
+
         // Validates the SMTP configuration. Returns an error message if invalid,
         // or null if the config is okay. Rules apply identically on both target
         // frameworks — the library exposes the same SMTP capabilities everywhere,
