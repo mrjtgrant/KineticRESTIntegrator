@@ -1,140 +1,136 @@
 # Configuration
 
-How Keri connects to Epicor — from a fresh checkout, to a working POC, to production.
+How Keri connects to Epicor — from a fresh checkout, to a working run, to your own application.
 
-## Three ways to supply a connection
+## One config, owned in one place
 
-Keri resolves an Epicor connection from one of three sources, each suited to a stage of the lifecycle:
+Keri's configuration lives in a **single shared `App.config`**, owned by **KeriConfigurator** — the composition root. KeriConfigurator holds the unified settings schema (Epicor connection *and* email/SMTP), reads it, and builds the sessions and clients the rest of the solution uses.
 
-| Source | Use it for | Where credentials live |
-|---|---|---|
-| **`App.config`** (User settings) | Local development & POCs | A gitignored file you fill in by hand |
-| **Environment variables** (`EPICOR_*`) | Production / CI / containers | The host environment — nothing on disk |
-| **`EpicorRESTSessionKey`** (in code) | Web portals, vaults, Credential Manager | Passed at runtime; never stored by Keri |
+The three libraries — `RESTServices`, `EpicorSvcs`, `FileHandling` — read **no configuration of their own**. They're handed what they need: an `EpicorRESTSessionKey` (built by `KeriConfig.CreateClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
 
-These stack rather than being mutually exclusive: environment variables override individual `App.config` settings row by row, and a programmatic `EpicorRESTSessionKey`, if supplied, bypasses both. So the same binary can read from `App.config` on a developer's machine and from environment variables in production with no code change — choose per environment, not per project.
+The solution's executables (`EpicorSvcDemo`, `EpicorSvcPOCs`) share KeriConfigurator's single `App.config` through an MSBuild `<AppConfig>` link, so there is exactly one file to fill in for the whole solution.
 
----
-
-## Out of the box (quick start)
-
-1. **Clone and build the solution.** There is **one** config template for the whole solution — `EpicorSvcDemo/App.config.template` — and it carries both the Epicor connection and the email/SMTP settings. On first build, the demo (the startup project) seeds its `App.config` from that template *if it doesn't already exist*, then fails the build once with a message telling you to fill it in. Your filled-in copy is never overwritten by later builds, and `App.config` is gitignored — your credentials never reach the repo. The template is the committed reference and is left untouched.
-
-2. **Open `EpicorSvcDemo/App.config`** and fill in the values (see the tables below). Save.
-
-3. **Rebuild and run the demo.** That's a working POC against your environment — it pulls parts from a BAQ, round-trips them through a UD table, and emails them.
-
-> The runtime reads the **startup project's** config (it becomes `EpicorSvcDemo.exe.config` at build). The class libraries (`EpicorSvcs`, `FileHandling`) do **not** have their own config — they read the running app's. Editing `App.config` and re-running without a rebuild uses the stale copy, so rebuild after every change.
-
-### The settings to fill
-
-**Epicor connection** — `<userSettings><EpicorSvcs.Properties.Settings>`:
-
-| Setting | Meaning |
-|---|---|
-| `DefaultUser` | Epicor user with REST access (a service account is recommended) |
-| `DefaultPasskey` | Password for `DefaultUser` (Basic auth) |
-| `DefaultApiKey` | API key for v2 OData auth |
-| `DefaultCompany` | Company ID, e.g. `EPIC01` |
-| `DefaultBaseUrl` | Full base URL of your Epicor app server, no trailing slash — e.g. `https://yourco-pilot.epicorsaas.com/server` |
-
-Authentication uses Basic (`DefaultUser` + `DefaultPasskey`) and/or an API key (`DefaultApiKey`) for v2 OData. The first service construction validates what's present and names anything missing — no silent 401s.
-
-**Email / SMTP** — `<userSettings><FileHandling.Properties.Settings>` (only needed if you use the email features):
-
-| Setting | Meaning |
-|---|---|
-| `FromEmail` | Default "From:" address on outbound mail |
-| `DeveloperEmail` | Default BCC (audit), and the only recipient when `IsDebug = true` |
-| `GroupEmail` | Optional distribution list (reserved; leave as placeholder) |
-| `SMTPHost` | SMTP relay host or IP |
-| `SMTPPort` | SMTP port (`25` default; `587` for STARTTLS) |
-| `SMTPEnableSsl` | `False` for plain port-25 relay; `True` for STARTTLS on 587 |
-| `SMTPUsername` / `SMTPPassword` | SMTP auth; leave empty for anonymous relay |
-
-Then `EpicorClient.FromConfiguration()` reads the connection settings automatically, and the email helpers read theirs.
-
-### Multiple environments
-
-Configuration describes **one** environment — the single `DefaultBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login — not a real environment switch.
-
-To work against more than one environment, build a full `EpicorRESTSessionKey` per environment in code and hand it to the client — each session carries its own URL *and* its own credentials. The [programmatic section](#programmatic-epicorrestsessionkey) below shows how (Windows Credential Manager, a vault, or a portal that brokers credentials per environment). For a one-off run pointed at a different server *with the same credentials*, override just the URL for that run via the `EPICOR_BASE_URL` environment variable.
-
----
-
-## Using Keri from your own project
-
-Keri is a library, so the connection config lives in **your application**, not in the Keri projects:
-
-1. Reference `EpicorSvcs` (and `RESTServices`, `FileHandling` as needed).
-2. Copy the `<configSections>` declaration **and** the relevant `<userSettings>` block(s) from `EpicorSvcDemo/App.config.template` into your app's `App.config` — the `EpicorSvcs.Properties.Settings` section for the connection, and the `FileHandling.Properties.Settings` section too if you use email. The `<configSections>` header is what binds those sections — without it, every setting reads empty and you'll get *"EpicorSvcs is not configured."*
-3. Fill in your values and use the client:
-
-```csharp
-using (var epicor = EpicorClient.FromConfiguration())   // reads App.config / env vars
-{
-    var parts = await epicor.Part.PartsAsync();
-}
+```
+KeriConfigurator/App.config   ← the one config file
+        │
+        ├─ KeriConfig.CreateClient()      → EpicorClient   (connection)
+        └─ KeriConfig.BuildSmtpSettings() → SmtpSettings    (email)
+        │
+   shared via <AppConfig> by
+        ├─ EpicorSvcDemo
+        └─ EpicorSvcPOCs
 ```
 
-A library `App.config` (in `EpicorSvcs`, `FileHandling`, etc.) is **never read at runtime** — only the startup executable's config is. If settings come back empty, the config is almost always in the wrong project.
+---
+
+## Quick start
+
+1. **Build the solution.** On the first build, KeriConfigurator seeds `KeriConfigurator/App.config` from `App.config.template` *if it doesn't already exist*, then fails the build once with a message telling you to set your values. Your filled-in copy is never overwritten by later builds, and `App.config` is gitignored — your credentials never reach the repo.
+
+2. **Run KeriConfigurator.** It walks you through setup and verifies it live before saving:
+   ```
+   dotnet run --project KeriConfigurator -f net8.0
+   ```
+   (or run the built `KeriConfigurator.exe`, or set it as the startup project in Visual Studio and run). It multi-targets, so the `dotnet run` CLI needs a `-f` to pick one; either framework behaves identically.
+
+3. **Run the demo** to confirm end-to-end:
+   ```
+   dotnet run --project EpicorSvcDemo
+   ```
+   It reads the same shared `App.config`, pulls parts from a BAQ, round-trips them through a UD table, and (if email is configured) emails them.
+
+> Editing `App.config` and re-running without a rebuild can use a stale copy — rebuild after a manual change. Running KeriConfigurator writes the source `App.config` directly, so a rebuild picks it up.
 
 ---
 
-## Production: environment variables
+## What KeriConfigurator asks for
 
-For deployed solutions, drop `App.config` entirely and supply the same values as environment variables. This keeps credentials off disk and lets an orchestrator (container runtime, key vault, CI secret store) inject them at launch — the connection handshake is assembled in memory and never committed anywhere.
+The console prompts for two groups. Every field shows its current value as `[default]`; press Enter to keep it, or type a new value. Fields that are blank or still hold a `YOUR_*` placeholder need a value. Secrets are masked as you type.
 
-The names mirror the settings with an `EPICOR_` prefix. The exact list is whatever the *"is not configured"* validation message prints — treat that as the source of truth — but they are:
+**Epicor connection** (required — KeriConfigurator tests it against the live server before saving):
 
-| Setting | Environment variable |
+| Setting | Meaning |
 |---|---|
-| `DefaultUser` | `EPICOR_USER` |
-| `DefaultPasskey` | `EPICOR_PASS` |
-| `DefaultCompany` | `EPICOR_COMPANY` |
-| `DefaultBaseUrl` | `EPICOR_BASE_URL` |
-| API key (if used) | `EPICOR_APIKEY` |
+| `DefaultBaseUrl` | Full base URL of your Epicor app server, no trailing slash — e.g. `https://yourco.epicorsaas.com/server` |
+| `DefaultCompany` | Company ID, e.g. `EPIC01` |
+| `DefaultUser` | Epicor user with REST access (a service account is recommended) |
+| `DefaultPasskey` | Password for `DefaultUser` (Basic auth) |
+| `DefaultApiKey` | API key for v2 OData auth (optional — leave blank for Basic/v1) |
 
-With these set, `EpicorClient.FromConfiguration()` resolves the connection with no config file present. Environment variables take precedence over `App.config` row by row, so you can also leave `App.config` in place and override just a few values (for example, point a local build at prod) through the environment.
+Authentication uses Basic (`DefaultUser` + `DefaultPasskey`) and/or an API key. The API key's presence is what selects v2 OData; without it the transport uses v1 Basic. At least one form of auth, plus the base URL and company, must be set — KeriConfigurator's connection test reads a single Part record and reports the HTTP status if it fails (401 → check credentials, 404 → check URL/company).
 
-The email/SMTP settings have their own override convention: each can be supplied by an environment variable with an `SMTP_` / `EMAIL_` prefix (e.g. the SMTP host, port, and credentials), so production email config also stays off disk. The template's comments are the source of truth for the exact names; prefer this over committing `SMTPPassword` into a config file.
+**Email / SMTP** (optional — only if you use the email features):
+
+| Setting | Meaning |
+|---|---|
+| `SMTPHost` | SMTP relay host or IP. Leave blank to skip email entirely. |
+| `SMTPPort` | SMTP port (`25` default; `587` for STARTTLS) |
+| `SMTPEnableSsl` | `False` for a plain port-25 relay; `True` for STARTTLS on 587 |
+| `SMTPUsername` / `SMTPPassword` | SMTP auth; leave the username blank for an anonymous relay (the password is then skipped) |
+| `FromEmail` | Default `From:` address on outbound mail |
+| `DeveloperEmail` | Default BCC (audit), and the only recipient when `EmailSpecs.IsDebug = true` — set this to your own address so test runs don't email customers |
+
+After you enter the SMTP host, KeriConfigurator runs a **reachability test**: it opens a connection to `host:port` and reads the server's greeting, with a timeout. This proves the host, port, and firewall are right. It does **not** authenticate or send a message, so it doesn't verify credentials or TLS — a bad password would surface on the first real send. If the test fails, you're asked whether to **[K]eep** the settings anyway (e.g. a relay reachable only from production), **[R]e-enter** them, or **[S]kip** email for now.
+
+Email is fully optional: leave `SMTPHost` blank and the email features stay off — the demo detects this and cleanly skips its email step.
 
 ---
 
-## Programmatic: `EpicorRESTSessionKey`
+## Re-running and changing settings
 
-When credentials shouldn't sit in a file or environment at all — a web portal that authenticates each user, a secrets vault, or Windows Credential Manager — construct the session in code and hand it to the client. This bypasses `App.config` and the environment variables completely:
+Run KeriConfigurator again any time. When the connection is already configured, it shows a summary and offers:
+
+- **`[Enter]` review/update** — walk every field with its current value as the default; Enter keeps each, so you only type what's changed or missing. This is how you add email to an existing setup, or revisit any field.
+- **`[T]` test saved settings** — run the live connection test (and the SMTP reachability test, if a host is configured) against what's already saved, without re-entering anything.
+
+Only fields that need a value force input; everything configured is kept on Enter.
+
+---
+
+## Hand-editing `App.config` (the fallback)
+
+The console is the easy path, but the file is plain XML — you can edit it directly. Open `KeriConfigurator/App.config` and set the values in the `<userSettings><KeriConfigurator.Properties.Settings>` section. The setting names are exactly those in the tables above. The `<configSections>` header at the top is what binds the section; don't remove it. Rebuild after editing so the executables pick up the change.
+
+---
+
+## Configuring from your own code (`EpicorRESTSessionKey`)
+
+When credentials shouldn't sit in a file at all — a web portal that authenticates each user, a secrets vault, or Windows Credential Manager — build the session in code and hand it to the client. This bypasses `App.config` entirely and is the path for any consumer outside this solution (your application supplies its own configuration; the libraries store nothing):
 
 ```csharp
+using EpicorSvcs;
+using EpicorSvcs.Dtos;
+using RESTServices;
+
 var session = new EpicorRESTSessionKey
 {
-    Company     = company,
-    BaseUrl     = baseUrl,                        // the Epicor app-server base URL
-    AuthObject  = new RESTAuthenticationObject
+    Company    = company,
+    BaseUrl    = baseUrl,                         // the Epicor app-server base URL
+    AuthObject = new RESTAuthenticationObject
     {
         Username = user,
         Userkey  = password,
-        ApiKey   = ""                            // set a key here for v2 OData; independent of Basic above
+        ApiKey   = ""                             // set a key here for v2 OData; independent of Basic above
     }
 };
 
 using (var epicor = new EpicorClient(session))   // uses exactly these credentials
 {
-    // ...
+    var parts = await epicor.Part.PartsAsync();
 }
 ```
 
 ### From a web portal gate
 
-The hosting portal authenticates the user, then builds a session per request or per signed-in session from the credentials it already holds — Keri stores nothing, so the secret lives only as long as the call:
+The hosting portal authenticates the user, then builds a session per request from the credentials it already holds — Keri stores nothing, so the secret lives only as long as the call:
 
 ```csharp
 // after your portal has authenticated the request
 var session = new EpicorRESTSessionKey
 {
-    Company     = portalUser.Company,
-    BaseUrl     = config.EpicorUrl,
-    AuthObject  = new RESTAuthenticationObject
+    Company    = portalUser.Company,
+    BaseUrl    = config.EpicorUrl,
+    AuthObject = new RESTAuthenticationObject
     {
         Username = portalUser.EpicorUser,
         Userkey  = portalUser.EpicorPasskey   // held only for this request
@@ -143,36 +139,105 @@ var session = new EpicorRESTSessionKey
 using (var epicor = new EpicorClient(session)) { /* serve the request */ }
 ```
 
-This is the path for orchestrating and obfuscating the handshake: the portal owns the secret, decides per-user what Epicor identity to use, and Keri only ever sees a transient session object.
-
 ### From Windows Credential Manager
 
-Read the stored credential at startup (via a credential-manager library or a `CredRead` P/Invoke) and build the session — credentials stay in the OS vault, never in your app's files:
+Store the whole connection — base URL, company, username, password, and (if used) API key — in the credential store, then read it back at connect time and build the session. Nothing sensitive lives in a file. A small `ConnectionManager` helper wraps the credential store and returns each field for a named connection; a real `Connect` method then looks like:
 
 ```csharp
-// (user, pass) pulled from Windows Credential Manager for a named target
-var (user, pass) = ReadWindowsCredential("Keri:Epicor");
+using System;
+using System.Collections.Generic;
+using EpicorSvcs;
+using EpicorSvcs.Dtos;
+using RESTServices;
 
-var session = new EpicorRESTSessionKey
+public string Connect(string connectionId)
 {
-    Company     = "EPIC01",
-    BaseUrl     = "https://erp-live.example.com/server",
-    AuthObject  = new RESTAuthenticationObject { Username = user, Userkey = pass }
-};
-using (var epicor = new EpicorClient(session)) { /* ... */ }
+    var conn        = ConnectionManager.Get(connectionId);          // url, company, username
+    string url      = conn.Url;
+    string company  = conn.Company;
+    string username = conn.Username;
+    string password = ConnectionManager.GetPassword(connectionId);  // from the credential store
+    string apiKey   = ConnectionManager.GetApiKey(connectionId);    // optional
+
+    var missing = new List<string>();
+    if (string.IsNullOrEmpty(url))      missing.Add("Url");
+    if (string.IsNullOrEmpty(company))  missing.Add("Company");
+    if (string.IsNullOrEmpty(username)) missing.Add("Username");
+    if (string.IsNullOrEmpty(password)) missing.Add("Password");
+    if (missing.Count > 0)
+        return $"Connection '{connectionId}' is missing: {string.Join(", ", missing)}";
+
+    try
+    {
+        _epicor?.Dispose();                       // dispose any previous connection
+        _epicor = new EpicorClient(new EpicorRESTSessionKey
+        {
+            Company    = company,
+            BaseUrl    = url,
+            AuthObject = new RESTAuthenticationObject
+            {
+                Username = username,
+                Userkey  = password,
+                ApiKey   = apiKey                 // empty/null -> Basic (v1); set -> API-key (v2 OData)
+            }
+        });
+        return "";
+    }
+    catch (Exception ex)
+    {
+        return ex.Message;
+    }
+}
 ```
 
-`ReadWindowsCredential` is your helper — e.g. the `CredentialManagement` NuGet package or a thin `advapi32!CredRead` P/Invoke. Keri doesn't depend on either; it only needs the resulting `EpicorRESTSessionKey`.
+`ConnectionManager` is your helper over the OS credential store (e.g. the `CredentialManagement` NuGet package or an `advapi32!CredRead` P/Invoke) — Keri doesn't depend on it; it only needs the resulting `EpicorRESTSessionKey`. Holding the client in a field (`_epicor`) and disposing the previous one lets a single app switch between stored connections at runtime.
 
 ---
 
-## The migration path
+## Multiple environments
 
-```
-Checkout ──> Fill App.config ──> POC running ──> Production
- (dev)        (one file, local,    (demo against     (EPICOR_* env vars,
-              gitignored)          your env)          or EpicorRESTSessionKey
-                                                      from portal / vault)
+Configuration describes **one** environment — a single `DefaultBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login.
+
+To work against more than one environment, build a full `EpicorRESTSessionKey` per environment in code (each session carries its own URL *and* its own credentials) and hand it to the `EpicorClient` constructor, as shown above. This is the same mechanism the portal/vault examples use.
+
+---
+
+## Email from your own code
+
+`FileHandling` is config-free too. Build an `SmtpSettings` and pass it to the email entry point:
+
+```csharp
+using FileHandling;
+using FileHandling.Dtos;
+
+var smtp = new SmtpSettings
+{
+    host = "smtp.example.com",
+    port = 587,
+    enableSsl = true,
+    username = "relay-user",
+    password = "…",
+    from = "noreply@example.com",
+    developerEmail = "you@example.com"
+};
+
+// optional: probe the relay first (connect + greeting, no send)
+string err = Emailer.TestConnection(smtp);
+
+FileProcessing.EmailReport(mailMeta, smtp);
 ```
 
-Start with `App.config` to get going fast and visually. When you move to a real deployment, switch to environment variables so nothing sensitive is on disk — or, if a portal or vault brokers credentials per user, construct an `EpicorRESTSessionKey` in code and skip both. The same `EpicorClient` works across all three; only the source of the credentials changes.
+Within this solution, `KeriConfig.BuildSmtpSettings()` produces that `SmtpSettings` from the shared `App.config`, and the demo passes it straight to `EmailReport`.
+
+---
+
+## What changed from earlier versions
+
+If you used Keri before 0.3.0, the configuration model changed substantially:
+
+- **Per-library `App.config` files are gone.** `EpicorSvcs` and `FileHandling` no longer read configuration or have their own settings. There's one shared `App.config`, owned by KeriConfigurator.
+- **`EpicorClient.FromConfiguration()` and `EpicorConfiguration` were removed.** Build a client with `KeriConfig.CreateClient()` (inside this solution) or `new EpicorClient(session)` (from your own code).
+- **`SmtpSettings` is now public and config-free**, and `FileProcessing.EmailReport` takes an `SmtpSettings` parameter.
+- **Environment-variable configuration (`EPICOR_*`) was removed.** v0.3.0 is `App.config`-by-default. If you relied on `EPICOR_*` for CI/production, supply an `EpicorRESTSessionKey` in code instead (the programmatic path above), which keeps secrets off disk just as well. Re-introducing an environment-variable reader at the composition root is a documented future option.
+
+The migration in one line: wherever you called `EpicorClient.FromConfiguration()`, call `KeriConfig.CreateClient()` (in-solution) or construct an `EpicorRESTSessionKey` and pass it to `new EpicorClient(...)` (external).

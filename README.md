@@ -5,7 +5,7 @@
 Multi-targets **.NET Framework 4.8** and **.NET 8.0**.
 
 ```csharp
-using (var client = EpicorClient.FromConfiguration())
+using (var client = KeriConfig.CreateClient())   // built from the shared App.config; run KeriConfigurator first
 {
     // BAQ parameters are passed as a name/value dictionary.
     // Values are object, so strings and numbers both work.
@@ -36,7 +36,7 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**v0.2.0 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, one hundred and eight unit tests pass, and a runnable example project exists. The library compiles and is being used in production at one site. It has not yet been independently reviewed by another team.
+**v0.3.0 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, and the libraries are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. One hundred and eight unit tests pass, and runnable example projects exist. The library builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
 
 ---
 
@@ -46,7 +46,7 @@ The library multi-targets **.NET Framework 4.8** (`net48`) and **.NET 8.0** (`ne
 
 The three library projects (`RESTServices`, `EpicorSvcs`, `FileHandling`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
 
-The two consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`) and the test project remain single-target `net48`. They consume the `net48` build of the libraries.
+The consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`) and the test project are single-target `net48`. `KeriConfigurator` — the setup tool and composition root — multi-targets `net48;net8.0` so the net48 executables can consume it while it stays runnable on net8. Each consumes the matching build of the libraries.
 
 The one place where target framework matters internally is `FileHandling.Emailer.Send`: on `net48` it uses `System.Net.Mail.SmtpClient` (BCL, no NuGet dependency), and on `net8.0` it uses `MailKit.Net.Smtp.SmtpClient` 4.16.0+ (a patched, modern SMTP client). The `#if NET48` switch is purely an implementation detail; the same `App.config` settings produce the same behavior on both targets.
 
@@ -61,6 +61,7 @@ The one place where target framework matters internally is `FileHandling.Emailer
 | `FileHandling` | `FileHandling.dll` | Excel generation (ClosedXML), CSV writer, and SMTP email sender. |
 | `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
+| `KeriConfigurator` | `KeriConfigurator.exe` | Composition root + interactive setup: owns the unified config, builds clients/sessions, and onboards and live-tests the connection and SMTP. |
 | `KineticRESTIntegrator.Tests` | xUnit test project | 108 offline unit tests covering the framework's deterministic surface. |
 
 ---
@@ -87,21 +88,20 @@ The one place where target framework matters internally is `FileHandling.Emailer
    dotnet restore KineticRESTIntegrator.sln
    ```
 
-3. **Create your local `App.config` files** from the templates:
-   ```
-   copy EpicorSvcs\App.config.template   EpicorSvcs\App.config
-   copy FileHandling\App.config.template FileHandling\App.config
-   ```
-
-4. **Edit each `App.config`** and replace the `YOUR_*` placeholders with your real Epicor URLs, credentials, and SMTP settings. See [Configuration](#configuration) below.
-
-5. **Build.**
+3. **Build.** On the first build, KeriConfigurator seeds its `App.config` from the template and the build stops once with a message to configure it:
    ```
    dotnet build KineticRESTIntegrator.sln
    ```
 
-6. **Run the demo** (`EpicorSvcDemo`) to verify your connection end-to-end — it runs a BAQ, builds an Excel attachment, and emails it.
+4. **Run KeriConfigurator** to set and live-test your connection (and, optionally, email):
    ```
+   dotnet run --project KeriConfigurator -f net8.0
+   ```
+   It prompts for the connection and verifies it against your server, then optionally prompts for SMTP and runs a reachability test. See [Configuration](#configuration). You can also set the values by hand in `KeriConfigurator/App.config`.
+
+5. **Rebuild and run the demo** to verify end-to-end — it runs a BAQ, builds an Excel attachment, and (if email is configured) emails it:
+   ```
+   dotnet build KineticRESTIntegrator.sln
    dotnet run --project EpicorSvcDemo
    ```
 
@@ -111,76 +111,36 @@ The one place where target framework matters internally is `FileHandling.Emailer
 
 ## Configuration
 
-The framework reads settings from each project's `App.config` (`userSettings` section). **Every setting can also be overridden by an environment variable of the same name** — useful for CI builds and production deployment where you don't want a config file with secrets.
+Configuration is owned by **KeriConfigurator**, the composition root: one unified settings schema (Epicor connection *and* email/SMTP) in one shared `App.config`. The libraries read nothing themselves — KeriConfigurator builds the session and SMTP settings and hands them in, and the executables share that one `App.config` via an MSBuild `<AppConfig>` link.
 
-### Where credentials come from
+The fastest way to configure is to **run KeriConfigurator** (see [Setup](#setup)): it prompts for each field, keeps already-set values on Enter, tests the Epicor connection against the live server, and runs an SMTP reachability check. You can also hand-edit `KeriConfigurator/App.config` directly.
 
-The framework supports three ways to provide credentials, and the right choice depends on **where the credentials live and how long they last**.
+### Connection settings
 
-| Source | Best for | Why |
+| Setting | Purpose | Example |
 |---|---|---|
-| **Programmatic session** — `new EpicorClient(new EpicorRESTSessionKey { ... })` | User-facing applications: web portals, desktop apps with sign-in, multi-tenant services. | Credentials come from a user action (a login form, a vault lookup, a token exchange) and exist only for the lifetime of that session. They never touch any config file or environment variable. The caller fully owns the credential lifecycle. |
-| **`App.config`** | Per-developer local setup. One developer working on one machine. | The file is gitignored, sits next to the binaries, and survives across runs without further action. Easy to set up, easy to edit, easy to switch environments by editing one line. Not appropriate for shared/production machines — a config file is a credential left on disk. |
-| **Environment variables** | Automated processes: scheduled jobs, services, CI builds, containers. | The credentials live in the surrounding system's secret store (a scheduler vault, a CI runner's secret manager, a container orchestrator) and reach the process only at startup. No secret-bearing file in the source tree, no secret-bearing file on disk. |
+| `DefaultBaseUrl` | Epicor app-server base URL, no trailing slash. | `https://company.epicorsaas.com/server` |
+| `DefaultCompany` | Epicor company ID. | `EPIC01` |
+| `DefaultUser` | Epicor username for Basic auth. | `your_epicor_user` |
+| `DefaultPasskey` | Password for that account. | (secret) |
+| `DefaultApiKey` | API key. Its presence selects v2 OData (else v1 Basic). | (secret) |
 
-These sources stack — you don't pick *one*. A programmatic session, if supplied, bypasses both other sources. Environment variables override individual `App.config` settings row by row. So the same binary can read its credentials from `App.config` on a developer's machine and from env vars when deployed, with no code change between the two.
-
-### `EpicorSvcs/App.config`
-
-| Setting | Env variable | Purpose | Example |
-|---|---|---|---|
-| `DefaultUser` | `EPICOR_USER` | Epicor username for Basic auth. | `your_epicor_user` |
-| `DefaultPasskey` | `EPICOR_PASS` | Password for that account. | (secret) |
-| `DefaultApiKey` | `EPICOR_APIKEY` | API key. Its presence selects v2 OData (else v1 Basic); use alone or alongside user+passkey. | (secret) |
-| `DefaultCompany` | `EPICOR_COMPANY` | Epicor company ID. | `EPIC01` |
-| `DefaultBaseUrl` | `EPICOR_BASE_URL` | Epicor app server base URL, no trailing slash. | `https://company-pilot.example.com/server` |
-
-Supply Basic (`DefaultUser` + `DefaultPasskey`), an API key (`DefaultApiKey`), or both — whichever your Epicor requires. The API key's presence is the only thing that selects v2 OData; without it the transport uses v1 Basic, and Basic and API-key credentials are independent (sent together if both are set). `DefaultCompany` and `DefaultBaseUrl` are always required.
-
-For `DefaultBaseUrl`: use the URL shown in the upper-right corner of your Epicor client. The framework treats it as an opaque string — copy it as-is, including the protocol and trailing path.
-
-### Multiple environments
-
-Configuration describes **one** environment — the single `DefaultBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login — not a real environment switch.
-
-To work against more than one environment, build a full `EpicorRESTSessionKey` per environment in code and hand it to the client — each session carries its own URL *and* its own credentials (see the programmatic-session example below, and CONFIGURATION.md). For a one-off run pointed at a different server *with the same credentials*, override just the URL for that run:
-
-```
-set EPICOR_BASE_URL=https://other-pilot.example.com/server
-dotnet run --project EpicorSvcDemo
-```
-
-### `FileHandling/App.config`
-
-Only needed if you use the email helpers.
+### Email settings (optional)
 
 | Setting | Purpose |
 |---|---|
-| `FromEmail` | Default `From:` address on outbound mail. |
-| `DeveloperEmail` | Default BCC, and the sole recipient when `EmailSpecs.IsDebug = true`. Set this to your own address so test runs don't email customers. |
-| `GroupEmail` | Optional broader distribution list. |
-| `SMTPHost` | SMTP relay host or IP. The default configuration uses port 25, no TLS, no auth — suitable for internal anonymous relays. |
-| `SMTPPort` | SMTP port. Default `25`. Use `587` for STARTTLS. |
-| `SMTPEnableSsl` | Enable TLS for the SMTP connection. Default `false`. When `true`, uses STARTTLS (must use a port other than 25 or 465). |
-| `SMTPUsername` | SMTP authentication username. Leave empty for anonymous relays. |
-| `SMTPPassword` | SMTP authentication password. Stored in plain text in `App.config`. |
+| `SMTPHost` | SMTP relay host or IP. Blank disables email. |
+| `SMTPPort` | SMTP port. `25` default; `587` for STARTTLS. |
+| `SMTPEnableSsl` | `True` for STARTTLS (use a port other than 25/465). |
+| `SMTPUsername` / `SMTPPassword` | SMTP auth; blank username = anonymous relay. |
+| `FromEmail` | Default `From:` address. |
+| `DeveloperEmail` | Default BCC, and the sole recipient when `IsDebug = true`. |
 
-### CI / production
+### From your own application
 
-For automated builds or deployed services, skip the `App.config` step and set environment variables instead:
+The libraries are configuration-free, so a consumer outside this solution supplies its own connection by building an `EpicorRESTSessionKey` in code and passing it to `new EpicorClient(session)` — ideal for a web portal, a vault, or Credential Manager, where the secret never touches a file. Email works the same way: build an `SmtpSettings` and pass it to `FileProcessing.EmailReport`.
 
-```
-set EPICOR_USER=your_epicor_user
-set EPICOR_PASS=...
-set EPICOR_COMPANY=EPIC01
-set EPICOR_BASE_URL=https://company-live.example.com/server
-```
-
-The framework reads env vars first and falls back to `App.config`. Anything set in the environment wins.
-
-### What happens if you forget
-
-The framework validates settings on the first service construction. If anything required is missing or still holds a `YOUR_*` placeholder, you get an explicit error listing exactly what's not set and how to fix it. No silent HTTP 401s.
+See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding flow, hand-editing, the programmatic / portal / vault patterns, multiple environments, and migration from the pre-0.3.0 model (per-library config and `EPICOR_*` environment variables, both removed).
 
 ---
 
@@ -191,7 +151,7 @@ The framework validates settings on the first service construction. If anything 
 `EpicorClient` is a disposable wrapper that holds one configured session and lazy-constructs each Epicor service on first access. It's the recommended entry point — one connection, many services, all disposed together.
 
 ```csharp
-using (var client = EpicorClient.FromConfiguration())   // reads App.config / env vars
+using (var client = KeriConfig.CreateClient())   // built from the shared App.config
 {
     var customers = await client.Customer.CustomersAsync(
         filters: new List<string> { "Inactive eq false" });
@@ -360,6 +320,8 @@ When you build the consumer, MSBuild copies the referenced DLLs into the consume
 
 **Do not add NuGet PackageReferences to the libraries Keri already brings in** — `Newtonsoft.Json`, `ClosedXML`, `MailKit`, `MimeKit`, or any of their transitives. See the next section for why.
 
+**Supplying configuration.** The libraries read no config of their own, so your application owns it: build an `EpicorRESTSessionKey` and pass it to `new EpicorClient(session)` (see [CONFIGURATION.md](CONFIGURATION.md)). The `KeriConfig` / `App.config` onboarding is for *this* solution's executables; an external consumer supplies a session in code.
+
 ---
 
 ## Dependency management
@@ -399,12 +361,11 @@ KineticRESTIntegrator/
 ├── .gitignore
 │
 ├── RESTServices/                    Low-level REST transport
-│   ├── Authentication/              RESTSessionKey, RESTAuthenticationObject, RESTEnvironments
+│   ├── Authentication/              RESTSessionKey, RESTAuthenticationObject
 │   ├── Transport/                   RESTHttpClient, RESTConnect
 │   └── RESTServices.csproj
 │
 ├── EpicorSvcs/                      Business Object wrappers
-│   ├── App.config.template          ← copy to App.config and edit
 │   ├── EpicorSvc.cs                 (base class — credential validation)
 │   ├── EpicorClient.cs              (the disposable facade)
 │   ├── OperationResult.cs           (the standard return type)
@@ -423,13 +384,20 @@ KineticRESTIntegrator/
 │       *.Workflows.cs partial-class file holding the orchestrators.
 │
 ├── FileHandling/                    Excel, CSV, email
-│   ├── App.config.template          ← copy to App.config and edit
-│   ├── Dtos/                        EmailSpecs, EMailMeta, SmtpSettings
+│   ├── Dtos/                        EmailSpecs, EMailMeta, SmtpSettings (SmtpSettings public)
 │   ├── ExcelReader.cs               worksheet → DataTable / JArray
 │   ├── ExcelWriter.cs               DataTable → .xlsx
 │   ├── Emailer.cs                   dual-path SMTP (System.Net.Mail / MailKit)
 │   ├── FileProcessing.cs
 │   └── FileHandling.csproj
+│
+├── KeriConfigurator/                Composition root + setup console
+│   ├── App.config.template          seeds the shared App.config on first build
+│   ├── App.config                   ← the one shared config (gitignored); exes link to it
+│   ├── KeriConfig.cs                builds sessions / clients + SmtpSettings from config
+│   ├── Program.cs                   interactive onboarding (connection + email, live tests)
+│   ├── Properties/                  unified Settings schema
+│   └── KeriConfigurator.csproj
 │
 ├── EpicorSvcDemo/                   End-to-end sample app
 │   ├── Program.cs
@@ -454,7 +422,7 @@ KineticRESTIntegrator/
 
 | Symptom | Likely cause |
 |---|---|
-| `InvalidOperationException: EpicorSvcs is not configured...` | You haven't copied `App.config.template` → `App.config`, or you left `YOUR_*` placeholders in place. The exception lists what's missing. |
+| `InvalidOperationException: EpicorSvcs is not configured...` | The shared `App.config` isn't filled in — run KeriConfigurator (or set values in `KeriConfigurator/App.config`) and clear any `YOUR_*` placeholders. The exception lists what's missing. |
 | `result.IsFailure` with HTTP 401 | Bad username/passkey, account disabled, or wrong environment URL. |
 | `result.IsFailure` with HTTP 404 | Wrong BO name, wrong company segment in the URL, or a record/BAQ was renamed/deleted. |
 | `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 or later — the type is `DateTime?` and accommodates this. |
@@ -473,7 +441,7 @@ The library has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 52 tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 108 tests, all green.
 
 Test Explorer in Visual Studio also discovers and runs them.
 
@@ -483,7 +451,7 @@ Test Explorer in Visual Studio also discovers and runs them.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
 
-1. **Never commit `App.config`** — it has credentials. Use `App.config.template` for any new settings.
+1. **Never commit `App.config`** — it has credentials. New settings go in KeriConfigurator’s unified schema and `App.config.template`.
 2. **Never commit secrets, internal URLs, real email addresses, or customer-specific data** in source files, tests, or examples.
 3. **Match the existing code style.** Async-with-`Async`-suffix, `OperationResult<T>` returns, XML doc comments on every public method, no `_c` columns in default DTOs (custom columns flow through `ExtraData`).
 

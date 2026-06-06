@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.3.0] — 2026-06-06
+
+Configuration moves out of the libraries into a dedicated composition root. `EpicorSvcs` and `FileHandling` no longer read configuration at all; the new `KeriConfigurator` project owns the unified settings, builds the sessions/clients and email settings, and onboards them interactively with live tests. *Breaking* for both libraries — they sync to 0.3.0; `RESTServices` is unchanged at 0.2.5.
+
+### Added
+
+- **`KeriConfigurator` — composition root and interactive setup console.** A `net48;net8.0` project that owns the single unified settings schema (Epicor connection *and* email/SMTP), the one shared `App.config` the executables consume via `<AppConfig>`, and the readers/factories that turn settings into objects: `KeriConfig.CreateClient()` (an `EpicorClient`) and `KeriConfig.BuildSmtpSettings()` (an `SmtpSettings`). The console onboards a fresh checkout end to end — it revisits any blank or placeholder field on each run (Enter keeps the current value; secrets are masked), tests the Epicor connection against the live server before saving, prompts for email, and runs an SMTP reachability test with a Keep/Re-enter/Skip choice on failure. It seeds its `App.config` from `App.config.template` on first build, then it (or a hand edit) fills in the values.
+
+- **`EpicorClient.TestConnectionAsync(CancellationToken)` — connectivity probe.** Reads a single Part record and returns `OperationResult<bool>`; used by the configurator (and available to callers) to verify a session reaches the server.
+
+- **`Emailer.TestConnection(SmtpSettings)` — SMTP reachability probe.** Opens a TCP connection to the relay and reads its greeting, with a timeout; returns `null` on success or an error string. It does not authenticate, negotiate TLS, or send a message — it verifies host/port/firewall, not credentials. A single code path on both target frameworks (no MailKit, no `#if`).
+
+### Changed
+
+- **The libraries are configuration-free; configuration is owned by the composition root.** *Breaking.* `EpicorSvcs` and `FileHandling` no longer read `App.config` (or anything else) as a side effect of construction. Configuration is resolved once, in `KeriConfigurator`, and flows inward as plain objects — an `EpicorRESTSessionKey` to `EpicorClient`, an `SmtpSettings` to the email path. In-solution callers use `KeriConfig.CreateClient()`; external callers build an `EpicorRESTSessionKey` and use `new EpicorClient(session)`.
+
+- **`SmtpSettings` is public and config-free; `FileProcessing.EmailReport` / `IsEmailConfigured` take it.** *Breaking (source).* `EmailReport(EMailMeta)` → `EmailReport(EMailMeta, SmtpSettings)` and `IsEmailConfigured()` → `IsEmailConfigured(SmtpSettings)`; the caller now supplies the email configuration. `SmtpSettings` (formerly `internal`) became `public`, gained a `developerEmail` field, and its `acct` field — the `From:` address — was renamed `from`. `Emailer.Send` is unchanged. FileHandling syncs to 0.3.0.
+
+- **Version syncs.** `EpicorSvcs` → 0.3.0 and `FileHandling` → 0.3.0 (both breaking this cycle); `RESTServices` stays at 0.2.5 (unchanged); `KeriConfigurator` takes 0.3.0 as its initial version, aligned with the coordinated release.
+
+### Removed
+
+- **`EpicorClient.FromConfiguration()` and the `EpicorConfiguration` class.** *Breaking.* Config-based client construction moves to the composition root. Replace `EpicorClient.FromConfiguration()` with `KeriConfig.CreateClient()` (in-solution) or `new EpicorClient(session)` (external).
+
+- **`SmtpSettings.FromConfiguration()` and the per-library `Settings` schemas** (`EpicorSvcs` and `FileHandling`), along with their net8 `System.Configuration.ConfigurationManager` package references and the per-project `App.config` seeding. The single remaining `Settings` schema and seed target live in `KeriConfigurator`.
+
+- **Environment-variable configuration (`EPICOR_*`).** *Breaking.* Removed with `EpicorConfiguration`. v0.3.0 reads `App.config` by default; to keep secrets off disk, build an `EpicorRESTSessionKey` in code (web portal, vault, Windows Credential Manager). Re-introducing an environment-variable reader at the composition root is a documented future option — see CONFIGURATION.md.
+
+---
+
 ## [0.2.6] — 2026-06-05
 
 ### Added
@@ -338,9 +368,10 @@ Initial release.
 
 ### Notes
 
-- **Pre-1.0.** The API may change in 0.x releases without a deprecation period. Production use at one site; not yet independently reviewed by another team.
+- **Pre-1.0.** The API may change in 0.x releases without a deprecation period. Not yet in production use anywhere; not yet independently reviewed by another team.
 - **Target frameworks: `net48` and `net8.0`.** The library multi-targets .NET Framework 4.8 and .NET 8.0. The internal SMTP implementation differs (`System.Net.Mail` on net48, MailKit 4.16.0+ on net8.0) but the contract is identical.
 
 ---
 
+[0.3.0]: https://github.com/mrjtgrant/KineticRESTIntegrator/releases/tag/v0.3.0
 [0.1.0]: https://github.com/mrjtgrant/KineticRESTIntegrator/releases/tag/v0.1.0

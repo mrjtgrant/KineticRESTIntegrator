@@ -96,8 +96,10 @@ token; a write takes the `JObject` payload. The wrapper handles URL
 composition, auth, error shape, and dataset normalization — you write the BO
 name and the parameters that matter to you, and nothing else.
 
+> The examples below pass a `session` — an `EpicorRESTSessionKey`. [Section 2](#2-using-a-single-service-directly) shows how to build one, or obtain it from `KeriConfig` in-solution.
+
 ```csharp
-using (var part = new PartSvc("pilot"))
+using (var part = new PartSvc(session))
 {
     var parts = await part.PartsAsync(
         filters: new List<string> { "NonStock eq true", "InActive eq false" },
@@ -171,7 +173,7 @@ emitted as top-level siblings of the typed properties.
 plumbing:
 
 ```csharp
-using (var part = new PartSvc("pilot"))
+using (var part = new PartSvc(session))
 {
     var result = await part.PartsAsync(top: 1);
     var p = result.Value.First();
@@ -190,7 +192,7 @@ numbers, and so on.
 payload the write method expects:
 
 ```csharp
-using (var part = new PartSvc("pilot"))
+using (var part = new PartSvc(session))
 {
     var getResult = await part.GetByIDAsync("WIDGET-001");
     JObject ds = getResult.Value;
@@ -297,16 +299,31 @@ choose whichever fits the shape of the code you are writing.
 
 ### One service, multiple calls
 
-Each service constructor takes either an environment selector (string) or a
-fully-configured `EpicorRESTSessionKey`. The environment selector is the
-common case — `"live"`, `"pilot"`, `"test"`, or a literal URL — and pulls the
-rest of the configuration from `App.config` / environment variables.
+Each service constructor takes a fully-configured `EpicorRESTSessionKey` — build
+one with the base URL, company, and credentials, and pass it in. In-solution
+code can get a ready session from `KeriConfig.BuildSession()` (or a whole client
+from `KeriConfig.CreateClient()`); the example below builds one directly, which
+is also how a consumer outside this solution supplies its own credentials —
+from a vault, a portal, or Windows Credential Manager (see
+[CONFIGURATION.md](CONFIGURATION.md) for those patterns).
 
 ```csharp
 using EpicorSvcs;
 using EpicorSvcs.Dtos;
+using RESTServices;
 
-using (var part = new PartSvc("pilot"))
+var session = new EpicorRESTSessionKey
+{
+    Company    = "EPIC01",
+    BaseUrl    = "https://company.epicorsaas.com/server",
+    AuthObject = new RESTAuthenticationObject
+    {
+        Username = "...",
+        Userkey  = "..."
+    }
+};
+
+using (var part = new PartSvc(session))
 {
     var matches = await part.GetPartsBySearchWordsAsync("WIDGET");
     if (matches.IsFailure)
@@ -321,32 +338,6 @@ using (var part = new PartSvc("pilot"))
         if (details.IsSuccess)
             Console.WriteLine($"{hit.PartNum} — {hit.PartDescription}");
     }
-}
-```
-
-For a programmatic session — a credential pulled from a vault, a multi-tenant
-context, an explicit override — construct an `EpicorRESTSessionKey` and pass it
-instead:
-
-```csharp
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
-
-var session = new EpicorRESTSessionKey
-{
-    Company     = "EPIC01",
-    Environment = "https://company-pilot.example.com/server",
-    AuthObject  = new RESTAuthenticationObject
-    {
-        Username = "...",
-        Userkey  = "..."
-    }
-};
-
-using (var part = new PartSvc(session))
-{
-    var matches = await part.GetPartsBySearchWordsAsync("WIDGET");
-    // ...
 }
 ```
 
@@ -378,7 +369,7 @@ using (var udTable = new UDTableSvc(session))
 }
 ```
 
-The session carries credentials, environment, and authentication — there is no
+The session carries credentials, base URL, and authentication — there is no
 reason to build it twice. Sharing one instance across services is identical to
 what `EpicorClient` does internally.
 
@@ -409,9 +400,10 @@ it leaves is a write you can catch a mistake in.
 ```csharp
 using EpicorSvcs;
 using EpicorSvcs.Dtos;
+using KeriConfigurator;
 using Newtonsoft.Json;
 
-using (var client = EpicorClient.FromConfiguration())
+using (var client = KeriConfig.CreateClient())
 {
     // Choose the target UD table for this service instance.
     client.UDTable.UDTableDefault = "UD22";
