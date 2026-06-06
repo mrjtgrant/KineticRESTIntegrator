@@ -28,9 +28,8 @@ namespace EpicorSvcs
     /// <para>
     /// Direct service construction still works for callers who prefer
     /// one-off, short-lived usage, but services are now session-only —
-    /// e.g. <c>new BAQSvc(session)</c>, where the session comes from
-    /// <see cref="FromConfiguration"/> /
-    /// <see cref="EpicorConfiguration.BuildSession"/> or is built directly.
+    /// e.g. <c>new BAQSvc(session)</c>, where the session is built by the
+    /// composition root (KeriConfigurator) or constructed directly.
     /// The facade is additive, not a replacement.
     /// </para>
     /// <example>
@@ -89,22 +88,6 @@ namespace EpicorSvcs
         public EpicorClient(EpicorRESTSessionKey session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
-        }
-
-        /// <summary>
-        /// Constructs an EpicorClient by reading connection settings from
-        /// <c>App.config</c> / environment variables. This is the explicit entry
-        /// point for config-based construction: it reads and validates
-        /// configuration via <see cref="EpicorConfiguration.BuildSession"/> and
-        /// throws <see cref="InvalidOperationException"/> if configuration is
-        /// missing or incomplete. To connect to a different server, supply a
-        /// fully-configured <see cref="EpicorRESTSessionKey"/> to the
-        /// constructor instead.
-        /// </summary>
-        /// <returns>A client bound to the configured session.</returns>
-        public static EpicorClient FromConfiguration()
-        {
-            return new EpicorClient(EpicorConfiguration.BuildSession());
         }
 
         /// <summary>
