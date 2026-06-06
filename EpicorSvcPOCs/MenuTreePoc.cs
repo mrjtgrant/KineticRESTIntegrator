@@ -60,6 +60,7 @@ namespace EpicorSvcPOCs
             if (result.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {result.ErrorMessage}");
+                if (!string.IsNullOrEmpty(result.CorrelationId)) Console.WriteLine($"  CorrelationId: {result.CorrelationId}");
                 if (result.StatusCode.HasValue)
                     Console.WriteLine($"  HTTP {result.StatusCode}");
                 return;

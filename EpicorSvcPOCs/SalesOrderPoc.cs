@@ -74,6 +74,7 @@ namespace EpicorSvcPOCs
             if (lookup.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {lookup.ErrorMessage}");
+                if (!string.IsNullOrEmpty(lookup.CorrelationId)) Console.WriteLine($"  CorrelationId: {lookup.CorrelationId}");
                 return;
             }
 
@@ -98,6 +99,7 @@ namespace EpicorSvcPOCs
             if (full.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {full.ErrorMessage}");
+                if (!string.IsNullOrEmpty(full.CorrelationId)) Console.WriteLine($"  CorrelationId: {full.CorrelationId}");
                 if (full.StatusCode == 404)
                     Console.WriteLine("  (no existing order to fetch — skipping fetch demo)");
             }
@@ -151,6 +153,7 @@ namespace EpicorSvcPOCs
             if (create.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {create.ErrorMessage}");
+                if (!string.IsNullOrEmpty(create.CorrelationId)) Console.WriteLine($"  CorrelationId: {create.CorrelationId}");
                 if (create.StatusCode.HasValue)
                     Console.WriteLine($"  HTTP {create.StatusCode}");
                 return;

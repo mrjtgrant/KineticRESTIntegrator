@@ -65,6 +65,7 @@ namespace EpicorSvcPOCs
             if (allRows.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {allRows.ErrorMessage}");
+                if (!string.IsNullOrEmpty(allRows.CorrelationId)) Console.WriteLine($"  CorrelationId: {allRows.CorrelationId}");
                 Console.WriteLine("  (table may not exist on this install — change DemoUDTable in UDTablePoc.cs)");
                 return;
             }
@@ -150,6 +151,7 @@ namespace EpicorSvcPOCs
             if (upsert.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {upsert.ErrorMessage}");
+                if (!string.IsNullOrEmpty(upsert.CorrelationId)) Console.WriteLine($"  CorrelationId: {upsert.CorrelationId}");
                 if (upsert.StatusCode.HasValue)
                     Console.WriteLine($"  HTTP {upsert.StatusCode}");
                 return;

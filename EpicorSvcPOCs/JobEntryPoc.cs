@@ -68,6 +68,7 @@ namespace EpicorSvcPOCs
             if (openJobs.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {openJobs.ErrorMessage}");
+                if (!string.IsNullOrEmpty(openJobs.CorrelationId)) Console.WriteLine($"  CorrelationId: {openJobs.CorrelationId}");
                 return;
             }
 
@@ -97,6 +98,7 @@ namespace EpicorSvcPOCs
             if (full.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {full.ErrorMessage}");
+                if (!string.IsNullOrEmpty(full.CorrelationId)) Console.WriteLine($"  CorrelationId: {full.CorrelationId}");
                 return;
             }
 
@@ -148,6 +150,7 @@ namespace EpicorSvcPOCs
             if (mtls.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {mtls.ErrorMessage}");
+                if (!string.IsNullOrEmpty(mtls.CorrelationId)) Console.WriteLine($"  CorrelationId: {mtls.CorrelationId}");
                 return;
             }
 

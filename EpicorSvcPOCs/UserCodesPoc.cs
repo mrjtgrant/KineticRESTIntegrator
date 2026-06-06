@@ -36,6 +36,7 @@ namespace EpicorSvcPOCs
             if (allCodes.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {allCodes.ErrorMessage}");
+                if (!string.IsNullOrEmpty(allCodes.CorrelationId)) Console.WriteLine($"  CorrelationId: {allCodes.CorrelationId}");
                 if (allCodes.StatusCode.HasValue)
                     Console.WriteLine($"  HTTP {allCodes.StatusCode}");
 
@@ -94,6 +95,7 @@ namespace EpicorSvcPOCs
             if (oneCode.IsFailure)
             {
                 Console.WriteLine($"  FAILED: {oneCode.ErrorMessage}");
+                if (!string.IsNullOrEmpty(oneCode.CorrelationId)) Console.WriteLine($"  CorrelationId: {oneCode.CorrelationId}");
                 return;
             }
 

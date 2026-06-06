@@ -98,6 +98,7 @@ namespace EpicorSvcDemo
                     if (probe.IsFailure)
                     {
                         Console.WriteLine($"  {table,-6} could not be read ({probe.ErrorMessage}) — skipping");
+                        if (!string.IsNullOrEmpty(probe.CorrelationId)) Console.WriteLine($"  CorrelationId: {probe.CorrelationId}");
                         continue;
                     }
 
@@ -183,6 +184,7 @@ namespace EpicorSvcDemo
                         {
                             failed.Add(key);
                             Console.WriteLine($"  delete failed for ({key.Key1}, {key.Key2}): {del.ErrorMessage}");
+                            if (!string.IsNullOrEmpty(del.CorrelationId)) Console.WriteLine($"  CorrelationId: {del.CorrelationId}");
                         }
                     }
                     return failed;
@@ -205,6 +207,7 @@ namespace EpicorSvcDemo
                     if (baqResult.IsFailure)
                     {
                         Console.WriteLine($"BAQ '{BaqId}' could not be run: {baqResult.ErrorMessage}");
+                        if (!string.IsNullOrEmpty(baqResult.CorrelationId)) Console.WriteLine($"  CorrelationId: {baqResult.CorrelationId}");
                         Console.WriteLine("A common cause on first run is that the BAQ hasn't been imported yet.");
 
                         if (!AskYesNo($"Copy {BaqFileName} to your Downloads folder, show import steps, and retry?"))
@@ -222,6 +225,7 @@ namespace EpicorSvcDemo
                         if (baqResult.IsFailure)
                         {
                             Console.WriteLine($"BAQ still failed after import: {baqResult.ErrorMessage}");
+                            if (!string.IsNullOrEmpty(baqResult.CorrelationId)) Console.WriteLine($"  CorrelationId: {baqResult.CorrelationId}");
                             return;
                         }
                     }
@@ -280,6 +284,7 @@ namespace EpicorSvcDemo
                         if (save.IsFailure)
                         {
                             Console.WriteLine($"  write failed for part {snap.PartNum}: {save.ErrorMessage}");
+                            if (!string.IsNullOrEmpty(save.CorrelationId)) Console.WriteLine($"  CorrelationId: {save.CorrelationId}");
                             Console.WriteLine("  Aborting the run; the finally block will remove the rows "
                                             + "written before this point.");
                             return;   // finally cleans up the partial write
@@ -299,6 +304,7 @@ namespace EpicorSvcDemo
                     if (readBack.IsFailure)
                     {
                         Console.WriteLine($"Read-back failed: {readBack.ErrorMessage}");
+                        if (!string.IsNullOrEmpty(readBack.CorrelationId)) Console.WriteLine($"  CorrelationId: {readBack.CorrelationId}");
                         return;   // finally cleans up what we wrote
                     }
 
