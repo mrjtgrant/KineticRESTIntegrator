@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using EpicorSvcs;
+using KeriConfigurator;
 
 namespace EpicorSvcPOCs
 {
@@ -21,36 +22,36 @@ namespace EpicorSvcPOCs
     /// exact payload they would send, and stop. See <see cref="PocConfig"/>.
     /// </para>
     /// <para>
-    /// Connection configuration is read from <c>App.config</c> or the
-    /// <c>EPICOR_*</c> environment variables — the same as every other Keri
-    /// service. See CONFIGURATION.md.
+    /// Connection configuration comes from the shared <c>App.config</c> owned by
+    /// KeriConfigurator (the solution's composition root). See CONFIGURATION.md.
     /// </para>
     /// </remarks>
     internal class Program
     {
         private static async Task<int> Main(string[] args)
         {
-            PocBanner.Header("Kinetic REST Integrator â€” Proof-of-Concept Examples");
+            PocBanner.Header("Kinetic REST Integrator - Proof-of-Concept Examples");
 
             // Print the write-gate state up front so the user is never
             // surprised by what does or doesn't happen below.
             Console.WriteLine();
             Console.WriteLine($"  Write gate (KERI_POC_ALLOW_WRITES): {(PocConfig.AllowWrites ? "ARMED" : "off (dry-run)")}");
             if (!PocConfig.AllowWrites)
-                Console.WriteLine("  â†’ Write POCs will build payloads and stop before sending.");
+                Console.WriteLine("  -> Write POCs will build payloads and stop before sending.");
 
             try
             {
-                // Construct the facade from App.config / env vars. One client,
+                // Construct the facade from the shared App.config (KeriConfigurator).
+                // One client,
                 // one session, all services lazy-constructed and disposed
                 // together at the end of the using block.
-                using (var client = EpicorClient.FromConfiguration())
+                using (var client = KeriConfig.CreateClient())
                 {
                     Console.WriteLine($"  Connected to: {client.Session.BaseUrl}");
                     Console.WriteLine($"  Company:      {client.Session.Company}");
 
                     // Run each POC in turn. If one fails, log it and keep going
-                    // â€” a connection issue with one service shouldn't prevent
+                    // - a connection issue with one service shouldn't prevent
                     // the others from demonstrating their behavior.
                     await SafeRun("UserCodes", () => UserCodesPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("Part",      () => PartPoc.RunAsync(client)).ConfigureAwait(false);
@@ -72,13 +73,13 @@ namespace EpicorSvcPOCs
                 Console.Error.WriteLine("Configuration error:");
                 Console.Error.WriteLine("  " + ex.Message);
                 Console.Error.WriteLine();
-                Console.Error.WriteLine("Make sure App.config is populated, or set the");
-                Console.Error.WriteLine("corresponding EPICOR_* environment variables.");
+                Console.Error.WriteLine("Run KeriConfigurator to populate the shared App.config,");
+                Console.Error.WriteLine("or edit KeriConfigurator\\App.config directly.");
                 return 1;
             }
             catch (Exception ex)
             {
-                // Top-level failsafe â€” anything that escaped the per-POC
+                // Top-level failsafe - anything that escaped the per-POC
                 // SafeRun gets logged here.
                 Console.Error.WriteLine();
                 Console.Error.WriteLine("Unexpected error:");
