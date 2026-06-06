@@ -4,7 +4,7 @@ using Xunit;
 namespace KineticRESTIntegrator.Tests
 {
     /// <summary>
-    /// Tests for <see cref="RESTHttpClient.BuildResourceUrl"/> — the URL
+    /// Tests for <see cref="RESTConnect.BuildResourceUrl"/> — the URL
     /// join that assembles every outbound request URL from three parts:
     /// an environment, a modifier, and a service path.
     /// </summary>
@@ -64,7 +64,7 @@ namespace KineticRESTIntegrator.Tests
     /// <para>
     /// The bug these tests lock down was real and shipped before being
     /// noticed: see the <c>### Fixed</c> note in <c>CHANGELOG.md</c> under
-    /// <c>[0.1.1]</c>. <see cref="RESTHttpClient.BuildResourceUrl"/> now
+    /// <c>[0.1.1]</c>. <see cref="RESTConnect.BuildResourceUrl"/> now
     /// normalizes each seam to exactly one slash, regardless of which
     /// neighbor contributed the slashes. These tests cover the
     /// permutations: a clean input, each kind of unintended slash in
@@ -89,7 +89,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void Environment_WithoutTrailingSlash_JoinsCorrectly()
         {
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://example.epicorsaas.com/server",
                 "api/v2/odata/EPIC01/",
                 "Erp.BO.PartSvc/Parts");
@@ -103,7 +103,7 @@ namespace KineticRESTIntegrator.Tests
             // The user pasted the environment URL with a trailing slash —
             // the common copy-paste artifact from the Epicor client's
             // address bar.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://example.epicorsaas.com/server/",
                 "api/v2/odata/EPIC01/",
                 "Erp.BO.PartSvc/Parts");
@@ -116,7 +116,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // EpicorSvc canonically writes the modifier as
             // "/api/v2/odata/{Company}/" — both leading and trailing slash.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://example.epicorsaas.com/server",
                 "/api/v2/odata/EPIC01/",
                 "Erp.BO.PartSvc/Parts");
@@ -129,7 +129,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // A contributor writing a new service wrapper might type a
             // leading slash on the service path. It shouldn't break the join.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://example.epicorsaas.com/server",
                 "api/v2/odata/EPIC01/",
                 "/Erp.BO.PartSvc/Parts");
@@ -142,7 +142,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // Every seam has a slash problem at once — the worst-case
             // permutation.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://example.epicorsaas.com/server/",
                 "/api/v2/odata/EPIC01/",
                 "/Erp.BO.PartSvc/Parts");
@@ -156,7 +156,7 @@ namespace KineticRESTIntegrator.Tests
             // The non-Epicor case: when the modifier is empty (the default
             // on a bare RESTAuthenticationObject), the URL collapses to
             // environment + service path with no extra segment between them.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://api.example.com",
                 "",
                 "v1/widgets");
@@ -170,7 +170,7 @@ namespace KineticRESTIntegrator.Tests
             // No service path — the environment (plus modifier, if any) is
             // a valid result. Useful for callers who want to issue requests
             // to a service root.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://api.example.com",
                 "",
                 "");
@@ -181,7 +181,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void EmptyServicePath_WithModifier_YieldsEnvironmentPlusModifier()
         {
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://example.epicorsaas.com/server",
                 "api/v1/",
                 "");
@@ -196,7 +196,7 @@ namespace KineticRESTIntegrator.Tests
             // empty string, matching the behavior of the degenerate-empty
             // cases above. Callers shouldn't have to defend against this
             // themselves.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://api.example.com",
                 null,
                 null);
@@ -209,7 +209,7 @@ namespace KineticRESTIntegrator.Tests
         {
             // A service path may carry an OData query string. The
             // normalization must not touch anything after the '?'.
-            string url = RESTHttpClient.BuildResourceUrl(
+            string url = RESTConnect.BuildResourceUrl(
                 "https://example.epicorsaas.com/server",
                 "api/v1/",
                 "Erp.BO.PartSvc/Parts?$top=10");

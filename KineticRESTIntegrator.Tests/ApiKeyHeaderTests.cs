@@ -4,7 +4,7 @@ using Xunit;
 namespace KineticRESTIntegrator.Tests
 {
     /// <summary>
-    /// Tests for <see cref="RESTHttpClient.ResolveApiKeyHeaderName"/> — the logic
+    /// Tests for <see cref="RESTConnect.ResolveApiKeyHeaderName"/> — the logic
     /// that decides which HTTP header the API key is sent under. The default is
     /// "X-API-Key" (what Epicor's v2 OData endpoint expects); callers can override
     /// it via <see cref="RESTAuthenticationObject.ApiKeyHeaderName"/> for other
@@ -18,7 +18,7 @@ namespace KineticRESTIntegrator.Tests
             var auth = new RESTAuthenticationObject();
 
             Assert.Equal("X-API-Key", auth.ApiKeyHeaderName);
-            Assert.Equal("X-API-Key", RESTHttpClient.ResolveApiKeyHeaderName(auth));
+            Assert.Equal("X-API-Key", RESTConnect.ResolveApiKeyHeaderName(auth));
         }
 
         [Fact]
@@ -26,7 +26,7 @@ namespace KineticRESTIntegrator.Tests
         {
             var auth = new RESTAuthenticationObject { ApiKeyHeaderName = "Ocp-Apim-Subscription-Key" };
 
-            Assert.Equal("Ocp-Apim-Subscription-Key", RESTHttpClient.ResolveApiKeyHeaderName(auth));
+            Assert.Equal("Ocp-Apim-Subscription-Key", RESTConnect.ResolveApiKeyHeaderName(auth));
         }
 
         [Fact]
@@ -34,7 +34,7 @@ namespace KineticRESTIntegrator.Tests
         {
             var auth = new RESTAuthenticationObject { ApiKeyHeaderName = "  apikey  " };
 
-            Assert.Equal("apikey", RESTHttpClient.ResolveApiKeyHeaderName(auth));
+            Assert.Equal("apikey", RESTConnect.ResolveApiKeyHeaderName(auth));
         }
 
         [Theory]
@@ -45,13 +45,13 @@ namespace KineticRESTIntegrator.Tests
         {
             var auth = new RESTAuthenticationObject { ApiKeyHeaderName = blank };
 
-            Assert.Equal("X-API-Key", RESTHttpClient.ResolveApiKeyHeaderName(auth));
+            Assert.Equal("X-API-Key", RESTConnect.ResolveApiKeyHeaderName(auth));
         }
 
         [Fact]
         public void FallsBackToXApiKey_WhenAuthObjectIsNull()
         {
-            Assert.Equal("X-API-Key", RESTHttpClient.ResolveApiKeyHeaderName(null));
+            Assert.Equal("X-API-Key", RESTConnect.ResolveApiKeyHeaderName(null));
         }
     }
 }
