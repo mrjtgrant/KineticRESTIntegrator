@@ -311,7 +311,8 @@ namespace EpicorSvcDemo
                     // PHASE 7 — optionally email the read-back rows as an attachment
                     // =========================================================
                     Console.WriteLine();
-                    if (!FileProcessing.IsEmailConfigured())
+                    SmtpSettings smtp = KeriConfig.BuildSmtpSettings();
+                    if (!FileProcessing.IsEmailConfigured(smtp))
                     {
                         Console.WriteLine("Skipping the email step — no SMTP host is configured.");
                         Console.WriteLine("  With SMTP settings in App.config (SMTPHost and FromEmail), this step");
@@ -332,7 +333,7 @@ namespace EpicorSvcDemo
                         else
                         {
                             // From and SMTPHost are intentionally left unset so they resolve
-                            // from configuration (FromEmail / SMTPHost). Only the recipient —
+                            // from the supplied SmtpSettings (smtp.from / smtp.host). Only the recipient —
                             // which is per-run — is supplied here.
                             var mailMeta = new EMailMeta
                             {
@@ -350,7 +351,7 @@ namespace EpicorSvcDemo
                             };
 
                             Console.WriteLine($"Emailing the read-back rows to {toAddress}...");
-                            List<string> emailLog = FileProcessing.EmailReport(mailMeta);
+                            List<string> emailLog = FileProcessing.EmailReport(mailMeta, smtp);
                             Console.WriteLine(string.Join(Environment.NewLine, emailLog));
                         }
                     }

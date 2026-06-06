@@ -90,15 +90,15 @@ namespace FileHandling.Dtos
         public string EmailBody { get; set; } = null;
 
         /// <summary>
-        /// Explicit <c>From:</c> address. When null, the configured
-        /// <c>FromEmail</c> setting is used.
+        /// Explicit <c>From:</c> address. When null, the <c>from</c> on the
+        /// supplied <see cref="SmtpSettings"/> is used.
         /// </summary>
         public string EmailFrom { get; set; } = null;
 
         /// <summary>
-        /// SMTP-connection parameters for this message. Internal — populated
-        /// from configuration by <see cref="FileHandling.FileProcessing.EmailReport"/>
-        /// (via <see cref="SmtpSettings.FromConfiguration"/>); <c>host</c> may be
+        /// SMTP-connection parameters for this message. Internal — set by
+        /// <see cref="FileHandling.FileProcessing.EmailReport"/> from the
+        /// <see cref="SmtpSettings"/> the caller supplies; <c>host</c> may be
         /// overridden per message. A bare instance carries neutral defaults.
         /// </summary>
         internal SmtpSettings smtpspecs { get; set; } = new SmtpSettings();

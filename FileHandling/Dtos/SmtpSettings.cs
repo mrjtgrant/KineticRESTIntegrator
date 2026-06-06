@@ -1,25 +1,25 @@
-using FileHandling.Properties;
-
 namespace FileHandling.Dtos
 {
     /// <summary>
-    /// Internal carrier for SMTP-connection parameters. Construct via
-    /// <see cref="FromConfiguration"/> to populate from configuration; a plain
-    /// <c>new SmtpSettings()</c> carries neutral defaults and reads no config.
+    /// Public carrier for the configuration an email send needs: the SMTP
+    /// connection, the <c>From:</c> address, and the default/debug recipient.
+    /// FileHandling reads no configuration itself — the composition root
+    /// (KeriConfigurator) builds this and passes it to
+    /// <see cref="FileHandling.FileProcessing.EmailReport"/>.
     /// </summary>
     /// <remarks>
-    /// Travels inside <see cref="EmailSpecs"/> as the <c>smtpspecs</c> member.
-    /// <see cref="FileHandling.FileProcessing.EmailReport"/> populates it from
-    /// configuration and may override <see cref="host"/> for a single message;
-    /// the other fields are not currently per-message overridable.
+    /// Travels inside <see cref="EmailSpecs"/> as the internal <c>smtpspecs</c>
+    /// member, set by <see cref="FileHandling.FileProcessing.EmailReport"/> from
+    /// the instance the caller supplies. A plain <c>new SmtpSettings()</c>
+    /// carries neutral defaults (anonymous relay, port 25, no TLS).
     /// </remarks>
-    internal class SmtpSettings
+    public class SmtpSettings
     {
         /// <summary>SMTP relay host or IP.</summary>
         public string host { get; set; } = null;
 
-        /// <summary>The configured <c>From:</c> address.</summary>
-        public string acct { get; set; } = null;
+        /// <summary>The <c>From:</c> address.</summary>
+        public string from { get; set; } = null;
 
         /// <summary>SMTP port. Default 25.</summary>
         public int port { get; set; } = 25;
@@ -34,22 +34,10 @@ namespace FileHandling.Dtos
         public string password { get; set; } = "";
 
         /// <summary>
-        /// Builds an <see cref="SmtpSettings"/> from configuration
-        /// (<c>App.config</c> via <see cref="Settings"/>). This is the single
-        /// place SMTP configuration is read; constructing a plain instance reads
-        /// no config.
+        /// Default recipient (the developer address): the sole recipient when
+        /// <see cref="EmailSpecs.IsDebug"/> is true, and a standing BCC on normal
+        /// sends. Empty disables it.
         /// </summary>
-        internal static SmtpSettings FromConfiguration()
-        {
-            return new SmtpSettings
-            {
-                host = Settings.Default.SMTPHost,
-                acct = Settings.Default.FromEmail,
-                port = Settings.Default.SMTPPort,
-                enableSsl = Settings.Default.SMTPEnableSsl,
-                username = Settings.Default.SMTPUsername,
-                password = Settings.Default.SMTPPassword
-            };
-        }
+        public string developerEmail { get; set; } = "";
     }
 }

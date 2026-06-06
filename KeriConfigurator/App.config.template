@@ -3,9 +3,6 @@
 	<configSections>
 		<sectionGroup name="userSettings" type="System.Configuration.UserSettingsGroup, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
 			<section name="KeriConfigurator.Properties.Settings" type="System.Configuration.ClientSettingsSection, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" allowExeDefinition="MachineToLocalUser" requirePermission="false" />
-			<!-- TRANSITIONAL (removed when FileHandling goes config-free): the demo's
-			     FileProcessing.EmailReport still reads this section itself. -->
-			<section name="FileHandling.Properties.Settings" type="System.Configuration.ClientSettingsSection, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" allowExeDefinition="MachineToLocalUser" requirePermission="false" />
 		</sectionGroup>
 	</configSections>
 	<startup>
@@ -123,69 +120,5 @@
 			</setting>
 
 		</KeriConfigurator.Properties.Settings>
-
-		<!-- ================================================================
-		     TRANSITIONAL SECTION - delete when FileHandling becomes config-free
-		     (the 0.3.0 step). Today the demo's FileProcessing.EmailReport reads
-		     its SMTP settings from THIS section directly. The email fields are
-		     also mirrored (as placeholders) in the unified section above; those
-		     become live only once BuildSmtpSettings is wired. Until then, set
-		     your real SMTP values HERE.
-		     ================================================================ -->
-		<FileHandling.Properties.Settings>
-
-			<!-- Default "From:" on outbound mail. Often a no-reply or service mailbox. -->
-			<setting name="FromEmail" serializeAs="String">
-				<value>YOUR_FROM_EMAIL@example.com</value>
-			</setting>
-
-			<!-- Developer address: default BCC on every send (audit trail), and the
-			     ONLY recipient when EmailSpecs.IsDebug = true. Set to your own
-			     address so test runs don't email customers. -->
-			<setting name="DeveloperEmail" serializeAs="String">
-				<value>YOUR_DEVELOPER_EMAIL@example.com</value>
-			</setting>
-
-			<!-- Optional broader distribution list. Reserved for future use;
-			     safe to leave as the placeholder. -->
-			<setting name="GroupEmail" serializeAs="String">
-				<value>YOUR_GROUP_EMAIL@example.com</value>
-			</setting>
-
-			<!-- SMTP relay host or IP (e.g. smtp.example.com, 10.0.0.25). For the
-			     default anonymous relay on port 25 with no TLS, set this and leave
-			     the four SMTP* settings below at their defaults. -->
-			<setting name="SMTPHost" serializeAs="String">
-				<value>YOUR_SMTP_HOST</value>
-			</setting>
-
-			<!-- SMTP port. Default 25 (anonymous relay). Modern setups use 587
-			     (STARTTLS with auth). -->
-			<setting name="SMTPPort" serializeAs="String">
-				<value>25</value>
-			</setting>
-
-			<!-- TLS for the SMTP connection.
-			       False (default): plain, no TLS - legacy anonymous port-25 relays.
-			       True: STARTTLS - connect plain, upgrade to TLS (use port 587).
-			     Rejected with a clear EmailError: port 25 + True, or port 465 + True
-			     (implicit TLS unsupported - use 587 + STARTTLS). -->
-			<setting name="SMTPEnableSsl" serializeAs="String">
-				<value>False</value>
-			</setting>
-
-			<!-- SMTP auth username. Empty = anonymous relay. When set, the
-			     connection authenticates with SMTPUsername / SMTPPassword. -->
-			<setting name="SMTPUsername" serializeAs="String">
-				<value />
-			</setting>
-
-			<!-- SMTP auth password. WARNING: plain text in App.config. For
-			     production, prefer a secure store rather than a password on disk
-			     (see CONFIGURATION.md). -->
-			<setting name="SMTPPassword" serializeAs="String">
-				<value />
-			</setting>
-		</FileHandling.Properties.Settings>
 	</userSettings>
 </configuration>

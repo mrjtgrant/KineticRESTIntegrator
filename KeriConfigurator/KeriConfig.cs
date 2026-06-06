@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using RESTServices;
 using EpicorSvcs;
+using FileHandling.Dtos;
 using EpicorSvcs.Dtos;
 
 namespace KeriConfigurator
@@ -56,9 +57,25 @@ namespace KeriConfigurator
             return new EpicorClient(BuildSession());
         }
 
-        // BuildSmtpSettings() is intentionally not implemented yet. The email
-        // path still flows through FileHandling's own configuration reader; it
-        // moves here when FileHandling is made config-free (the 0.3.0 step).
+        /// <summary>
+        /// Builds the email configuration from the unified settings. Returns a
+        /// config-free <see cref="SmtpSettings"/> for the email path to consume;
+        /// FileHandling no longer reads any configuration itself. Blank and
+        /// placeholder (<c>YOUR_*</c>) string values resolve to empty.
+        /// </summary>
+        public static SmtpSettings BuildSmtpSettings()
+        {
+            return new SmtpSettings
+            {
+                host = Resolve(Properties.Settings.Default.SMTPHost),
+                from = Resolve(Properties.Settings.Default.FromEmail),
+                port = Properties.Settings.Default.SMTPPort,
+                enableSsl = Properties.Settings.Default.SMTPEnableSsl,
+                username = Resolve(Properties.Settings.Default.SMTPUsername),
+                password = Resolve(Properties.Settings.Default.SMTPPassword),
+                developerEmail = Resolve(Properties.Settings.Default.DeveloperEmail)
+            };
+        }
 
         /// <summary>
         /// Resolves the API key from configuration. An unset or still-placeholder
@@ -72,6 +89,18 @@ namespace KeriConfigurator
                 apiKey.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
                 return string.Empty;
             return apiKey;
+        }
+
+        /// <summary>
+        /// Collapses a blank or still-placeholder (<c>YOUR_*</c>) string to empty;
+        /// otherwise returns the value unchanged.
+        /// </summary>
+        private static string Resolve(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                value.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+            return value;
         }
 
         /// <summary>

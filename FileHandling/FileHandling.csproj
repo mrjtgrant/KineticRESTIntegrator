@@ -63,13 +63,6 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
-  <!-- System.Configuration.ConfigurationManager: makes Properties.Settings.Default.X
-       and App.config file loading work on .NET 6+, matching the behavior provided
-       by the built-in System.Configuration assembly on .NET Framework. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
-  </ItemGroup>
-
   <!-- MailKit 4.16.0+ for SMTP on .NET 6+. The net48 build uses
        System.Net.Mail.SmtpClient (BCL) instead - MailKit 4.x dropped
        .NET Framework support, and the only net48-compatible MailKit (3.x)
@@ -78,29 +71,5 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageReference Include="MailKit" Version="4.16.0" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Compile Update="Properties\Settings.Designer.cs">
-      <DesignTimeSharedInput>True</DesignTimeSharedInput>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Settings.settings</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="Properties\Settings.settings">
-      <Generator>SettingsSingleFileGenerator</Generator>
-      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
-    </None>
-  </ItemGroup>
-
-  <!-- Auto-create App.config from App.config.template on first build.
-       Build will fail once with a clear message telling the developer to
-       fill in their settings, then succeed on subsequent builds. -->
-  <Target Name="CreateAppConfigFromTemplate" BeforeTargets="PrepareForBuild" Condition="!Exists('App.config') And Exists('App.config.template')">
-    <Copy SourceFiles="App.config.template" DestinationFiles="App.config" />
-    <Message Importance="high" Text="*** Created App.config from App.config.template. Edit it with your settings, then rebuild. ***" />
-    <Error Text="App.config was just created from template. Edit it with your settings before continuing." />
-  </Target>
 
 </Project>

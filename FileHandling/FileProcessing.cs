@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using FileHandling.Dtos;
-using FileHandling.Properties;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -13,7 +12,7 @@ namespace FileHandling
 {
     public static class FileProcessing
     {
-        public static List<string> EmailReport(EMailMeta mailMeta)
+        public static List<string> EmailReport(EMailMeta mailMeta, SmtpSettings smtp)
         {
             var steplist = new List<string> { "Emailer Start" };
             try
@@ -25,12 +24,11 @@ namespace FileHandling
                     EmailBody = mailMeta.Body
                 };
 
-                // Load email configuration explicitly (App.config via Properties.Settings).
-                // Construction no longer reads config as a side effect; this is the
-                // single place the email path pulls its settings.
-                EmailSpecs.smtpspecs = SmtpSettings.FromConfiguration();
-                EmailSpecs.EmailRecipientDefault = new List<string> { Settings.Default.DeveloperEmail };
-                EmailSpecs.EmailFrom = Settings.Default.FromEmail;
+                // Email configuration is supplied by the caller (the composition
+                // root), not read from config here — FileHandling owns no config.
+                EmailSpecs.smtpspecs = smtp;
+                EmailSpecs.EmailRecipientDefault = new List<string> { smtp.developerEmail };
+                EmailSpecs.EmailFrom = smtp.from;
 
                 steplist.Add(2.ToString() + " Create " + mailMeta.AttachmentType);
                 EmailSpecs.FileAddress = mailMeta.AttachmentType == "csv" ?
@@ -81,14 +79,14 @@ namespace FileHandling
         }
 
         /// <summary>
-        /// Returns true when an SMTP host is configured — a non-blank
-        /// <c>SMTPHost</c> setting that isn't still the template placeholder.
-        /// Lets a caller decide whether to offer an email step before
-        /// attempting a send.
+        /// Returns true when the supplied <see cref="SmtpSettings"/> has a usable
+        /// host — non-blank and not still a <c>YOUR_</c> template placeholder.
+        /// Lets a caller decide whether to offer an email step before attempting
+        /// a send.
         /// </summary>
-        public static bool IsEmailConfigured()
+        public static bool IsEmailConfigured(SmtpSettings smtp)
         {
-            string host = SmtpSettings.FromConfiguration().host;
+            string host = smtp?.host;
             return !string.IsNullOrWhiteSpace(host)
                 && !host.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
         }

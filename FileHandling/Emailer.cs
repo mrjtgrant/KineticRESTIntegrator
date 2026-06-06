@@ -54,7 +54,7 @@ namespace FileHandling
                 return report;
             }
 
-            string fromAddress = report.EmailFrom ?? report.smtpspecs.acct;
+            string fromAddress = report.EmailFrom ?? report.smtpspecs.from;
 
 #if NET48
             // ===== .NET Framework path: System.Net.Mail =====
