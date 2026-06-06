@@ -390,7 +390,35 @@ namespace EpicorSvcs
             svc += String.Format("&key5={0}", UrlEncode(keys.Key5 ?? string.Empty));
 
             JObject response = await RESTCallAsync(svc, null, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => HandleResponse(r));
+            var result = response.ToOperationResult(r => HandleResponse(r));
+
+            // Epicor returns 404 RecordNotFound when the row doesn't exist. Honor
+            // this method's contract (a miss == success with an empty table array)
+            // so the Automatic upsert falls through to the add path, and an explicit
+            // Update on a missing row gets a clean "no row to populate" instead of a
+            // raw 404. Recognize the miss by status code OR error text, so it works
+            // even when the status code didn't survive the transport layer.
+            if (result.IsFailure && IsRecordNotFound(result))
+            {
+                var inner = new JObject();
+                inner[table] = new JArray();
+                var empty = new JObject();
+                empty["ds"] = inner;
+                return OperationResult<JObject>.Success(empty, result.RawResponse, result.ResourcePath);
+            }
+            return result;
+        }
+
+        // True when an OperationResult represents Epicor's "row does not exist"
+        // response: HTTP 404 (when the status code is populated) or a body that
+        // carries the RecordNotFoundException / "Record not found." marker.
+        private static bool IsRecordNotFound(OperationResult<JObject> result)
+        {
+            if (result.StatusCode == 404) return true;
+            string m = result.ErrorMessage;
+            if (string.IsNullOrEmpty(m)) return false;
+            return m.IndexOf("RecordNotFound", StringComparison.OrdinalIgnoreCase) >= 0
+                || m.IndexOf("Record not found", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // ---------------------------------------------------------------

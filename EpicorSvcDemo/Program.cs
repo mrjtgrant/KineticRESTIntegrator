@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using EpicorSvcs;
 using FileHandling;
 using FileHandling.Dtos;
+using KeriConfigurator;
 using Newtonsoft.Json.Linq;
 
 namespace EpicorSvcDemo
@@ -50,6 +51,10 @@ namespace EpicorSvcDemo
 
         static async Task Main(string[] args)
         {
+            // Render the box-drawing and dash characters below correctly on
+            // any console code page.
+            try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
+
             Console.WriteLine("=== EpicorSvcDemo — typed UD-table round-trip ===");
             Console.WriteLine();
 
@@ -71,11 +76,10 @@ namespace EpicorSvcDemo
                 return;
             }
 
-            // EpicorClient.FromConfiguration() reads connection settings from
-            // App.config (the demo seeds it from App.config.template on first
-            // build) or from environment variables. It owns an HttpClient and
-            // must be disposed.
-            using (var epicor = EpicorClient.FromConfiguration())
+            // KeriConfig.CreateClient() builds the client from the shared
+            // App.config (owned by KeriConfigurator). It owns an HttpClient
+            // and must be disposed.
+            using (var epicor = KeriConfig.CreateClient())
             {
                 // =============================================================
                 // PHASE 1 — pick the target UD table
