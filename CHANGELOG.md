@@ -12,7 +12,7 @@ Configuration moves out of the libraries into a dedicated composition root. `Epi
 
 ### Added
 
-- **`KeriConfigurator` — composition root and interactive setup console.** A `net48;net8.0` project that owns the single unified settings schema (Epicor connection *and* email/SMTP), the one shared `App.config` the executables consume via `<AppConfig>`, and the readers/factories that turn settings into objects: `KeriConfig.CreateClient()` (an `EpicorClient`) and `KeriConfig.BuildSmtpSettings()` (an `SmtpSettings`). The console onboards a fresh checkout end to end — it revisits any blank or placeholder field on each run (Enter keeps the current value; secrets are masked), tests the Epicor connection against the live server before saving, prompts for email, and runs an SMTP reachability test with a Keep/Re-enter/Skip choice on failure. It seeds its `App.config` from `App.config.template` on first build, then it (or a hand edit) fills in the values.
+- **`KeriConfigurator` — composition root and interactive setup console.** A `net48;net8.0` project that owns the single unified settings schema (Epicor connection *and* email/SMTP), the one shared `App.config` the executables consume via `<AppConfig>`, and the readers/factories that turn settings into objects: `KeriConfig.BuildEpicorClient()` (an `EpicorClient`) and `KeriConfig.BuildSmtpSettings()` (an `SmtpSettings`). The console onboards a fresh checkout end to end — it revisits any blank or placeholder field on each run (Enter keeps the current value; secrets are masked), tests the Epicor connection against the live server before saving, prompts for email, and runs an SMTP reachability test with a Keep/Re-enter/Skip choice on failure. It seeds its `App.config` from `App.config.template` on first build, then it (or a hand edit) fills in the values.
 
 - **`EpicorClient.TestConnectionAsync(CancellationToken)` — connectivity probe.** Reads a single Part record and returns `OperationResult<bool>`; used by the configurator (and available to callers) to verify a session reaches the server.
 
@@ -20,7 +20,7 @@ Configuration moves out of the libraries into a dedicated composition root. `Epi
 
 ### Changed
 
-- **The libraries are configuration-free; configuration is owned by the composition root.** *Breaking.* `EpicorSvcs` and `FileHandling` no longer read `App.config` (or anything else) as a side effect of construction. Configuration is resolved once, in `KeriConfigurator`, and flows inward as plain objects — an `EpicorRESTSessionKey` to `EpicorClient`, an `SmtpSettings` to the email path. In-solution callers use `KeriConfig.CreateClient()`; external callers build an `EpicorRESTSessionKey` and use `new EpicorClient(session)`.
+- **The libraries are configuration-free; configuration is owned by the composition root.** *Breaking.* `EpicorSvcs` and `FileHandling` no longer read `App.config` (or anything else) as a side effect of construction. Configuration is resolved once, in `KeriConfigurator`, and flows inward as plain objects — an `EpicorRESTSessionKey` to `EpicorClient`, an `SmtpSettings` to the email path. In-solution callers use `KeriConfig.BuildEpicorClient()`; external callers build an `EpicorRESTSessionKey` and use `new EpicorClient(session)`.
 
 - **`SmtpSettings` is public and config-free; `FileProcessing.EmailReport` / `IsEmailConfigured` take it.** *Breaking (source).* `EmailReport(EMailMeta)` → `EmailReport(EMailMeta, SmtpSettings)` and `IsEmailConfigured()` → `IsEmailConfigured(SmtpSettings)`; the caller now supplies the email configuration. `SmtpSettings` (formerly `internal`) became `public`, gained a `developerEmail` field, and its `acct` field — the `From:` address — was renamed `from`. `Emailer.Send` is unchanged. FileHandling syncs to 0.3.0.
 
@@ -28,7 +28,7 @@ Configuration moves out of the libraries into a dedicated composition root. `Epi
 
 ### Removed
 
-- **`EpicorClient.FromConfiguration()` and the `EpicorConfiguration` class.** *Breaking.* Config-based client construction moves to the composition root. Replace `EpicorClient.FromConfiguration()` with `KeriConfig.CreateClient()` (in-solution) or `new EpicorClient(session)` (external).
+- **`EpicorClient.FromConfiguration()` and the `EpicorConfiguration` class.** *Breaking.* Config-based client construction moves to the composition root. Replace `EpicorClient.FromConfiguration()` with `KeriConfig.BuildEpicorClient()` (in-solution) or `new EpicorClient(session)` (external).
 
 - **`SmtpSettings.FromConfiguration()` and the per-library `Settings` schemas** (`EpicorSvcs` and `FileHandling`), along with their net8 `System.Configuration.ConfigurationManager` package references and the per-project `App.config` seeding. The single remaining `Settings` schema and seed target live in `KeriConfigurator`.
 
