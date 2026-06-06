@@ -5,7 +5,7 @@
 Multi-targets **.NET Framework 4.8** and **.NET 8.0**.
 
 ```csharp
-using (var client = KeriConfig.CreateClient())   // built from the shared App.config; run KeriConfigurator first
+using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinetic connection, built from the shared App.config (run KeriConfigurator first)
 {
     // BAQ parameters are passed as a name/value dictionary.
     // Values are object, so strings and numbers both work.
@@ -17,7 +17,7 @@ using (var client = KeriConfig.CreateClient())   // built from the shared App.co
 
     // BAQ rows are returned as JObject — a BAQ's columns can change
     // whenever the query is edited, so results aren't bound to a DTO.
-    var result = await client.BAQ.BAQResultsAsync<JObject>("MyOpenOrders_BAQ", parameters);
+    var result = await epicorClient.BAQ.BAQResultsAsync<JObject>("MyOpenOrders_BAQ", parameters);
     if (result.IsFailure)
     {
         Console.WriteLine($"BAQ failed: {result.ErrorMessage}");
@@ -151,12 +151,12 @@ See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding 
 `EpicorClient` is a disposable wrapper that holds one configured session and lazy-constructs each Epicor service on first access. It's the recommended entry point — one connection, many services, all disposed together.
 
 ```csharp
-using (var client = KeriConfig.CreateClient())   // built from the shared App.config
+using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinetic connection, built from the shared App.config
 {
-    var customers = await client.Customer.CustomersAsync(
+    var customers = await epicorClient.Customer.CustomersAsync(
         filters: new List<string> { "Inactive eq false" });
-    var parts     = await client.Part.PartsAsync(top: 10);
-    var order     = await client.SalesOrder.GetByIDAsync(orderNum: 12345);
+    var parts     = await epicorClient.Part.PartsAsync(top: 10);
+    var order     = await epicorClient.SalesOrder.GetByIDAsync(orderNum: 12345);
     // …all services disposed here
 }
 ```
@@ -179,7 +179,7 @@ var session = new EpicorRESTSessionKey
     AuthObject = new RESTAuthenticationObject { Username = "...", Userkey = "..." }
 };
 
-using (var client = new EpicorClient(session)) { /* ... */ }
+using (var epicorClient = new EpicorClient(session)) { /* ... */ }
 ```
 
 ### The `OperationResult<T>` pattern
@@ -187,7 +187,7 @@ using (var client = new EpicorClient(session)) { /* ... */ }
 Every service call returns an `OperationResult<T>`. Always check `IsSuccess` (or `IsFailure`) before reading `Value`.
 
 ```csharp
-var result = await client.Customer.CustomersAsync(
+var result = await epicorClient.Customer.CustomersAsync(
     filters: new List<string> { "CustID eq 'CUST001'" });
 
 if (result.IsFailure)
@@ -253,17 +253,17 @@ public class OrderTracking
 }
 
 // Save:
-var save = await client.UDTable.SaveAsync("UD22",
+var save = await epicorClient.UDTable.SaveAsync("UD22",
     new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345",
                         CustomerName = "Acme Corp", TotalValue = 15000.50m,
                         SubmittedDate = DateTime.Now });
 
 // Fetch one row by its full keys:
-var one = await client.UDTable.GetByIDAsync<OrderTracking>(
+var one = await epicorClient.UDTable.GetByIDAsync<OrderTracking>(
     new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
 
 // Fetch a filtered list (populated key columns become the OData $filter):
-var byCategory = await client.UDTable.QueryAsync<OrderTracking>(
+var byCategory = await epicorClient.UDTable.QueryAsync<OrderTracking>(
     new OrderTracking { Category = "ORDER_TRACKING" }, "UD22", top: 100);
 ```
 
@@ -362,7 +362,7 @@ KineticRESTIntegrator/
 │
 ├── RESTServices/                    Low-level REST transport
 │   ├── Authentication/              RESTSessionKey, RESTAuthenticationObject
-│   ├── Transport/                   RESTHttpClient, RESTConnect
+│   ├── Transport/                   RESTConnect
 │   └── RESTServices.csproj
 │
 ├── EpicorSvcs/                      Business Object wrappers

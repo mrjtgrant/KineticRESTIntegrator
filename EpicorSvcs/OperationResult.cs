@@ -64,6 +64,22 @@ namespace EpicorSvcs
         /// </summary>
         public Exception Exception { get; set; }
 
+        /// <summary>
+        /// The provider error type, when the response carried one. For Epicor this
+        /// is the fully-qualified exception class (e.g.
+        /// <c>Ice.Common.RecordNotFoundException</c>). Null on success or when the
+        /// error body had no type. Branch on this rather than parsing
+        /// <see cref="ErrorMessage"/> text.
+        /// </summary>
+        public string ErrorType { get; set; }
+
+        /// <summary>
+        /// The provider correlation id for the failed call, when present — Epicor's
+        /// <c>CorrelationId</c>, for matching a failure to a server-side log entry.
+        /// Null on success or when none was returned.
+        /// </summary>
+        public string CorrelationId { get; set; }
+
 
         /// <summary>Construct a successful result.</summary>
         /// <param name="value">The successful payload — see <see cref="Value"/>.</param>
@@ -101,7 +117,9 @@ namespace EpicorSvcs
             string errorMessage,
             int? statusCode = null,
             string resourcePath = null,
-            JObject rawResponse = null)
+            JObject rawResponse = null,
+            string errorType = null,
+            string correlationId = null)
         {
             return new OperationResult<T>
             {
@@ -110,7 +128,9 @@ namespace EpicorSvcs
                 ErrorMessage = errorMessage,
                 StatusCode = statusCode,
                 ResourcePath = resourcePath,
-                RawResponse = rawResponse
+                RawResponse = rawResponse,
+                ErrorType = errorType,
+                CorrelationId = correlationId
             };
         }
 
@@ -164,9 +184,11 @@ namespace EpicorSvcs
     {
         /// <summary>
         /// Convert a JObject response into an <see cref="OperationResult{T}"/>.
-        /// Detects the standard Keri error shape (<c>ErrorMessage</c>,
-        /// <c>statusCode</c>, <c>resource</c>) when present; otherwise calls
-        /// <paramref name="success"/> to build the typed value.
+        /// Detects the transport error shape (<c>ErrorMessage</c>, <c>statusCode</c>,
+        /// <c>httpResponseBody</c>, <c>resource</c>) when present and parses Epicor's
+        /// error envelope from the body (clean message, <c>ErrorType</c>,
+        /// <c>CorrelationId</c>); otherwise calls <paramref name="success"/> to build
+        /// the typed value.
         /// </summary>
         /// <typeparam name="T">The success payload type.</typeparam>
         /// <param name="response">The raw Epicor response.</param>
@@ -183,7 +205,38 @@ namespace EpicorSvcs
             {
                 int? status = (int?)response["statusCode"];
                 string resource = response["resource"] == null ? null : response["resource"].ToString();
-                return OperationResult<T>.Failure(err, status, resource, response);
+
+                // The transport carries the raw HTTP error body verbatim and stays
+                // vendor-neutral. Parse Epicor's error envelope here, in the Epicor
+                // layer, to surface a clean message plus the exception type and the
+                // correlation id. If the body isn't an Epicor JSON envelope (HTML,
+                // plain text, empty), fall back to the transport's generic message.
+                string cleanMessage = err;
+                string errorType = null;
+                string correlationId = null;
+                JObject raw = response;
+
+                JToken bodyToken = response["httpResponseBody"];
+                string bodyText = bodyToken == null ? null : bodyToken.ToString();
+                if (!string.IsNullOrWhiteSpace(bodyText))
+                {
+                    try
+                    {
+                        JObject epi = JObject.Parse(bodyText);
+                        string epiMessage = epi["ErrorMessage"] == null ? null : epi["ErrorMessage"].ToString();
+                        if (!string.IsNullOrWhiteSpace(epiMessage)) cleanMessage = epiMessage;
+                        errorType = epi["ErrorType"] == null ? null : epi["ErrorType"].ToString();
+                        correlationId = epi["CorrelationId"] == null ? null : epi["CorrelationId"].ToString();
+                        if (status == null) status = (int?)epi["HttpStatus"];
+                        raw = epi;
+                    }
+                    catch
+                    {
+                        // Not an Epicor JSON envelope — keep the generic message/status.
+                    }
+                }
+
+                return OperationResult<T>.Failure(cleanMessage, status, resource, raw, errorType, correlationId);
             }
 
             try

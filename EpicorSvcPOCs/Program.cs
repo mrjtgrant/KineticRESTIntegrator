@@ -45,7 +45,7 @@ namespace EpicorSvcPOCs
                 // One client,
                 // one session, all services lazy-constructed and disposed
                 // together at the end of the using block.
-                using (var client = KeriConfig.CreateClient())
+                using (var client = KeriConfig.BuildEpicorClient())
                 {
                     Console.WriteLine($"  Connected to: {client.Session.BaseUrl}");
                     Console.WriteLine($"  Company:      {client.Session.Company}");

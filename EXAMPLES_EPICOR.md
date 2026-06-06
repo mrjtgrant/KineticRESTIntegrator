@@ -84,7 +84,7 @@ a code type and returns one description string).
 service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`,
 `Ice.BO.UDCodesSvc`, and so on — 30+ in total). Wrapping each one as its own
 Keri class would be tedious and unhelpful since they share an interface.
-`UDTableSvc` instead parameterizes over the table — `client.UDTable.QueryAsync(top: 25, udTable: "UD22")` —
+`UDTableSvc` instead parameterizes over the table — `epicorClient.UDTable.QueryAsync(top: 25, udTable: "UD22")` —
 so one Keri class covers the family. The class-matches-Svc-name rule is
 deliberately broken here to keep the surface manageable.
 
@@ -302,7 +302,7 @@ choose whichever fits the shape of the code you are writing.
 Each service constructor takes a fully-configured `EpicorRESTSessionKey` — build
 one with the base URL, company, and credentials, and pass it in. In-solution
 code can get a ready session from `KeriConfig.BuildSession()` (or a whole client
-from `KeriConfig.CreateClient()`); the example below builds one directly, which
+from `KeriConfig.BuildEpicorClient()`); the example below builds one directly, which
 is also how a consumer outside this solution supplies its own credentials —
 from a vault, a portal, or Windows Credential Manager (see
 [CONFIGURATION.md](CONFIGURATION.md) for those patterns).
@@ -403,10 +403,10 @@ using EpicorSvcs.Dtos;
 using KeriConfigurator;
 using Newtonsoft.Json;
 
-using (var client = KeriConfig.CreateClient())
+using (var epicorClient = KeriConfig.BuildEpicorClient())
 {
     // Choose the target UD table for this service instance.
-    client.UDTable.UDTableDefault = "UD22";
+    epicorClient.UDTable.UDTableDefault = "UD22";
 
     // Construct the row. Key1-Key5 identify the record; the generic
     // columns (Character/Number/CheckBox/ShortChar/Date) carry the data.
@@ -426,7 +426,7 @@ using (var client = KeriConfig.CreateClient())
     // Upsert. SaveAsync with the default Automatic mode updates the row if
     // it exists, otherwise adds it. It targets Ice.BO.{UDTable}Svc; the table
     // comes from UDTableDefault unless a UDTable argument is passed per call.
-    var result = await client.UDTable.SaveAsync(row);
+    var result = await epicorClient.UDTable.SaveAsync(row);
 
     if (result.IsFailure)
     {
@@ -452,7 +452,7 @@ multi-row or mixed-operation write, use the raw `UpdateAsync(ds)` primitive
 `GetByIDAsync` returns the single row matching the five key values you pass (`Key1`–`Key5`):
 
 ```csharp
-var rows = await client.UDTable.QueryAsync(top: 25);
+var rows = await epicorClient.UDTable.QueryAsync(top: 25);
 if (rows.IsSuccess)
     foreach (var r in rows.Value)
         Console.WriteLine($"{r.Key1} / {r.Key2}");
@@ -469,11 +469,11 @@ default?).
 
 ```csharp
 // All rows whose Key1 = "ORDER_TRACKING":
-var byCategory = await client.UDTable.QueryAsync(
+var byCategory = await epicorClient.UDTable.QueryAsync(
     new UDRow { Key1 = "ORDER_TRACKING" }, "UD22", top: 100);
 
 // All rows for one specific order:
-var byOrder = await client.UDTable.QueryAsync(
+var byOrder = await epicorClient.UDTable.QueryAsync(
     new UDRow { Key1 = "ORDER_TRACKING", Key2 = "12345" }, "UD22");
 ```
 
@@ -505,12 +505,12 @@ at the call site.
 ```csharp
 // A single row — the table is required and explicit.
 // UDXX is a placeholder — replace it with your real UD table name.
-var one = await client.UDTable.DeleteByIDAsync(
+var one = await epicorClient.UDTable.DeleteByIDAsync(
     row.Key1, row.Key2, row.Key3, row.Key4, row.Key5, "UDXX");
 
 // Every row of a test table — pre-prod / POC use only.
 // UDXX is a placeholder — replace it with your real UD table name.
-var all = await client.UDTable.TruncateAsync("UDXX", confirmTruncate: true);
+var all = await epicorClient.UDTable.TruncateAsync("UDXX", confirmTruncate: true);
 
 if (all.IsFailure)
     Console.WriteLine($"Truncate failed: {all.ErrorMessage}");
@@ -752,7 +752,7 @@ public class MinimalNote
 }
 
 // Save:
-await client.UDTable.SaveAsync("UD22", new MinimalNote
+await epicorClient.UDTable.SaveAsync("UD22", new MinimalNote
 {
     Category = "USER_PREF",
     NoteID = "DASHBOARD_LAYOUT_V2",
@@ -782,7 +782,7 @@ public class OrderTracking
 }
 
 // Round-trip:
-await client.UDTable.SaveAsync("UD22", new OrderTracking
+await epicorClient.UDTable.SaveAsync("UD22", new OrderTracking
 {
     Category = "ORDER_TRACKING",
     OrderNum = "12345",
@@ -793,14 +793,14 @@ await client.UDTable.SaveAsync("UD22", new OrderTracking
     IsExpedited = true
 });
 
-var one = await client.UDTable.GetByIDAsync<OrderTracking>(
+var one = await epicorClient.UDTable.GetByIDAsync<OrderTracking>(
     new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
 
 if (one.IsSuccess && one.Value != null)
     Console.WriteLine($"{one.Value.CustomerName}: ${one.Value.TotalValue:N2}");
 
 // All open tracking rows:
-var byCategory = await client.UDTable.QueryAsync<OrderTracking>(
+var byCategory = await epicorClient.UDTable.QueryAsync<OrderTracking>(
     new OrderTracking { Category = "ORDER_TRACKING" }, "UD22", top: 500);
 ```
 
@@ -857,7 +857,7 @@ public class WorkLog
 }
 
 // Tagged save:
-await client.UDTable.SaveAsync("UD22", new WorkLog
+await epicorClient.UDTable.SaveAsync("UD22", new WorkLog
 {
     Category = "WORK_LOG",
     EntryID = Guid.NewGuid().ToString("N"),
@@ -911,10 +911,10 @@ var dto = new OrderTracking
         ["IsKitParent_c"]    = true
     }
 };
-await client.UDTable.SaveAsync("UD22", dto);
+await epicorClient.UDTable.SaveAsync("UD22", dto);
 
 // Read: the same columns come back through ExtraData on the projected DTO.
-var read = await client.UDTable.GetByIDAsync<OrderTracking>(
+var read = await epicorClient.UDTable.GetByIDAsync<OrderTracking>(
     new OrderTracking { Category = "ORDER_TRACKING", OrderNum = "12345" }, "UD22");
 if (read.IsSuccess && read.Value != null)
 {

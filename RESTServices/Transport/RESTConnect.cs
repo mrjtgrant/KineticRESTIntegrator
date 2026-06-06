@@ -189,7 +189,18 @@ namespace RESTServices
                         if (!string.IsNullOrWhiteSpace(body))
                             msg += $" — {body}";
 
-                        return new JObject(new JProperty("ErrorMessage", msg));
+                        // Vendor-neutral error surface: keep the human-readable message,
+                        // and also carry the numeric status and the raw body verbatim as
+                        // structured fields. This layer does NOT parse provider-specific
+                        // error shapes — a caller (e.g. EpicorSvcs) reads httpResponseBody
+                        // to extract a clean message, error type, correlation id, etc.
+                        return new JObject
+                        {
+                            ["ErrorMessage"]     = msg,
+                            ["statusCode"]       = (int)response.StatusCode,
+                            ["reasonPhrase"]     = response.ReasonPhrase,
+                            ["httpResponseBody"] = body ?? ""
+                        };
                     }
 
                     try

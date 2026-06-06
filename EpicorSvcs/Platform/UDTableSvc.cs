@@ -410,15 +410,15 @@ namespace EpicorSvcs
         }
 
         // True when an OperationResult represents Epicor's "row does not exist"
-        // response: HTTP 404 (when the status code is populated) or a body that
-        // carries the RecordNotFoundException / "Record not found." marker.
+        // response. Keys on the parsed error type (Ice.Common.RecordNotFoundException),
+        // now surfaced as a first-class field, instead of scraping the message text.
+        // Falls back to a bare 404 for any error shape that carried no parsed type.
         private static bool IsRecordNotFound(OperationResult<JObject> result)
         {
-            if (result.StatusCode == 404) return true;
-            string m = result.ErrorMessage;
-            if (string.IsNullOrEmpty(m)) return false;
-            return m.IndexOf("RecordNotFound", StringComparison.OrdinalIgnoreCase) >= 0
-                || m.IndexOf("Record not found", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (string.Equals(result.ErrorType, "Ice.Common.RecordNotFoundException",
+                              StringComparison.OrdinalIgnoreCase))
+                return true;
+            return result.StatusCode == 404;
         }
 
         // ---------------------------------------------------------------

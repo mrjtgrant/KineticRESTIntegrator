@@ -49,10 +49,11 @@ namespace KeriConfigurator
         }
 
         /// <summary>
-        /// Convenience factory: builds a session from configuration and wraps it
-        /// in an <see cref="EpicorClient"/>. Dispose the returned client when done.
+        /// Convenience factory: builds a validated session from configuration and
+        /// wraps it in an <see cref="EpicorClient"/> — your connection to the
+        /// Epicor/Kinetic REST API. Dispose the returned client when done.
         /// </summary>
-        public static EpicorClient CreateClient()
+        public static EpicorClient BuildEpicorClient()
         {
             return new EpicorClient(BuildSession());
         }

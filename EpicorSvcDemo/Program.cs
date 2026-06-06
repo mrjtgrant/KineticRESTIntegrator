@@ -76,10 +76,10 @@ namespace EpicorSvcDemo
                 return;
             }
 
-            // KeriConfig.CreateClient() builds the client from the shared
+            // KeriConfig.BuildEpicorClient() builds the client from the shared
             // App.config (owned by KeriConfigurator). It owns an HttpClient
             // and must be disposed.
-            using (var epicor = KeriConfig.CreateClient())
+            using (var epicor = KeriConfig.BuildEpicorClient())
             {
                 // =============================================================
                 // PHASE 1 — pick the target UD table

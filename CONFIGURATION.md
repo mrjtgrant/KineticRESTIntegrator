@@ -6,14 +6,14 @@ How Keri connects to Epicor — from a fresh checkout, to a working run, to your
 
 Keri's configuration lives in a **single shared `App.config`**, owned by **KeriConfigurator** — the composition root. KeriConfigurator holds the unified settings schema (Epicor connection *and* email/SMTP), reads it, and builds the sessions and clients the rest of the solution uses.
 
-The three libraries — `RESTServices`, `EpicorSvcs`, `FileHandling` — read **no configuration of their own**. They're handed what they need: an `EpicorRESTSessionKey` (built by `KeriConfig.CreateClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
+The three libraries — `RESTServices`, `EpicorSvcs`, `FileHandling` — read **no configuration of their own**. They're handed what they need: an `EpicorRESTSessionKey` (built by `KeriConfig.BuildEpicorClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
 
 The solution's executables (`EpicorSvcDemo`, `EpicorSvcPOCs`) share KeriConfigurator's single `App.config` through an MSBuild `<AppConfig>` link, so there is exactly one file to fill in for the whole solution.
 
 ```
 KeriConfigurator/App.config   ← the one config file
         │
-        ├─ KeriConfig.CreateClient()      → EpicorClient   (connection)
+        ├─ KeriConfig.BuildEpicorClient() → EpicorClient   (connection)
         └─ KeriConfig.BuildSmtpSettings() → SmtpSettings    (email)
         │
    shared via <AppConfig> by
@@ -238,8 +238,8 @@ Within this solution, `KeriConfig.BuildSmtpSettings()` produces that `SmtpSettin
 If you used Keri before 0.3.0, the configuration model changed substantially:
 
 - **Per-library `App.config` files are gone.** `EpicorSvcs` and `FileHandling` no longer read configuration or have their own settings. There's one shared `App.config`, owned by KeriConfigurator.
-- **`EpicorClient.FromConfiguration()` and `EpicorConfiguration` were removed.** Build a client with `KeriConfig.CreateClient()` (inside this solution) or `new EpicorClient(session)` (from your own code).
+- **`EpicorClient.FromConfiguration()` and `EpicorConfiguration` were removed.** Build a client with `KeriConfig.BuildEpicorClient()` (inside this solution) or `new EpicorClient(session)` (from your own code).
 - **`SmtpSettings` is now public and config-free**, and `FileProcessing.EmailReport` takes an `SmtpSettings` parameter.
 - **Environment-variable configuration (`EPICOR_*`) was removed.** v0.3.0 is `App.config`-by-default. If you relied on `EPICOR_*` for CI/production, supply an `EpicorRESTSessionKey` in code instead (the programmatic path above), which keeps secrets off disk just as well. Re-introducing an environment-variable reader at the composition root is a documented future option.
 
-The migration in one line: wherever you called `EpicorClient.FromConfiguration()`, call `KeriConfig.CreateClient()` (in-solution) or construct an `EpicorRESTSessionKey` and pass it to `new EpicorClient(...)` (external).
+The migration in one line: wherever you called `EpicorClient.FromConfiguration()`, call `KeriConfig.BuildEpicorClient()` (in-solution) or construct an `EpicorRESTSessionKey` and pass it to `new EpicorClient(...)` (external).
