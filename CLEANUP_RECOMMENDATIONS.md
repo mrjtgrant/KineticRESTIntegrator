@@ -11,7 +11,21 @@ Severity legend:
 
 ## Future work
 
-_Nothing open at the moment — recently completed items are listed below._
+- **🩹 Surface Epicor's structured error feedback to callers (target: 0.3.0).** When a BO call fails, the transport (`RESTServices`, `RESTHttpClient.RESTTransactionAsync`) flattens the whole HTTP error into a single `ErrorMessage` string — `"HTTP {status} {reason} calling {url} — {raw body}"` — and discards the structure. A caller therefore can't read Epicor's own clean message (e.g. *"PartNum already exists"* on a rejected write), can't branch on `ErrorType` (`Ice.Common.BusinessLogicException`, `Ice.Common.RecordNotFoundException`, ...), and can't grab the `CorrelationId` that Epicor support needs to investigate a server-side failure. `OperationResult.StatusCode` also comes back null on every Epicor HTTP error, because the body carries the code as `HttpStatus` and nothing maps it onto the result. Net user-facing impact: a failed write shows a verbose blob instead of the actionable reason.
+
+  **Layering constraint (do not violate):** `RESTServices` is the vendor-neutral transport and must stay that way — it must NOT learn Epicor's error vocabulary (`ApiExceptionResponse`, `ErrorType`, `RecordNotFoundException`, `ErrorDetails`, `CorrelationId`). That knowledge belongs in `EpicorSvcs`, the Epicor-aware layer, where `OperationResult`, `ToOperationResult`, and `HandleResponse` already live.
+
+  **Suggested split:**
+  - `RESTServices` (transport): on a non-2xx, preserve two pieces of *generic* data — the HTTP status code and the raw, unmodified response body. No parsing, no interpretation. This is the only change here, and it is defensibly transport-level.
+  - `EpicorSvcs` (Epicor-aware): parse that raw body in the existing `ToOperationResult` / `HandleResponse` path. Populate `StatusCode` from the status, set `ErrorMessage` to Epicor's own clean message, keep the parsed Epicor error object in `RawResponse` (so `ErrorDetails` — Table/Program/Method/Line — stays reachable), and add first-class `ErrorType` and `CorrelationId` properties on `OperationResult`. A computed `ErrorSummary` getter (message + type + correlation id) lets the demo/POCs keep printing one line that is automatically informative.
+  - Upsert: replace the current record-not-found heuristic in `UDTableSvc.GetByIDDatasetAsync` (which keys on `StatusCode == 404` OR the `RecordNotFound` / `Record not found` text) with a clean `ErrorType == "Ice.Common.RecordNotFoundException"` check, once the type is available.
+  - Demo/POCs: print Epicor's `ErrorMessage` (and `CorrelationId` when present) on failure.
+
+  **Do not branch on the status number.** Business-logic rejections ("PartNum already exists", validation, posting failures) come back as HTTP 500 (sometimes 400) with a `BusinessLogicException` body and a useful message; a missing-row probe comes back as 404 `RecordNotFoundException`; a genuinely unresolved endpoint is also 404. Same numbers, different meanings — categorize on the body's `ErrorType` / `ErrorMessage`, not the code. The exact status for business errors can vary by endpoint and Epicor version, which is itself the argument for keying on the body.
+
+  **Open design question:** how the transport hands the status + raw body up to `EpicorSvcs` without learning Epicor's shape — extend the existing JObject-return convention with neutral `httpStatus` / `rawBody` properties (lower churn, fits what is there), or give the transport a small neutral result type (cleaner, larger change).
+
+  **Risks / notes:** `ErrorMessage` changes from the verbose blob to Epicor's clean text — grep the test suite and any log scrapers for the old `"HTTP ... calling ..."` format before committing. The change is additive (nothing useful is removed; the full body is *preserved* in `RawResponse` rather than discarded) but spans both `RESTServices` and `EpicorSvcs`, so it carries a version event — fold it into the `0.3.0` batch (Step 4/5) rather than spending a separate bump. The currently-deployed not-found fix is functional in the meantime and needs no urgent change.
 
 ---
 
