@@ -157,7 +157,7 @@ public string Connect(string connectionId)
     string company  = conn.Company;
     string username = conn.Username;
     string password = ConnectionManager.GetPassword(connectionId);  // from the credential store
-    string apiKey   = ConnectionManager.GetApiKey(connectionId);    // optional
+    string apiKey   = ConnectionManager.GetApiKey(connectionId);    // optional; stored like a password, under a prefixed target
 
     var missing = new List<string>();
     if (string.IsNullOrEmpty(url))      missing.Add("Url");
@@ -191,6 +191,8 @@ public string Connect(string connectionId)
 ```
 
 `ConnectionManager` is your helper over the OS credential store (e.g. the `CredentialManagement` NuGet package or an `advapi32!CredRead` P/Invoke) — Keri doesn't depend on it; it only needs the resulting `EpicorRESTSessionKey`. Holding the client in a field (`_epicor`) and disposing the previous one lets a single app switch between stored connections at runtime.
+
+`GetApiKey` is an extension of that same password storage. An API key is held as a Windows Credential Manager **password** entry exactly like the login secret — same secured store, same retrieval — distinguished only by a **custom prefix on the credential’s target name** that marks the entry as the connection’s API key rather than its login password. API keys are treated as passwords; the prefix is what lets one connection carry both a login password and an API key as two separate, independently-resolved credentials.
 
 ---
 
