@@ -58,7 +58,7 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.SelectedSerialNumbersSvc/RetrieveSerialNumbers";
-            JObject ds = (JObject)NewDS.DeepClone();
+            JObject ds = NewDataset();
             ds.Add(new JProperty("whereClause", whereClause));
             ds.Add(new JProperty("startSerialNumber", ""));
             ds.Add(new JProperty("endSerialNumber", ""));

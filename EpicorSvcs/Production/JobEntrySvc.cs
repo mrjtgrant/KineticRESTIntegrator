@@ -309,7 +309,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.JobEntrySvc/GetNewJobHead";
 
-            JObject newJobHead = new JObject(NewDS);
+            JObject newJobHead = NewDataset();
             newJobHead.Add(new JProperty("jobNum", jobNum));
 
             JObject response = HandleResponse(await RESTCallAsync(svc, newJobHead, ct).ConfigureAwait(false));
@@ -349,7 +349,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.JobEntrySvc/GetNextJobNum";
 
-            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDataset(), ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r["parameters"]?["opNextJobNum"]?.ToString());
         }
 

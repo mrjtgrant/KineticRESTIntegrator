@@ -135,7 +135,7 @@ namespace EpicorSvcs
         public async Task<OperationResult<JObject>> GetNewOrderHedAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.SalesOrderSvc/GetNewOrderHed";
-            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDataset(), ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
         }
 
@@ -150,7 +150,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.SalesOrderSvc/GetNewOrderDtl";
 
-            JObject newOrderDtl = new JObject(NewDS);
+            JObject newOrderDtl = NewDataset();
             newOrderDtl.Add(new JProperty("orderNum", ordernum));
 
             JObject response = HandleResponse(await RESTCallAsync(svc, newOrderDtl, ct).ConfigureAwait(false));

@@ -317,7 +317,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.ReceiptSvc/GetNewRcvHead";
 
-            JObject newRcvHead = new JObject(NewDS);
+            JObject newRcvHead = NewDataset();
             newRcvHead.Add(new JProperty("vendorNum", vendorNum));
             newRcvHead.Add(new JProperty("purPoint", purPoint));
 
@@ -348,7 +348,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.ReceiptSvc/GetNewRcvHeadWithPONum";
 
-            JObject newRcvHead = new JObject(NewDS);
+            JObject newRcvHead = NewDataset();
             newRcvHead.Add(new JProperty("vendorNum", vendorNum));
             newRcvHead.Add(new JProperty("purPoint", purPoint));
             newRcvHead.Add(new JProperty("poNum", poNum));
@@ -380,7 +380,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.ReceiptSvc/GetNewRcvDtl";
 
-            JObject newRcvDtl = new JObject(NewDS);
+            JObject newRcvDtl = NewDataset();
             newRcvDtl.Add(new JProperty("vendorNum", vendorNum));
             newRcvDtl.Add(new JProperty("purPoint", purPoint));
             newRcvDtl.Add(new JProperty("packSlip", packSlip));
@@ -407,7 +407,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.ReceiptSvc/GetNewRcvHeadAttch";
 
-            JObject newRcvHeadAttch = new JObject(NewDS);
+            JObject newRcvHeadAttch = NewDataset();
             newRcvHeadAttch.Add(new JProperty("vendorNum", vendorNum));
             newRcvHeadAttch.Add(new JProperty("purPoint", purPoint));
             newRcvHeadAttch.Add(new JProperty("packSlip", packSlip));

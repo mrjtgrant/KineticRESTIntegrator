@@ -60,7 +60,7 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             string svc = "Erp.BO.InvTransferSvc/GetNewInventoryTransfer";
-            JObject ds = (JObject)NewDS.DeepClone();
+            JObject ds = NewDataset();
             ds.Add(new JProperty("ipSourceType", invTrans.ipSourceType));
 
             JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));

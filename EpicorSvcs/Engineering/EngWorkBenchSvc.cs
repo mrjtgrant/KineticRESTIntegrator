@@ -82,7 +82,7 @@ namespace EpicorSvcs
         /// <returns>The new ECO group dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
         public async Task<OperationResult<JObject>> GetNewECOGroupAsync(CancellationToken ct = default)
         {
-            JObject ds = new JObject(NewDS);
+            JObject ds = NewDataset();
             string svc = "Erp.BO.EngWorkBenchSvc/GetNewECOGroup";
             JObject response = HandleResponse(await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
@@ -103,7 +103,7 @@ namespace EpicorSvcs
             string RevNum,
             CancellationToken ct = default)
         {
-            JObject ds = new JObject(NewDS);
+            JObject ds = NewDataset();
             string svc = "Erp.BO.EngWorkBenchSvc/GetNewECOOpr";
 
             ds.Add(new JProperty("groupID", GroupID));
@@ -145,7 +145,7 @@ namespace EpicorSvcs
             string RevNum,
             CancellationToken ct = default)
         {
-            JObject ds = new JObject(NewDS);
+            JObject ds = NewDataset();
             string svc = "Erp.BO.EngWorkBenchSvc/GetDatasetForTreeByRef";
 
             ds.Add(new JProperty("ipAltMethod", ""));

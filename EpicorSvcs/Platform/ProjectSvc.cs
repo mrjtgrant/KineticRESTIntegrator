@@ -122,7 +122,7 @@ namespace EpicorSvcs
         public async Task<OperationResult<JObject>> GetNewProjectAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.ProjectSvc/GetNewProject";
-            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDataset(), ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
         }
 

@@ -275,7 +275,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.POSvc/GetNewPOHeader";
 
-            JObject newPOHeader = new JObject(NewDS);
+            JObject newPOHeader = NewDataset();
             newPOHeader.Add(new JProperty("poNum", poNum));
 
             JObject response = HandleResponse(await RESTCallAsync(svc, newPOHeader, ct).ConfigureAwait(false));
@@ -295,7 +295,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.POSvc/GetNewPODetail";
 
-            JObject newPODetail = new JObject(NewDS);
+            JObject newPODetail = NewDataset();
             newPODetail.Add(new JProperty("poNum", poNum));
 
             JObject response = HandleResponse(await RESTCallAsync(svc, newPODetail, ct).ConfigureAwait(false));
@@ -317,7 +317,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.POSvc/GetNewPORel";
 
-            JObject newPORel = new JObject(NewDS);
+            JObject newPORel = NewDataset();
             newPORel.Add(new JProperty("poNum", poNum));
             newPORel.Add(new JProperty("poLine", poLine));
 

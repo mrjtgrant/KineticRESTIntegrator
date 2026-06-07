@@ -185,7 +185,7 @@ namespace EpicorSvcs
         public async Task<OperationResult<JObject>> GetNewQuoteHedAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.QuoteSvc/GetNewQuoteHed";
-            JObject response = HandleResponse(await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false));
+            JObject response = HandleResponse(await RESTCallAsync(svc, NewDataset(), ct).ConfigureAwait(false));
             return response.ToOperationResult(r => r);
         }
 

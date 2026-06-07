@@ -322,7 +322,7 @@ namespace EpicorSvcs
         {
             string table = ResolveTable(UDTable);
             string svc = String.Format("Ice.BO.{0}Svc/GetaNew{0}", table);
-            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
+            JObject response = await RESTCallAsync(svc, NewDataset(), ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
 

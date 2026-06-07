@@ -22,10 +22,17 @@ namespace EpicorSvcs
     public class EpicorSvc : RESTConnect
     {
         /// <summary>
-        /// The empty Epicor dataset skeleton: <c>{"ds":{}}</c>. Epicor's
-        /// <c>GetNew*</c> action methods expect this shape as their input.
+        /// Returns a fresh, empty Epicor dataset envelope: <c>{"ds":{}}</c>.
+        /// Epicor's <c>GetNew*</c> action methods expect this shape as their
+        /// input. Each call returns a new, independent instance, so callers can
+        /// add parameters to it or populate the dataset without affecting any
+        /// other call.
         /// </summary>
-        public JObject NewDS = new JObject { new JProperty("ds", new JObject()) };
+        /// <returns>A new <c>{"ds":{}}</c> dataset envelope.</returns>
+        public JObject NewDataset()
+        {
+            return new JObject { new JProperty("ds", new JObject()) };
+        }
 
         /// <summary>
         /// Construct with a programmatic session. Build one from configuration

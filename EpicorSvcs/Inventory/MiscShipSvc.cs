@@ -108,7 +108,7 @@ namespace EpicorSvcs
         /// <returns>The new shipment-line dataset wrapped in an <see cref="OperationResult{T}"/>.</returns>
         public async Task<OperationResult<JObject>> GetNewMscShpDtAsync(int packNum, CancellationToken ct = default)
         {
-            JObject ds = new JObject(NewDS);
+            JObject ds = NewDataset();
             string svc = "Erp.BO.MiscShipSvc/GetNewMscShpDt";
             ds.Add(new JProperty("packNum", packNum));
 

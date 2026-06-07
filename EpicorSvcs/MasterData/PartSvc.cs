@@ -218,7 +218,7 @@ namespace EpicorSvcs
         public async Task<OperationResult<JObject>> GetNewPartAsync(CancellationToken ct = default)
         {
             string svc = "Erp.BO.PartSvc/GetNewPart";
-            JObject response = await RESTCallAsync(svc, NewDS, ct).ConfigureAwait(false);
+            JObject response = await RESTCallAsync(svc, NewDataset(), ct).ConfigureAwait(false);
             return response.ToOperationResult(r => r);
         }
 
@@ -247,7 +247,7 @@ namespace EpicorSvcs
         {
             string svc = "Erp.BO.PartSvc/GetNewPartRev";
 
-            JObject ds = new JObject(NewDS);
+            JObject ds = NewDataset();
             ds.Add(new JProperty("partNum", partNum));
             ds.Add(new JProperty("revisionNum", ""));
             ds.Add(new JProperty("altMethod", ""));
