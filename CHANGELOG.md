@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Versioning
+
+This project follows Semantic Versioning, with one pragmatic qualification **while it remains a solo, single-solution project with no external consumers**: "breaking" is judged by *actual* breakage risk, not by category. A minor bump (`0.X.0`) is reserved for changes that alter documented runtime behavior or meaningfully reshape the API. In-solution renames or removals that are fixed within the same change — together with fixes, additions, internal refactors, and documentation — are patch bumps (`0.0.X`), even when they technically touch a public symbol, because nothing outside the solution can break.
+
+The project stays on `0.x` until its API is deliberately committed to as stable. `1.0.0` is a maturity decision, not an automatic milestone — a high `0.x` minor implies nothing about stability; the leading `0.` is the signal that the API may still change.
+
+**If an external consumer is ever added** — a published package, a shared assembly, or a separate repository that takes a dependency on this one — this relaxation no longer applies. Revert to strict Semantic Versioning at that point: any public rename or removal is a breaking change and bumps the minor.
+
 ---
 
 ## [0.4.0] — 2026-06-06
