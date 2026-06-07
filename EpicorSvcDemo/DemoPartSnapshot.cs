@@ -36,7 +36,7 @@ namespace EpicorSvcDemo
         [UDTableColumn("ShortChar02")] public string ProdCode { get; set; }
         [UDTableColumn("Character01")] public string PartDescription { get; set; }
 
-        /// <summary><c>Part.CreatedOn</c> carried through from the BAQ.</summary>
-        [UDTableColumn("Date01")]      public DateTime CreatedOn { get; set; }
+        /// <summary><c>Part.OnHoldDate</c> carried through from the BAQ.</summary>
+        [UDTableColumn("Date01")]      public DateTime OnHoldDate { get; set; }
     }
 }
