@@ -253,7 +253,7 @@ namespace EpicorSvcDemo
                             TypeCode        = (string)r["Part_TypeCode"],
                             ProdCode        = (string)r["Part_ProdCode"],
                             PartDescription = (string)r["Part_PartDescription"],
-                            CreatedOn       = (DateTime?)r["Part_CreatedOn"] ?? DateTime.MinValue
+                            OnHoldDate       = (DateTime?)r["Part_OnHoldDate"] ?? DateTime.MinValue
                         });
                     }
 
@@ -524,7 +524,7 @@ namespace EpicorSvcDemo
                 { "TypeCode",        "Type Code" },
                 { "ProdCode",        "Product Code" },
                 { "PartDescription", "Description" },
-                { "CreatedOn",       "Created On" }
+                { "OnHoldDate",       "On Hold Date" }
             };
     }
 }
