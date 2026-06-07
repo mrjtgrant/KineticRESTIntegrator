@@ -38,7 +38,7 @@ namespace EpicorSvcs
         public EpicorSvc(EpicorRESTSessionKey session) : base(session)
         {
             session.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
-            session.AuthObject.DynamicURLModifier_OAuth = string.Format("/api/v2/odata/{0}/", session.Company);
+            session.AuthObject.DynamicURLModifier_Keyed = string.Format("/api/v2/odata/{0}/", session.Company);
         }
 
         /// <summary>

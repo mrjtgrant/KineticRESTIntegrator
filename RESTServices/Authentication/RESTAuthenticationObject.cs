@@ -15,7 +15,7 @@ namespace RESTServices
         /// e.g. "api/v1/" for Basic auth, "api/v2/odata/{Company}/" for API-key.
         /// Selected automatically based on <see cref="KeyType"/>.
         /// </summary>
-        internal string DynamicURLModifier => KeyType == "basic" ? DynamicURLModifier_Basic : DynamicURLModifier_OAuth;
+        internal string DynamicURLModifier => KeyType == "basic" ? DynamicURLModifier_Basic : DynamicURLModifier_Keyed;
 
         /// <summary>Username for Basic authentication.</summary>
         public string Username { get; set; }
@@ -54,6 +54,6 @@ namespace RESTServices
         public string DynamicURLModifier_Basic { get; set; } = "";
 
         /// <summary>URL modifier used when <see cref="KeyType"/> is "apikey". Typically "api/v2/odata/{Company}/".</summary>
-        public string DynamicURLModifier_OAuth { get; set; } = "";
+        public string DynamicURLModifier_Keyed { get; set; } = "";
     }
 }
