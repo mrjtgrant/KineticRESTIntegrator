@@ -20,13 +20,13 @@ namespace EpicorSvcs
     /// across multiple tables.
     /// </para>
     /// <para>
-    /// Two flavors of <c>BAQResultsAsync</c> are provided:
+    /// Two flavors of <c>ExecuteAsync</c> are provided:
     /// <list type="bullet">
-    /// <item><see cref="BAQResultsAsync{TRow}(string, Dictionary{string, object}, CancellationToken)"/>
+    /// <item><see cref="ExecuteAsync{TRow}(string, Dictionary{string, object}, CancellationToken)"/>
     /// — generic, recommended for production. Each row is materialized as an
     /// instance of <typeparamref name="TRow"/>, giving compile-time safety on
     /// column access.</item>
-    /// <item><see cref="BAQResultsAsync(string, Dictionary{string, object}, CancellationToken)"/>
+    /// <item><see cref="ExecuteAsync(string, Dictionary{string, object}, CancellationToken)"/>
     /// — untyped, returns rows as <see cref="JObject"/>s. Useful for one-off
     /// scripts and exploration where defining a row type per BAQ isn't worth
     /// the ceremony.</item>
@@ -69,7 +69,7 @@ namespace EpicorSvcs
         /// An <see cref="OperationResult{T}"/> wrapping the list of rows. On
         /// failure, <c>ErrorMessage</c> describes what went wrong.
         /// </returns>
-        public async Task<OperationResult<List<TRow>>> BAQResultsAsync<TRow>(
+        public async Task<OperationResult<List<TRow>>> ExecuteAsync<TRow>(
             string BAQName,
             Dictionary<string, object> parameters = null,
             CancellationToken ct = default)
@@ -92,7 +92,7 @@ namespace EpicorSvcs
         /// <see cref="JObject"/>s. Prefer the generic overload when you know
         /// the row shape at compile time.
         /// </returns>
-        public async Task<OperationResult<List<JObject>>> BAQResultsAsync(
+        public async Task<OperationResult<List<JObject>>> ExecuteAsync(
             string BAQName,
             Dictionary<string, object> parameters = null,
             CancellationToken ct = default)

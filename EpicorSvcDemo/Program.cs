@@ -197,7 +197,7 @@ namespace EpicorSvcDemo
                     // =========================================================
                     Console.WriteLine();
                     Console.WriteLine($"Running BAQ '{BaqId}'...");
-                    var baqResult = await epicor.BAQ.BAQResultsAsync(BaqId).ConfigureAwait(false);
+                    var baqResult = await epicor.BAQ.ExecuteAsync(BaqId).ConfigureAwait(false);
 
                     // Detect-then-offer: if the BAQ can't run, the most common
                     // first-run cause is that it hasn't been imported into this
@@ -220,7 +220,7 @@ namespace EpicorSvcDemo
                             return;   // file missing / couldn't stage; message already printed
 
                         Console.WriteLine($"Retrying BAQ '{BaqId}'...");
-                        baqResult = await epicor.BAQ.BAQResultsAsync(BaqId).ConfigureAwait(false);
+                        baqResult = await epicor.BAQ.ExecuteAsync(BaqId).ConfigureAwait(false);
 
                         if (baqResult.IsFailure)
                         {
