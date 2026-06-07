@@ -31,7 +31,6 @@
     <ComVisible>false</ComVisible>
 
     <!-- App manifest -->
-    <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
 
     <!-- Misc -->
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
