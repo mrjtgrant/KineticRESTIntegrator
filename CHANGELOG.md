@@ -14,6 +14,47 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## [0.4.1] — 2026-06-08
+
+A patch release bundling everything since 0.4.0. The headline change: entity-set reads now derive their OData `$select` from the row DTO instead of hand-maintained column lists — fixing rows whose typed properties came back null — with a new `additionalColumns` channel for columns the DTO doesn't model. It also folds in the dataset-factory and auth-route renames, a BAQ method rename, repo/demo hygiene, and the supporting docs. Every change is in-solution; nothing outside the solution can break. `EpicorSvcs` — 0.4.1 (driver).
+
+### Added
+
+- **`EpicorSvc.SelectFor<T>()`.** Reflects a DTO's public properties into the OData `$select` column list — skipping the `[JsonExtensionData]` overflow and `[JsonIgnore]` members, honoring `[JsonProperty]` names, cached per type. Because the request mirrors the DTO, every typed property on a returned row is populated.
+
+- **`additionalColumns` on every entity-set read.** A `List<string>` parameter that appends columns the DTO doesn't model — install-specific `_c` columns or Epicor UD placeholder columns (`ShortChar01`, `Character01`, …) — to the `$select`. They come back in the row's `ExtraData` overflow. Like the other OData options, it is honored only on v2 OData (API-key) sessions.
+
+- **Offline `SelectFor` tests.** `SelectForTests` pins the reflection rules against a controlled DTO (rename / ignore / extension-data / indexer handling) and smoke-tests the real `POHeader`. No live Epicor session required.
+
+### Changed
+
+- **Entity-set reads default `$select` to the DTO.** *In-solution.* All twelve entity-set services — `POSvc`, `ReceiptSvc`, `PartSvc`, `CustomerSvc`, `VendorSvc`, `SerialNoSvc`, `PayMethodSvc`, `PaymentEntrySvc`, `MiscShipSvc`, `SalesOrderSvc`, `QuoteSvc`, and `JobEntrySvc` (20 read methods in all) — now build their default `$select` from `SelectFor<T>()` and accept `additionalColumns`. The 20 hand-maintained `default*Select` lists are deleted. This fixes a latent bug: a default list shorter than its DTO left the un-selected typed properties null on every returned row even though the data existed. The existing `select` parameter is unchanged — a full override that also serves as a lean-projection lever. `EpicorSvcs` — 0.4.1.
+
+- **`NewDS` field → `NewDataset()` method.** *In-solution.* The shared mutable `JObject NewDS` field on `EpicorSvc` became a `NewDataset()` factory returning a fresh `{"ds":{}}` envelope per call, so two flows in flight never alias one object. The old "copy it before you mutate it" pattern is no longer needed.
+
+- **`BAQSvc.BAQResultsAsync` → `ExecuteAsync`.** *In-solution.* The BAQ execution method was renamed to read as the action it performs; in-solution call sites were updated.
+
+- **`DynamicURLModifier_OAuth` → `DynamicURLModifier_Keyed`.** *(RESTServices) In-solution.* The auth-object URL-modifier field was renamed to describe the API-key route generically, paired with `_Basic`.
+
+### Removed
+
+- **Unused demo `app.manifest`** and its `.csproj` reference.
+- **Stray duplicate `EpicorSvcPOCs.csproj`** at the repository root (the real one lives in the project folder).
+
+### Documentation
+
+- **The read model is documented across the docs.** `README`, `CONTRIBUTING`, `EXAMPLES_EPICOR`, and `CONFIGURATION` now explain the DTO-drives-`$select` model, `additionalColumns`, the `ExtraData` overflow, and the `NewDataset()` lifecycle — and each calls out the **v2-only** limitation: OData query options (`select` / `additionalColumns` / `top` / `filters`) are silently ignored on a Basic/v1 session, which returns the full collection. The stale `NewDS` section in `EXAMPLES_EPICOR` was corrected (field → method).
+
+- **Earlier docs in this cycle:** documented the `ds` dataset-envelope lifecycle and split use-vs-extend guidance across `README`/`CONTRIBUTING`, and stated the pragmatic pre-1.0 versioning policy.
+
+- **`CLEANUP_RECOMMENDATIONS.md`:** marked error feedback as shipped (0.4.0); parked pagination (`$skip` + end-of-data detection) and a warn-on-v1 idea for OData options on Basic sessions.
+
+- **Demo:** the bundled `Parts_BAQ` now uses `OnHoldDate`, and company references were scrubbed (`EPIC01` → `EPIC01`).
+
+### Version bumps
+
+- `EpicorSvcs` 0.4.0 → 0.4.1 (driver). `RESTServices` 0.3.0 → 0.3.1 (the `_Keyed` rename). `KeriConfigurator` (0.4.0) and `FileHandling` (0.3.0) are unchanged.
+
 ## [0.4.0] — 2026-06-06
 
 This release surfaces Epicor's error feedback as first-class data, collapses the REST transport into a single class, and renames the client factory to state its purpose. *Breaking* for `EpicorSvcs` (the content of `OperationResult.ErrorMessage` changes) and `KeriConfigurator` (the factory rename); `RESTServices` syncs to 0.3.0 (transport collapse plus new error fields); `FileHandling` is unchanged at 0.3.0.
