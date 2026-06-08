@@ -59,6 +59,8 @@ The console prompts for two groups. Every field shows its current value as `[def
 
 Authentication uses Basic (`DefaultUser` + `DefaultPasskey`) and/or an API key. The API key's presence is what selects v2 OData; without it the transport uses v1 Basic. At least one form of auth, plus the base URL and company, must be set — KeriConfigurator's connection test reads a single Part record and reports the HTTP status if it fails (401 → check credentials, 404 → check URL/company).
 
+> **v2 vs v1 affects more than authentication.** Keri's OData query options — `select`, `additionalColumns`, `top`, and `filters` on the entity-set reads (`PartsAsync`, `POesAsync`, …) — are honored only on the **v2 OData** endpoint, i.e. when an API key is set. On a Basic/v1 session they are silently ignored and the full collection is returned. If you depend on column or row trimming, authenticate with an API key.
+
 **Email / SMTP** (optional — only if you use the email features):
 
 | Setting | Meaning |

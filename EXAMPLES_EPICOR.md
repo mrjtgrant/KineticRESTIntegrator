@@ -91,20 +91,53 @@ deliberately broken here to keep the surface manageable.
 ### Using a wrapped call: append a filter, pass a payload
 
 Once you've found the wrapper, calling it is the standard shape. A read takes
-optional OData fragments — filter, select, top — and an in-context cancellation
-token; a write takes the `JObject` payload. The wrapper handles URL
-composition, auth, error shape, and dataset normalization — you write the BO
-name and the parameters that matter to you, and nothing else.
+optional OData fragments — `filters`, `select`, `additionalColumns`, and `top` —
+and an in-context cancellation token; a write takes the `JObject` payload. The
+wrapper handles URL composition, auth, error shape, and dataset normalization —
+you write the BO name and the parameters that matter to you, and nothing else.
+
+#### How a list read chooses its columns
+
+When you pass no `select`, the wrapper
+asks Epicor for exactly the columns the DTO models — derived by reflection from
+the DTO via `SelectFor<T>()` — so every typed property on the returned rows is
+populated. Three knobs adjust that:
+
+- **`select`** — a full override. Pass an explicit column list and *only* those
+  columns are requested (typed properties you leave out come back null). Use it
+  to trim the payload on a large read, or to request a deliberately narrow
+  projection.
+- **`additionalColumns`** — columns to *add* on top of the base set. This is how
+  you pull install-specific `_c` columns, or Epicor's UD placeholder columns
+  (`ShortChar01`, `Character01`, …), that aren't on the DTO. They come back in
+  the row's `ExtraData` (covered below).
+- **`top`** — the row cap (default 500).
+
+> **These options require v2 OData.** `select`, `additionalColumns`, `top`, and
+> `filters` are OData query options, honored only on Epicor's **v2 OData**
+> endpoint — which Keri uses when the session carries an **API key**. On a
+> **Basic-auth (v1)** session they are silently ignored: Epicor returns the
+> full, untrimmed collection with no error. If column or row trimming isn't
+> taking effect, check that you're authenticating with an API key.
 
 > The examples below pass a `session` — an `EpicorRESTSessionKey`. [Section 2](#2-using-a-single-service-directly) shows how to build one, or obtain it from `KeriConfig` in-solution.
 
 ```csharp
 using (var part = new PartSvc(session))
 {
-    var parts = await part.PartsAsync(
+    // Default: every column the Part DTO models is requested and populated.
+    var all = await part.PartsAsync(top: 50);
+
+    // Narrowed projection (leaner payload) via an explicit select:
+    var lean = await part.PartsAsync(
         filters: new List<string> { "NonStock eq true", "InActive eq false" },
         select:  new List<string> { "PartNum", "PartDescription", "ClassID" },
         top:     50);
+
+    // DTO columns PLUS install-specific custom columns (these land in ExtraData):
+    var withCustom = await part.PartsAsync(
+        additionalColumns: new List<string> { "WarrantyPeriod_c", "ProductLine_c" },
+        top: 50);
 }
 ```
 
@@ -112,7 +145,7 @@ For a BO method that Keri does not wrap, the same shape is available through
 `RESTConnect` directly — see
 [EXAMPLES_RESTAPI.md — Calling an un-wrapped Epicor endpoint](EXAMPLES_RESTAPI.md#calling-an-un-wrapped-epicor-endpoint).
 
-### `NewDS`: the empty dataset for `GetNew*` calls
+### `NewDataset()`: the empty dataset for `GetNew*` calls
 
 Epicor's `GetNew*` methods (`GetNewPart`, `GetNewPartRev`, `GetNewECOGroup`,
 `GetNewECOMtl`, and so on) all expect the same starting payload: an empty
@@ -120,25 +153,24 @@ dataset, `{"ds": {}}`. They return that dataset filled in with default values
 for a new row, ready for the caller to populate and persist.
 
 Rather than constructing that literal `JObject` at each call site, every
-service inherits a public `NewDS` field on `EpicorSvc` that holds it:
+service inherits a `NewDataset()` method on `EpicorSvc` that produces one:
 
 ```csharp
-public JObject NewDS = new JObject { new JProperty("ds", new JObject()) };
+public JObject NewDataset();      // returns a fresh {"ds":{}}
 ```
 
 Use it as the starting payload for any `GetNew*` call:
 
 ```csharp
-var newPart = await part.GetNewPartAsync();   // sends NewDS internally
+var newPart = await part.GetNewPartAsync();   // sends a fresh dataset internally
 ```
 
-For a `GetNew*` call that takes additional parameters, **copy `NewDS` into a
-fresh `JObject` before adding to it** — do not add properties to `NewDS`
-itself, since it is a shared field on the service instance and mutating it
-would pollute subsequent calls. The orchestrator code follows this pattern:
+For a `GetNew*` call that takes additional parameters, call `NewDataset()` and
+add to the result directly — each call returns its own independent instance, so
+there is nothing to copy and no shared state to pollute:
 
 ```csharp
-JObject newpartrev = new JObject(NewDS);                   // fresh copy
+JObject newpartrev = NewDataset();
 newpartrev.Add(new JProperty("partNum", partNum));
 newpartrev.Add(new JProperty("revisionNum", ""));
 newpartrev.Add(new JProperty("altMethod", ""));
@@ -146,8 +178,9 @@ newpartrev.Add(new JProperty("altMethod", ""));
 JObject ds = HandleResponse(await RESTCallAsync(svc, newpartrev, ct).ConfigureAwait(false));
 ```
 
-`new JObject(NewDS)` is a deep copy via the `JObject(JToken)` constructor —
-exactly what you want here.
+`NewDataset()` is a method, not a shared field, precisely for this reason: two
+operations in flight never alias the same object, so the older "copy it before
+you mutate it" caution no longer applies — just call it again for a fresh one.
 
 ### `ExtraData`: install-specific columns (`_c` fields)
 
@@ -169,20 +202,28 @@ attribute doing the work: on deserialization, any field the DTO doesn't have a
 typed property for lands here; on serialization, the dictionary's entries are
 emitted as top-level siblings of the typed properties.
 
-**Reading custom columns** — they're available on the DTO without any extra
-plumbing:
+**Reading custom columns** — on a list read, a `_c` column comes back only when
+you ask for it, because the default `$select` is the DTO's own columns (covered
+in [the column-selection note](#how-a-list-read-chooses-its-columns) above).
+Name the column in `additionalColumns` and it rides back in `ExtraData`:
 
 ```csharp
 using (var part = new PartSvc(session))
 {
-    var result = await part.PartsAsync(top: 1);
+    var result = await part.PartsAsync(
+        top: 1,
+        additionalColumns: new List<string> { "WarrantyPeriod_c", "ProductLine_c" });
     var p = result.Value.First();
 
     Console.WriteLine(p.PartNum);                                  // typed
-    Console.WriteLine(p.ExtraData["WarrantyPeriod_c"]);            // custom
-    Console.WriteLine(p.ExtraData["ProductLine_c"]?.ToString());   // custom
+    Console.WriteLine(p.ExtraData["WarrantyPeriod_c"]);            // custom (named)
+    Console.WriteLine(p.ExtraData["ProductLine_c"]?.ToString());   // custom (named)
 }
 ```
+
+A full-dataset read is different: `GetByIDAsync` applies no `$select`, so Epicor
+returns the whole row — every `_c` and UD column included — and they all land in
+`ExtraData` (or the raw dataset) automatically, with nothing to name.
 
 The dictionary's value type is `JToken`, so cast or convert to whatever shape
 the column actually holds — `ToString()` for strings, `ToObject<int>()` for
