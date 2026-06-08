@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -28,19 +29,6 @@ namespace EpicorSvcs
         // primary entity set.
         // ---------------------------------------------------------------
 
-        // A practical default $select for Vendors queries — chosen to
-        // populate the core columns for vendor-lookup use cases so a
-        // default call returns a usefully-filled object rather than just a
-        // vendor number.
-        private static readonly List<string> defaultVendorSelect = new List<string>
-        {
-            "VendorNum", "VendorID", "Name",
-            "Address1", "City", "State", "ZIP", "Country",
-            "PhoneNum", "EMailAddress",
-            "TermsCode", "CurrencyCode", "GroupCode",
-            "Inactive", "Approved", "PayHold"
-        };
-
         /// <summary>
         /// Queries vendor master records via OData. Calls
         /// <c>Erp.BO.VendorSvc/Vendors</c> in Epicor.
@@ -51,10 +39,18 @@ namespace EpicorSvcs
         /// <c>"Inactive eq false"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="Vendor"/> DTO. Pass an explicit list to widen or
-        /// narrow the projection.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="Vendor"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="Vendor"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -65,14 +61,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<Vendor>>> VendorsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultVendorSelect;
+            List<string> cols = select ?? SelectFor<Vendor>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.VendorSvc/Vendors";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)

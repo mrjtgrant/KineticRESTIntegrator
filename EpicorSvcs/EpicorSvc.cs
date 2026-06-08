@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using RESTServices;
 using EpicorSvcs.Dtos;
@@ -22,6 +25,13 @@ namespace EpicorSvcs
     public class EpicorSvc : RESTConnect
     {
         /// <summary>
+        /// Per-type cache of the column names derived for <see cref="SelectFor{T}"/>.
+        /// Reflection runs once per DTO type; later calls reuse the cached result.
+        /// </summary>
+        private static readonly ConcurrentDictionary<Type, string[]> _selectColumnCache
+            = new ConcurrentDictionary<Type, string[]>();
+
+        /// <summary>
         /// Returns a fresh, empty Epicor dataset envelope: <c>{"ds":{}}</c>.
         /// Epicor's <c>GetNew*</c> action methods expect this shape as their
         /// input. Each call returns a new, independent instance, so callers can
@@ -32,6 +42,77 @@ namespace EpicorSvcs
         public JObject NewDataset()
         {
             return new JObject { new JProperty("ds", new JObject()) };
+        }
+
+        /// <summary>
+        /// Derives the OData <c>$select</c> column list for a DTO type
+        /// <typeparamref name="T"/> from its public properties — the typed columns
+        /// the DTO represents. The <see cref="JsonExtensionDataAttribute"/> overflow
+        /// property (for example <c>ExtraData</c>) is excluded because it is not a
+        /// column; properties marked <see cref="JsonIgnoreAttribute"/> are skipped;
+        /// and an explicit <see cref="JsonPropertyAttribute"/> name is honored when
+        /// present so the emitted name matches the Epicor column. Results are cached
+        /// per type.
+        /// </summary>
+        /// <remarks>
+        /// This drives the default <c>$select</c> for the OData entity-set reads, so
+        /// a list call returns every column the DTO models rather than a
+        /// hand-maintained subset. To pull columns that are not on the DTO (custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns), append their names at
+        /// the call site; they arrive in the DTO's <c>[JsonExtensionData]</c> overflow.
+        /// <para>
+        /// <c>$select</c> is an OData query option, honored only on Epicor's v2 OData
+        /// endpoint (API-key sessions). On a Basic-auth (v1) session the option is
+        /// ignored by the server and the full collection is returned regardless.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">The DTO type whose properties define the columns.</typeparam>
+        /// <returns>A new list of column names. The caller may freely mutate it (for
+        /// example, to append extra columns) without affecting the cache.</returns>
+        public List<string> SelectFor<T>()
+        {
+            string[] columns = _selectColumnCache.GetOrAdd(typeof(T), BuildSelectColumns);
+            return new List<string>(columns);
+        }
+
+        /// <summary>
+        /// Reflects a DTO type's public instance properties into column names,
+        /// applying the <see cref="SelectFor{T}"/> rules (skip the
+        /// <see cref="JsonExtensionDataAttribute"/> overflow and
+        /// <see cref="JsonIgnoreAttribute"/> properties; honor
+        /// <see cref="JsonPropertyAttribute"/> names). Called once per type by the
+        /// cache in <see cref="SelectFor{T}"/>.
+        /// </summary>
+        /// <param name="type">The DTO type to reflect.</param>
+        /// <returns>The derived column names.</returns>
+        private static string[] BuildSelectColumns(Type type)
+        {
+            var names = new List<string>();
+
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                // Indexers are not columns.
+                if (prop.GetIndexParameters().Length > 0)
+                    continue;
+
+                // The [JsonExtensionData] overflow (for example ExtraData) is not a column.
+                if (prop.GetCustomAttribute<JsonExtensionDataAttribute>() != null)
+                    continue;
+
+                // Properties excluded from (de)serialization are not Epicor columns.
+                if (prop.GetCustomAttribute<JsonIgnoreAttribute>() != null)
+                    continue;
+
+                // Honor an explicit [JsonProperty("...")] name; otherwise use the property name.
+                var jsonProp = prop.GetCustomAttribute<JsonPropertyAttribute>();
+                string columnName = (jsonProp != null && !string.IsNullOrEmpty(jsonProp.PropertyName))
+                    ? jsonProp.PropertyName
+                    : prop.Name;
+
+                names.Add(columnName);
+            }
+
+            return names.ToArray();
         }
 
         /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -41,17 +42,6 @@ namespace EpicorSvcs
         // Public API — reads, template-fetchers, and the write primitive
         // ---------------------------------------------------------------
 
-        // A practical default $select for SalesOrders queries — chosen to
-        // populate the core columns for tracking/projection use cases so a
-        // default call returns a usefully-filled object rather than just an
-        // order number.
-        private static readonly List<string> defaultSalesOrderSelect = new List<string>
-        {
-            "OrderNum", "OrderDate", "PONum", "CustNum", "CustomerCustID",
-            "CustomerName", "OrderHeld", "OpenOrder", "RequestDate",
-            "NeedByDate", "DocOrderAmt", "OrderAmt", "Currency_CurrencyID"
-        };
-
         /// <summary>
         /// Queries sales-order header records via OData. Calls
         /// <c>Erp.BO.SalesOrderSvc/SalesOrders</c> in Epicor.
@@ -61,10 +51,18 @@ namespace EpicorSvcs
         /// is a single condition, e.g. <c>"OrderDate ge 2025-08-01"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="OrderHed"/> DTO. Pass an explicit list to widen or
-        /// narrow the projection.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="OrderHed"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="OrderHed"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -75,14 +73,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<OrderHed>>> SalesOrdersAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultSalesOrderSelect;
+            List<string> cols = select ?? SelectFor<OrderHed>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.SalesOrderSvc/SalesOrders";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)

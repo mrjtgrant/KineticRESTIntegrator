@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -38,21 +39,6 @@ namespace EpicorSvcs
         // Public API — generic primitives
         // ---------------------------------------------------------------
 
-        // A practical default $select for MiscShips queries — chosen to
-        // populate the core columns of the MscShpHd DTO. Widen by passing
-        // an explicit select list.
-        private static readonly List<string> defaultMiscShipSelect = new List<string>
-        {
-            "Company", "PackNum", "Plant", "ShipDate", "ShipStatus",
-            "OrderNum", "PONum", "JobNum", "RMANum", "DMRNum", "BOLNum",
-            "CustNum", "ShipToNum", "VendorNum", "PurPoint",
-            "Name", "City", "State", "Country",
-            "ShipViaCode", "TrackingNumber",
-            "Hazmat", "DocOnly", "IntrntlShip",
-            "Weight", "WeightUOM",
-            "EntryPerson"
-        };
-
         /// <summary>
         /// Queries miscellaneous-shipment records via OData. Calls
         /// <c>Erp.BO.MiscShipSvc/MiscShips</c> in Epicor.
@@ -68,10 +54,18 @@ namespace EpicorSvcs
         /// is a single condition, e.g. <c>"ShipStatus eq 'OPEN'"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="MscShpHd"/> DTO. Pass an explicit list to widen or
-        /// narrow the projection.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="MscShpHd"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="MscShpHd"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -82,14 +76,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<MscShpHd>>> MiscShipsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultMiscShipSelect;
+            List<string> cols = select ?? SelectFor<MscShpHd>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.MiscShipSvc/MiscShips";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)

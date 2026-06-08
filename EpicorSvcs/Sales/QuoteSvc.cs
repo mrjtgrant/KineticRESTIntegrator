@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -39,33 +40,6 @@ namespace EpicorSvcs
         // Public API — generic primitives
         // ---------------------------------------------------------------
 
-        // A practical default $select for Quotes queries — chosen to populate
-        // the core columns of the QuoteHed DTO. Widen by passing an explicit
-        // select list.
-        private static readonly List<string> defaultQuoteSelect = new List<string>
-        {
-            "Company", "QuoteNum", "CustNum", "PONum",
-            "EntryDate", "DueDate", "DateQuoted", "ExpirationDate",
-            "Quoted", "QuoteClosed", "Ordered", "VoidQuote",
-            "CurrencyCode", "TermsCode", "ShipViaCode", "TerritoryID",
-            "EntryPerson", "SalesRepCode",
-            "ConfidencePct", "CurrentStage",
-            "QuoteAmt", "TotalQuote"
-        };
-
-        // A practical default $select for QuoteDtls queries — chosen to
-        // populate the core columns of the QuoteDtl DTO.
-        private static readonly List<string> defaultQuoteDtlSelect = new List<string>
-        {
-            "Company", "QuoteNum", "QuoteLine",
-            "PartNum", "RevisionNum", "LineDesc",
-            "OrderQty", "OrderUM",
-            "UnitPrice", "ListPrice", "DiscountPercent", "Discount", "ExtPriceDtl",
-            "Ordered", "Quoted", "Expired", "VoidLine",
-            "ReqShipDate", "ShipByDate", "NeedByDate",
-            "TaxCatID", "KitFlag"
-        };
-
         /// <summary>
         /// Queries quote-header records via OData. Calls
         /// <c>Erp.BO.QuoteSvc/Quotes</c> in Epicor.
@@ -75,10 +49,18 @@ namespace EpicorSvcs
         /// is a single condition, e.g. <c>"Quoted eq true"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="QuoteHed"/> DTO. Pass an explicit list to widen or
-        /// narrow the projection.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="QuoteHed"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="QuoteHed"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -89,14 +71,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<QuoteHed>>> QuotesAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultQuoteSelect;
+            List<string> cols = select ?? SelectFor<QuoteHed>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.QuoteSvc/Quotes";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -115,10 +99,18 @@ namespace EpicorSvcs
         /// is a single condition, e.g. <c>"QuoteNum eq 12345"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="QuoteDtl"/> DTO. Pass an explicit list to widen or
-        /// narrow the projection.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="QuoteDtl"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="QuoteDtl"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -129,14 +121,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<QuoteDtl>>> QuoteDtlsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultQuoteDtlSelect;
+            List<string> cols = select ?? SelectFor<QuoteDtl>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.QuoteSvc/QuoteDtls";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)

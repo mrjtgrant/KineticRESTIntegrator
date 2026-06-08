@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -17,16 +18,6 @@ namespace EpicorSvcs
         /// <param name="session">A fully-configured session.</param>
         public SerialNoSvc(EpicorRESTSessionKey session) : base(session) { }
 
-        // A practical default $select for SerialNoes queries — chosen to
-        // populate the core columns of the SerialNo DTO. Widen by passing
-        // an explicit select list.
-        private static readonly List<string> defaultSerialNoSelect = new List<string>
-        {
-            "Company", "PartNum", "SerialNumber", "SNStatus",
-            "JobNum", "AssemblySeq", "MtlSeq", "PackNum", "PackLine",
-            "Voided"
-        };
-
         /// <summary>
         /// Queries serial-number records via OData. Calls
         /// <c>Erp.BO.SerialNoSvc/SerialNoes</c> in Epicor.
@@ -40,10 +31,18 @@ namespace EpicorSvcs
         /// is a single condition, e.g. <c>"PartNum eq 'WIDGET-A'"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="SerialNo"/> DTO. Pass an explicit list to widen or
-        /// narrow the projection.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="SerialNo"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="SerialNo"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -54,14 +53,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<SerialNo>>> SerialNoesAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultSerialNoSelect;
+            List<string> cols = select ?? SelectFor<SerialNo>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.SerialNoSvc/SerialNoes";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)

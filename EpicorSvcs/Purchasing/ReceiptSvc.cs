@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -72,55 +73,6 @@ namespace EpicorSvcs
         // against the REST help.
         // ---------------------------------------------------------------
 
-        private static readonly List<string> defaultRcvHeadSelect = new List<string>
-        {
-            "Company", "VendorNum", "PurPoint", "PackSlip",
-            "PONum", "POLine", "PORel", "POType",
-            "ReceiptDate", "EntryDate", "ArrivedDate",
-            "EntryPerson", "ReceivePerson", "ChangedBy", "ChangeDate",
-            "Plant", "ShipViaCode", "IncotermCode", "IncotermLocation",
-            "Received", "Invoiced", "SaveForInvoicing", "AutoReceipt",
-            "ICLinked", "PartialReceipt",
-            "ReceiptComment", "LegalNumber", "TranDocTypeID", "ImportNum", "ASNID",
-            "CurrencyCode",
-            "TotalAmt", "TotLinesAmt", "TotTaxAmt", "TotDedTaxAmt",
-            "TotDutiesAmt", "TotIndirectCostsAmt", "TotSATaxAmt", "TotWHTaxAmt",
-            "TaxRegionCode", "TaxRateGrpCode", "TaxPoint", "TaxRateDate",
-            "TaxesCalculated", "InPrice",
-            "LandedCost", "LCVariance", "LCReference", "LCComment",
-            "LCDisburseMethod", "AppliedLCAmt", "ApplyToLC"
-        };
-
-        private static readonly List<string> defaultRcvDtlSelect = new List<string>
-        {
-            "Company", "VendorNum", "PurPoint", "PackSlip", "PackLine",
-            "PONum", "POLine", "PORelNum", "POType",
-            "PartNum", "PartDescription", "RevisionNum", "VenPartNum",
-            "OurQty", "IUM", "VendorQty", "PUM",
-            "OurUnitCost", "VendorUnitCost", "CostPerCode", "ExtCost",
-            "WareHouseCode", "BinNum", "LotNum", "DimCode", "DUM", "DimConvFactor", "Plant",
-            "JobNum", "AssemblySeq", "JobSeqType", "JobSeq",
-            "Received", "ReceiptType", "ReceivedTo",
-            "ReceivedComplete", "IssuedComplete", "AutoReceipt",
-            "ReceiptDate", "ArrivedDate",
-            "InspectionReq", "InspectionPending", "InspectorID",
-            "InspectedBy", "InspectedDate", "PassedQty", "FailedQty",
-            "Invoiced", "InvoiceNum", "InvoiceLine",
-            "TranReference", "ReasonCode", "RefType", "RefCode",
-            "PurchCode", "NonConformnce",
-            "TaxRegionCode", "TaxCatID", "Taxable", "TaxExempt", "NoTaxRecalc",
-            "CurrencyCode",
-            "TotalAmt", "TotLineAmt", "TotTaxAmt", "TotDedTaxAmt",
-            "TotDutiesAmt", "TotSATaxAmt", "TotWHTaxAmt", "TotCostVariance"
-        };
-
-        private static readonly List<string> defaultRcvHeadAttchSelect = new List<string>
-        {
-            "Company", "VendorNum", "PurPoint", "PackSlip", "DrawingSeq",
-            "XFileRefNum", "DrawDesc", "FileName",
-            "PDMDocID", "DocTypeID", "ForeignSysRowID"
-        };
-
         /// <summary>
         /// Queries purchase-order receipt header records via OData. Calls
         /// <c>Erp.BO.ReceiptSvc/Receipts</c> in Epicor.
@@ -136,9 +88,18 @@ namespace EpicorSvcs
         /// <c>"Received eq true and ReceiptDate ge 2026-01-01"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null,
-        /// a practical default set is used that populates the core columns
-        /// of the <see cref="RcvHead"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="RcvHead"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="RcvHead"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -149,14 +110,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<RcvHead>>> ReceiptsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultRcvHeadSelect;
+            List<string> cols = select ?? SelectFor<RcvHead>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.ReceiptSvc/Receipts";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -176,9 +139,18 @@ namespace EpicorSvcs
         /// specific PO.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null,
-        /// a practical default set is used that populates the core columns
-        /// of the <see cref="RcvDtl"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="RcvDtl"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="RcvDtl"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -189,14 +161,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<RcvDtl>>> RcvDtlsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultRcvDtlSelect;
+            List<string> cols = select ?? SelectFor<RcvDtl>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.ReceiptSvc/RcvDtls";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -221,9 +195,18 @@ namespace EpicorSvcs
         /// Optional OData filter clauses, combined with <c>and</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null,
-        /// a practical default set is used that populates the core columns
-        /// of the <see cref="RcvHeadAttch"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="RcvHeadAttch"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="RcvHeadAttch"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -234,14 +217,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<RcvHeadAttch>>> RcvHeadAttchesAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultRcvHeadAttchSelect;
+            List<string> cols = select ?? SelectFor<RcvHeadAttch>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.ReceiptSvc/RcvHeadAttches";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)

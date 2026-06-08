@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -45,39 +46,6 @@ namespace EpicorSvcs
         // follow Epicor's names directly.
         // ---------------------------------------------------------------
 
-        private static readonly List<string> defaultJobHeadSelect = new List<string>
-        {
-            "JobNum", "PartNum", "PartDescription", "RevisionNum",
-            "JobReleased", "JobClosed", "JobComplete", "JobHeld",
-            "ProdQty", "QtyCompleted", "IUM",
-            "DueDate", "StartDate", "ReqDueDate",
-            "Plant", "ProdCode"
-        };
-
-        private static readonly List<string> defaultJobAsmblSelect = new List<string>
-        {
-            "JobNum", "AssemblySeq", "PartNum", "RevisionNum", "Description",
-            "QtyPer", "RequiredQty", "IssuedQty", "PullQty", "IUM",
-            "JobComplete", "IssuedComplete",
-            "BomLevel", "BomSequence", "Parent"
-        };
-
-        private static readonly List<string> defaultJobMtlSelect = new List<string>
-        {
-            "JobNum", "AssemblySeq", "MtlSeq", "PartNum", "RevisionNum", "Description",
-            "RequiredQty", "IssuedQty", "IUM",
-            "JobComplete", "IssuedComplete",
-            "ReqDate", "BuyIt", "Direct"
-        };
-
-        private static readonly List<string> defaultJobPartSelect = new List<string>
-        {
-            "JobNum", "PartNum", "RevisionNum",
-            "PartQty", "StockQty", "ShippedQty", "ReceivedQty",
-            "WIPQty", "QtyCompleted",
-            "JobClosed", "JobComplete", "IUM", "Plant"
-        };
-
         /// <summary>
         /// Queries job-header records via OData. Calls
         /// <c>Erp.BO.JobEntrySvc/JobEntries</c> in Epicor.
@@ -94,10 +62,18 @@ namespace EpicorSvcs
         /// is a single condition, e.g. <c>"DueDate ge 2026-01-01"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="JobHead"/> DTO. Pass an explicit list to widen or
-        /// narrow the projection.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="JobHead"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="JobHead"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -108,14 +84,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<JobHead>>> JobEntriesAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultJobHeadSelect;
+            List<string> cols = select ?? SelectFor<JobHead>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.JobEntrySvc/JobEntries";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -134,9 +112,18 @@ namespace EpicorSvcs
         /// <c>"JobNum eq '12345'"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="JobAsmbl"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="JobAsmbl"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="JobAsmbl"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -147,14 +134,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<JobAsmbl>>> JobAsmblsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultJobAsmblSelect;
+            List<string> cols = select ?? SelectFor<JobAsmbl>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.JobEntrySvc/JobAsmbls";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -173,9 +162,18 @@ namespace EpicorSvcs
         /// <c>"JobNum eq '12345' and IssuedComplete eq false"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="JobMtl"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="JobMtl"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="JobMtl"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -186,14 +184,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<JobMtl>>> JobMtlsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultJobMtlSelect;
+            List<string> cols = select ?? SelectFor<JobMtl>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.JobEntrySvc/JobMtls";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -212,9 +212,18 @@ namespace EpicorSvcs
         /// <c>"PartNum eq 'WIDGET-001'"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null, a
-        /// practical default set is used that populates the core columns of
-        /// the <see cref="JobPart"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="JobPart"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="JobPart"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -225,14 +234,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<JobPart>>> JobPartsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultJobPartSelect;
+            List<string> cols = select ?? SelectFor<JobPart>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.JobEntrySvc/JobParts";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)

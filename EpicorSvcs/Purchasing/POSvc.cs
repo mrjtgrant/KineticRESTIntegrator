@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -53,29 +54,6 @@ namespace EpicorSvcs
         // JobEntries its name on JobEntrySvc.
         // ---------------------------------------------------------------
 
-        private static readonly List<string> defaultPOHeaderSelect = new List<string>
-        {
-            "PONum", "VendorNum", "OrderDate", "DueDate", "PromiseDate",
-            "OpenOrder", "OrderHeld", "Approve", "ApprovalStatus",
-            "Confirmed", "BuyerID", "POType",
-            "TermsCode", "CurrencyCode", "TotalOrder", "DocTotalOrder"
-        };
-
-        private static readonly List<string> defaultPODetailSelect = new List<string>
-        {
-            "PONUM", "POLine", "PartNum", "RevisionNum", "VenPartNum",
-            "LineDesc", "OrderQty", "IUM", "UnitCost", "ExtCost",
-            "OpenLine", "Confirmed", "DueDate", "VendorNum"
-        };
-
-        private static readonly List<string> defaultPORelSelect = new List<string>
-        {
-            "PONum", "POLine", "PORelNum",
-            "DueDate", "PromiseDt", "NeedByDate",
-            "RelQty", "ReceivedQty", "InvoicedQty",
-            "OpenRelease", "FirmRelease", "Plant", "WarehouseCode"
-        };
-
         /// <summary>
         /// Queries purchase-order header records via OData. Calls
         /// <c>Erp.BO.POSvc/POes</c> in Epicor.
@@ -93,9 +71,18 @@ namespace EpicorSvcs
         /// <c>"VendorNum eq 17"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null,
-        /// a practical default set is used that populates the core columns
-        /// of the <see cref="POHeader"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="POHeader"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="POHeader"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -106,14 +93,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<POHeader>>> POesAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultPOHeaderSelect;
+            List<string> cols = select ?? SelectFor<POHeader>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.POSvc/POes";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -133,9 +122,18 @@ namespace EpicorSvcs
         /// detail table.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null,
-        /// a practical default set is used that populates the core columns
-        /// of the <see cref="PODetail"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="PODetail"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="PODetail"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -146,14 +144,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<PODetail>>> PODetailsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultPODetailSelect;
+            List<string> cols = select ?? SelectFor<PODetail>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.POSvc/PODetails";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
@@ -178,9 +178,18 @@ namespace EpicorSvcs
         /// <c>"PONum eq 12345 and OpenRelease eq true"</c>.
         /// </param>
         /// <param name="select">
-        /// Optional list of columns for the OData <c>$select</c>. When null,
-        /// a practical default set is used that populates the core columns
-        /// of the <see cref="PORel"/> DTO.
+        /// Optional explicit column list for the OData <c>$select</c>. When
+        /// null, the full set of <see cref="PORel"/> columns is used (via
+        /// <see cref="EpicorSvc.SelectFor{T}"/>), so every column the DTO
+        /// models is populated. Supply this only to override the column set —
+        /// for example, a leaner projection to reduce payload size.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Optional extra column names appended to the <c>$select</c> — custom
+        /// <c>_c</c> columns or Epicor UD placeholder columns not on the
+        /// <see cref="PORel"/> DTO. They are returned in the DTO's
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
+        /// on a v2 OData (API-key) session; ignored on Basic/v1.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -191,14 +200,16 @@ namespace EpicorSvcs
         public async Task<OperationResult<List<PORel>>> PORelsAsync(
             List<string> filters = null,
             List<string> select = null,
+            List<string> additionalColumns = null,
             int top = 500,
             CancellationToken ct = default)
         {
-            if (select == null)
-                select = defaultPORelSelect;
+            List<string> cols = select ?? SelectFor<PORel>();
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
 
             string svc = "Erp.BO.POSvc/PORels";
-            svc += "?$select=" + UrlEncode(string.Join(",", select));
+            svc += "?$select=" + UrlEncode(string.Join(",", cols));
             svc += "&$top=" + top.ToString();
 
             if (filters != null && filters.Count > 0)
