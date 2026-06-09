@@ -191,107 +191,72 @@ both.
 
 ---
 
-## Calling an un-wrapped Epicor endpoint
+## Switching URL shape by authentication path
 
-The transport-direct path also works against Epicor itself, for the rare case
-of an endpoint `EpicorSvcs` does not wrap. This is the corner case: if you are
-working with Epicor, prefer the typed services in `EpicorSvcs` (see
-[EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md)). Reach for `RESTConnect` against
-Epicor only when there is no wrapper for what you need.
+Some APIs serve the same resources under **different URL prefixes depending on
+how you authenticate** — a Basic-auth path and a separate key-auth path. The
+transport supports this with two URL-modifier fields on the auth object, and
+picks between them automatically based on whether an `ApiKey` is set:
 
-Epicor's REST endpoints live under one of two URL shapes, depending on which
-API version you call:
+- **Basic auth** (`ApiKey` empty) → `DynamicURLModifier_Basic`, e.g. `{BaseUrl}/api/basic/{service-path}`
+- **API-key auth** (`ApiKey` set) → `DynamicURLModifier_Keyed`, e.g. `{BaseUrl}/api/v0XX/{service-path}`
 
-- **v1, Basic auth** — `{BaseUrl}/api/v1/{service-path}`
-- **v2 OData, API-key auth** — `{BaseUrl}/api/v2/odata/{Company}/{service-path}`
-
-When you go through `EpicorSvc` (or any service that derives from it), the
-constructor populates the two URL-modifier fields on the auth object for you:
-
-```csharp
-session.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
-session.AuthObject.DynamicURLModifier_Keyed = string.Format("/api/v2/odata/{0}/", session.Company);
-```
-
-…and the transport picks between them automatically: when `ApiKey` is empty
-it uses `DynamicURLModifier_Basic`, otherwise `DynamicURLModifier_Keyed`. This
-is the work the wrapper saves you. Going through `RESTConnect` directly, you
-populate those fields yourself, and the same pick-by-`ApiKey` logic applies.
-
-### v1 + Basic auth
-
-`ApiKey` empty, `DynamicURLModifier_Basic` set, `Username` and `Userkey`
-populated. The request URL becomes `{BaseUrl}/api/v1/{path}`.
+Set the two modifiers on the `RESTAuthenticationObject`. On each call the
+transport joins the chosen modifier between `BaseUrl` and the path you pass to
+`RESTCallAsync`, selecting by `ApiKey` presence — empty picks `_Basic`, set
+picks `_Keyed`. Populate whichever credential the path you're targeting wants;
+the URL prefixes above are illustrative — set them to whatever shapes your API
+actually uses.
 
 ```csharp
 using RESTServices;
 using Newtonsoft.Json.Linq;
 
-var session = new RESTSessionKey
+// Basic-auth path: ApiKey empty, _Basic set, Username/Userkey supplied.
+var basicSession = new RESTSessionKey
 {
-    BaseUrl = "https://company-pilot.example.com/server",
-    AuthObject  = new RESTAuthenticationObject
+    BaseUrl = "https://api.example.com",
+    AuthObject = new RESTAuthenticationObject
     {
-        Username                 = "YOUR_USER",
-        Userkey                  = "YOUR_PASSWORD",
-        DynamicURLModifier_Basic = "/api/v1/"
+        Username                 = "api-user",
+        Userkey                  = "api-password",
+        DynamicURLModifier_Basic = "/api/basic/"
     }
 };
+// request URL: https://api.example.com/api/basic/{path}
 
-using (var rest = new RESTConnect(session))
+using (var rest = new RESTConnect(basicSession))
 {
-    JObject result = await rest.RESTCallAsync(
-        "Erp.BO.SalesOrderSvc/GetByID?orderNum=12345");
-
+    JObject result = await rest.RESTCallAsync("orders/12345");
     if (result["ErrorMessage"] != null)
         Console.WriteLine($"Call failed: {result["ErrorMessage"]}");
-    else
-        Console.WriteLine(result);
 }
-```
 
-### v2 OData + API key
-
-`ApiKey` set, `DynamicURLModifier_Keyed` set with the company substituted in.
-The request URL becomes `{BaseUrl}/api/v2/odata/{Company}/{path}`. This is
-the path Epicor's `Company` segment lives in — going direct, you interpolate
-your company into the modifier yourself (the wrapper does the same thing,
-using `EpicorRESTSessionKey.Company` as the source).
-
-```csharp
-using RESTServices;
-using Newtonsoft.Json.Linq;
-
-var session = new RESTSessionKey
+// Key-auth path: ApiKey set, _Keyed set.
+var keyedSession = new RESTSessionKey
 {
-    BaseUrl = "https://company-pilot.example.com/server",
-    AuthObject  = new RESTAuthenticationObject
+    BaseUrl = "https://api.example.com",
+    AuthObject = new RESTAuthenticationObject
     {
-        ApiKey                   = "YOUR_API_KEY",
-        DynamicURLModifier_Keyed = "/api/v2/odata/EPIC01/"
+        ApiKey                   = "your-api-key-value",
+        DynamicURLModifier_Keyed = "/api/v0XX/"
     }
 };
+// request URL: https://api.example.com/api/v0XX/{path}
 
-using (var rest = new RESTConnect(session))
+using (var rest = new RESTConnect(keyedSession))
 {
-    JObject result = await rest.RESTCallAsync(
-        "Erp.BO.SalesOrderSvc/GetByID?orderNum=12345");
-
+    JObject result = await rest.RESTCallAsync("orders/12345");
     // ...
 }
 ```
 
-OAuth 2.0 bearer-token auth is independent of which URL shape you use. Set
-`BearerToken` for the `Authorization: Bearer {token}` header, and let `ApiKey`
-control which modifier the transport picks: leave `ApiKey` empty for the v1
-path, or set it (alongside the bearer token, since they use different
-headers) for the v2 path.
-
-The choice between the two URL shapes is a deployment decision about which
-Epicor API version you're targeting, not a property of the endpoint you're
-calling — the same business object is reachable under either. v2 OData is
-Epicor's current direction and is what `EpicorSvcs` defaults to when an
-`ApiKey` is configured.
+Because the transport decides purely on whether `ApiKey` is set, the same call
+site serves either shape — you choose by which credential you populate. A class
+that derives from the transport can set these two modifiers in its constructor
+so its callers never think about them; the typed Epicor services do exactly
+that for their own two URL shapes (see
+[EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md#calling-an-un-wrapped-endpoint)).
 
 ---
 
