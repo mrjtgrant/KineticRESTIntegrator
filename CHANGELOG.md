@@ -12,7 +12,33 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 **If an external consumer is ever added** — a published package, a shared assembly, or a separate repository that takes a dependency on this one — this relaxation no longer applies. Revert to strict Semantic Versioning at that point: any public rename or removal is a breaking change and bumps the minor.
 
+**Each project versions independently.** As of `KeriConfigurator 0.5.0`, the four projects — `RESTServices`, `EpicorSvcs`, `FileHandling`, and `KeriConfigurator` — carry their own version numbers and are released and git-tagged per project (e.g. `KeriConfigurator-v0.5.0`), rather than under a single aggregate repo version. The `[0.x.y]` entries below and the matching `vX.Y.Z` tags were whole-repo releases driven by `EpicorSvcs`; they remain as the historical record. New entries are headed by the project and its version.
+
 ---
+
+## KeriConfigurator 0.5.0 — 2026-06-09
+
+Adds environment-variable references to configuration: any `App.config` value may be written as `{ENV:NAME}` and is resolved from the process environment, so secrets can stay off disk on a live/deployed machine while `App.config` remains the single, self-documenting source of configuration *shape*. Additive and backward-compatible — existing literal values behave exactly as before. `KeriConfigurator` only; `RESTServices` / `EpicorSvcs` / `FileHandling` are unchanged.
+
+### Added
+
+- **`{ENV:NAME}` environment-variable references.** `KeriConfig` resolves any configured value written as `{ENV:NAME}` from the environment variable `NAME` at build time. A literal value is used as-is, and the environment is read *only* where a value is a token — there is no global mode flag and no precedence rule; the presence of the token is the only switch, and each `App.config` node states where its value comes from. Applies to every setting (connection and SMTP), not just secrets.
+
+- **Value-or-environment-reference prompts in the console.** For the three secrets — the Epicor password, the API key, and the SMTP password — KeriConfigurator now offers `[V]` (enter a masked literal, stored in `App.config`) or `[E]` (reference an environment variable, suggesting `EPICOR_PASSWORD` / `EPICOR_API_KEY` / `SMTP_PASSWORD`), writing the `{ENV:NAME}` token rather than the secret. The variable name is sanity-checked. The configuration summary now reports each field's source — its literal, or `(from env NAME)` — and flags a referenced variable that isn't set in the current session.
+
+### Changed
+
+- **Configuration resolution is environment-aware.** `KeriConfig.BuildSession()` and `BuildSmtpSettings()` route every value through a single resolver that handles `{ENV:NAME}` tokens (and still collapses blank / `YOUR_*` placeholders to empty). The console's live connection test and SMTP reachability test resolve the same way, so a `[V]` value tests directly and an `[E]` reference tests against the real variable when it is set in the session; when it isn't, the console offers to save the reference without testing (it resolves at runtime where the variable exists). The former `ResolveApiKey()` is folded into the shared resolver.
+
+- **Validation names an unset referenced variable.** When a *required* setting resolves empty because its `{ENV:NAME}` reference isn't set, the error names the variable (e.g. *DefaultPasskey references environment variable EPICOR_PASSWORD, which is not set*) rather than reporting a generic missing value. An *optional* setting whose reference is unset simply resolves to empty — for the API key, that means Basic/v1 auth, exactly as a blank literal would.
+
+### Documentation
+
+- **CONFIGURATION.md** gains an *Environment-variable references (`{ENV:NAME}`)* section (sandbox-vs-live, the token-is-the-only-switch model, the console flow, test behavior, validation); the secrets-prompt and hand-editing notes now mention the `[V]/[E]` choice and token syntax; and the stale "`EPICOR_*` removed / future option" note is corrected to describe the explicit-reference model. **README.md** gains a short *Environment-variable references* subsection and the migration line is fixed. **App.config.template** demonstrates the `{ENV:NAME}` form on each secret node.
+
+### Version
+
+- `KeriConfigurator` 0.4.0 → 0.5.0. No other project changed.
 
 ## [0.4.1] — 2026-06-08
 
