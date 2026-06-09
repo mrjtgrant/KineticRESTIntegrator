@@ -36,7 +36,16 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**v0.3.0 — pre-1.0, API may change.** All twenty-three Epicor service wrappers are converted, and the libraries are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. One hundred and eight unit tests pass, and runnable example projects exist. The library builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
+**Pre-1.0 — the API may change.** Each project versions independently:
+
+| Project | Version |
+|---|---|
+| `EpicorSvcs` | 0.4.1 |
+| `RESTServices` | 0.3.1 |
+| `FileHandling` | 0.3.0 |
+| `KeriConfigurator` | 0.5.0 |
+
+All the Epicor service wrappers are converted, and the libraries are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The library builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
 
 ---
 
@@ -57,12 +66,12 @@ The one place where target framework matters internally is `FileHandling.Emailer
 | Project | Output | Purpose |
 |---|---|---|
 | `RESTServices` | `RESTServices.dll` | Low-level REST client. Owns auth, session, URL building, and JSON error handling. |
-| `EpicorSvcs` | `EpicorSvcs.dll` | Async wrappers for 23 Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
+| `EpicorSvcs` | `EpicorSvcs.dll` | Async wrappers for the Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
 | `FileHandling` | `FileHandling.dll` | Excel generation (ClosedXML), CSV writer, and SMTP email sender. |
 | `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
 | `KeriConfigurator` | `KeriConfigurator.exe` | Composition root + interactive setup: owns the unified config, builds clients/sessions, and onboards and live-tests the connection and SMTP. |
-| `KineticRESTIntegrator.Tests` | xUnit test project | 108 offline unit tests covering the framework's deterministic surface. |
+| `KineticRESTIntegrator.Tests` | xUnit test project | Offline unit tests covering the framework's deterministic surface. |
 
 ---
 
@@ -371,7 +380,7 @@ KineticRESTIntegrator/
 │   ├── EpicorClient.cs              (the disposable facade)
 │   ├── OperationResult.cs           (the standard return type)
 │   ├── EpicorRESTSessionKey.cs      (in Dtos/ — programmatic-session DTO)
-│   ├── Dtos/                        ~45 typed DTOs
+│   ├── Dtos/                        typed DTOs
 │   ├── Sales/                       QuoteSvc, SalesOrderSvc
 │   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
 │   ├── Production/                  JobEntrySvc
@@ -442,7 +451,7 @@ The library has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently 108 tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->118<!--/TESTS--> tests, all green.
 
 Test Explorer in Visual Studio also discovers and runs them.
 
