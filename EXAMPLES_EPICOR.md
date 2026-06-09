@@ -81,8 +81,7 @@ calls `GetByIDAsync` for the full dataset; `GetUDCodeDescriptionAsync` fetches
 a code type and returns one description string).
 
 **One generalization to be aware of: `UDTableSvc`.** Epicor has a separate
-service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`,
-`Ice.BO.UDCodesSvc`, and so on — 30+ in total). Wrapping each one as its own
+service for every UD table (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`, and so on). Wrapping each one as its own
 Keri class would be tedious and unhelpful since they share an interface.
 `UDTableSvc` instead parameterizes over the table — `epicorClient.UDTable.QueryAsync(top: 25, udTable: "UD22")` —
 so one Keri class covers the family. The class-matches-Svc-name rule is
@@ -723,7 +722,14 @@ your data shape:
   practice.
 - **Two keys** — `Key1` + `Key2`. The common case: `Key1` identifies
   the row's *category* (a row indicator), `Key2` identifies the
-  *specific instance* within that category.
+  *specific instance* within that category. Most often `Key2` is a
+  **foreign key into a real Epicor record** — a `PartNum`, `OrderNum`,
+  `JobNum`, `CustNum`, and so on — which turns the UD table into
+  satellite data hanging off an existing entity. `Key1 = "REPAIR_INTAKE"`,
+  `Key2 = <JobNum>` attaches repair-intake rows to jobs;
+  `Key1 = "ORDER_TRACKING"`, `Key2 = <OrderNum>` attaches tracking rows
+  to sales orders. `Key1` says *what kind* of data this is; `Key2` says
+  *which record* it belongs to.
 - **Three or more keys** — adds finer-grained dimensions. A natural
   shape is `Key1 = "category", Key2 = "instance", Key3 = "year"` for
   rows that recycle the same instance ID across years.
@@ -752,9 +758,10 @@ is hard to organize or query later.
 
 When your typed DTO does *not* map a property to `Character10`, the
 mapper writes a column-legend string into `Character10` on save —
-something like `"Key1:Category|Key2:OrderNum|ShortChar01:CustomerName"`.
-This lets someone opening the row in Epicor's UI see what each generic
-column means in this row's shape.
+**every mapped column, the keys included** — something like
+`"Key1:Category|Key2:OrderNum|ShortChar01:CustomerName"`. This lets
+someone opening the row in Epicor's UI see what each generic column
+means in this row's shape.
 
 If you *do* map a property to `Character10`, the framework backs off
 and uses your value unchanged — you've taken ownership.
