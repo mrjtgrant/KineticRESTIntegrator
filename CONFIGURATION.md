@@ -45,7 +45,7 @@ KeriConfigurator/App.config   ← the one config file
 
 ## What KeriConfigurator asks for
 
-The console prompts for two groups. Every field shows its current value as `[default]`; press Enter to keep it, or type a new value. Fields that are blank or still hold a `YOUR_*` placeholder need a value. Secrets are masked as you type.
+The console prompts for two groups. Every field shows its current value as `[default]`; press Enter to keep it, or type a new value. Fields that are blank or still hold a `YOUR_*` placeholder need a value. For the three secrets — the Epicor password, the API key, and the SMTP password — the prompt offers a choice: **`[V]`** to enter a value (masked as you type, stored in `App.config`), or **`[E]`** to reference an environment variable (stored as a `{ENV:NAME}` token so the secret stays off disk). See [Environment-variable references](#environment-variable-references-envname) below.
 
 **Epicor connection** (required — KeriConfigurator tests it against the live server before saving):
 
@@ -91,7 +91,37 @@ Only fields that need a value force input; everything configured is kept on Ente
 
 ## Hand-editing `App.config` (the fallback)
 
-The console is the easy path, but the file is plain XML — you can edit it directly. Open `KeriConfigurator/App.config` and set the values in the `<userSettings><KeriConfigurator.Properties.Settings>` section. The setting names are exactly those in the tables above. The `<configSections>` header at the top is what binds the section; don't remove it. Rebuild after editing so the executables pick up the change.
+The console is the easy path, but the file is plain XML — you can edit it directly. Open `KeriConfigurator/App.config` and set the values in the `<userSettings><KeriConfigurator.Properties.Settings>` section. The setting names are exactly those in the tables above. The `<configSections>` header at the top is what binds the section; don't remove it. A value can be a literal or an `{ENV:NAME}` reference (see [Environment-variable references](#environment-variable-references-envname) below). Rebuild after editing so the executables pick up the change.
+
+---
+
+## Environment-variable references (`{ENV:NAME}`)
+
+`App.config` is the discoverable, on-disk home for configuration — ideal for a sandbox or local development, where seeing every value in one file is the point. On a live or deployed machine you often don't want secrets sitting on disk. The same file serves both: **any setting value may be an environment-variable reference instead of a literal**, written as `{ENV:NAME}`.
+
+When a value is `{ENV:NAME}`, Keri reads the environment variable `NAME` in its place; when it's a literal, the literal is used as-is. The reference stays in `App.config` — so the file still documents *which* variable supplies each value — while the secret itself lives only in the environment, off disk.
+
+```xml
+<!-- sandbox: literal on disk -->
+<setting name="DefaultApiKey" serializeAs="String">
+    <value>abc123-real-key</value>
+</setting>
+
+<!-- live: reference - the key lives in the EPICOR_API_KEY environment variable -->
+<setting name="DefaultApiKey" serializeAs="String">
+    <value>{ENV:EPICOR_API_KEY}</value>
+</setting>
+```
+
+**The token is the only switch.** There's no global mode flag and no precedence rule to reason about: a literal is always used as-is, and the environment is read *only* where a value is an `{ENV:…}` reference. Open `App.config` and each node states where its value comes from — setting `EPICOR_API_KEY` has no effect on a node that still holds a literal. That makes the sandbox→live move just changing a value from a literal to a reference (and setting the variable in your platform — shell, container env, CI secrets, systemd): no code change, no separate "production config."
+
+**KeriConfigurator writes these for you.** When the console prompts for a secret — the Epicor password, the API key, or the SMTP password — choose **`[E]`** and give it a variable name (it suggests `EPICOR_PASSWORD` / `EPICOR_API_KEY` / `SMTP_PASSWORD`), and it writes the `{ENV:NAME}` token rather than the secret. Choose **`[V]`** to store a literal instead. The re-run summary reports each field's source — its literal, or `(from env NAME)` — and flags a referenced variable that isn't set in the current session.
+
+**Testing a reference.** KeriConfigurator's live connection test resolves a referenced variable from its own environment when it's set. If you configure on a machine where the variable isn't set — the common live case, where the secret lives only on the deployed box — it can't test against it: the console says so and offers to save the reference without testing, to resolve at runtime where the variable exists.
+
+**Validation.** When a *required* setting resolves empty because its `{ENV:NAME}` reference isn't set, the error names the variable (e.g. *DefaultPasskey references environment variable EPICOR_PASSWORD, which is not set*) instead of reporting a generic missing value. An *optional* setting whose reference is unset simply resolves to empty — for the API key that means Basic/v1 auth, exactly as a blank literal would.
+
+Any setting can use a token, not only secrets — if your platform injects the base URL or company, reference those too. The console only *prompts* for it on the three secrets, because that's where keeping the value off disk matters.
 
 ---
 
@@ -242,6 +272,6 @@ If you used Keri before 0.3.0, the configuration model changed substantially:
 - **Per-library `App.config` files are gone.** `EpicorSvcs` and `FileHandling` no longer read configuration or have their own settings. There's one shared `App.config`, owned by KeriConfigurator.
 - **`EpicorClient.FromConfiguration()` and `EpicorConfiguration` were removed.** Build a client with `KeriConfig.BuildEpicorClient()` (inside this solution) or `new EpicorClient(session)` (from your own code).
 - **`SmtpSettings` is now public and config-free**, and `FileProcessing.EmailReport` takes an `SmtpSettings` parameter.
-- **Environment-variable configuration (`EPICOR_*`) was removed.** v0.3.0 is `App.config`-by-default. If you relied on `EPICOR_*` for CI/production, supply an `EpicorRESTSessionKey` in code instead (the programmatic path above), which keeps secrets off disk just as well. Re-introducing an environment-variable reader at the composition root is a documented future option.
+- **Environment-variable *auto-reading* (`EPICOR_*`) was removed in 0.3.0 — then reintroduced in a clearer form.** 0.3.0 dropped the old behavior in which settings were silently overridden by `EPICOR_*` variables. Environment variables are supported again, now as explicit **`{ENV:NAME}` references** written into `App.config` (see [Environment-variable references](#environment-variable-references-envname) above): a value reads from the environment only when you write it as a token, so there is no hidden override to reason about. The programmatic `EpicorRESTSessionKey` path remains for keeping secrets out of any file entirely.
 
 The migration in one line: wherever you called `EpicorClient.FromConfiguration()`, call `KeriConfig.BuildEpicorClient()` (in-solution) or construct an `EpicorRESTSessionKey` and pass it to `new EpicorClient(...)` (external).

@@ -136,11 +136,15 @@ The fastest way to configure is to **run KeriConfigurator** (see [Setup](#setup)
 | `FromEmail` | Default `From:` address. |
 | `DeveloperEmail` | Default BCC, and the sole recipient when `IsDebug = true`. |
 
+### Environment-variable references
+
+Any setting can hold an environment-variable reference instead of a literal, written as `{ENV:NAME}` — e.g. `DefaultApiKey` set to `{ENV:EPICOR_API_KEY}` reads the `EPICOR_API_KEY` variable at runtime, so the secret stays out of `App.config`. KeriConfigurator offers this on the three secrets (Epicor password, API key, SMTP password) via a `[V]alue` / `[E]nv-reference` prompt; you can also hand-edit a token into any value. Literals are used as-is; the environment is read only where a value is an `{ENV:…}` reference. See [CONFIGURATION.md](CONFIGURATION.md) for the sandbox-vs-live workflow.
+
 ### From your own application
 
 The libraries are configuration-free, so a consumer outside this solution supplies its own connection by building an `EpicorRESTSessionKey` in code and passing it to `new EpicorClient(session)` — ideal for a web portal, a vault, or Credential Manager, where the secret never touches a file. Email works the same way: build an `SmtpSettings` and pass it to `FileProcessing.EmailReport`.
 
-See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding flow, hand-editing, the programmatic / portal / vault patterns, multiple environments, and migration from the pre-0.3.0 model (per-library config and `EPICOR_*` environment variables, both removed).
+See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding flow, hand-editing, the programmatic / portal / vault patterns, multiple environments, and migration from the pre-0.3.0 model (per-library config, removed; and the old `EPICOR_*` auto-reader, replaced by the `{ENV:NAME}` references above).
 
 ---
 
