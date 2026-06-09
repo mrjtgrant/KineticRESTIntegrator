@@ -123,6 +123,33 @@ When a value is `{ENV:NAME}`, Keri reads the environment variable `NAME` in its 
 
 Any setting can use a token, not only secrets — if your platform injects the base URL or company, reference those too. The console only *prompts* for it on the three secrets, because that's where keeping the value off disk matters.
 
+### Setting the variable on your platform
+
+KeriConfigurator writes the *reference*; you set the variable itself wherever the app runs. The rule that trips people up: the variable has to exist in the environment of the **process that runs Keri** — the demo, your application, a service — not just the shell you happened to type it in. Set it so it's present for that process, and start the process from there.
+
+**Windows**
+
+```powershell
+setx EPICOR_API_KEY "your-key-value"     # persists for your user; takes effect in NEW shells
+$env:EPICOR_API_KEY = "your-key-value"   # this PowerShell session only (handy for a quick test)
+```
+
+`setx` does not affect the current shell — open a new one (or also set `$env:`) before running. Add `/M` from an elevated prompt for a machine-wide value. A Windows **service**, IIS app pool, or scheduled task will not inherit your interactive shell, so set it machine-wide or in that process's own environment.
+
+**Linux / macOS**
+
+```bash
+export EPICOR_API_KEY="your-key-value"   # current shell session
+```
+
+Persist it in your shell profile (`~/.bashrc`, `~/.zshrc`) for interactive use, or `/etc/environment` system-wide. For a **systemd** service, use `Environment=EPICOR_API_KEY=...` in the unit — or `EnvironmentFile=/etc/keri.env` to load several at once (keep that file out of source control, readable only by the service account).
+
+**Containers and CI**
+
+Pass them at runtime — `docker run -e EPICOR_API_KEY=...`, an `environment:` block in `docker-compose.yml`, or your orchestrator's secret mechanism (Docker / Kubernetes secrets). Avoid baking real secrets into a `Dockerfile` `ENV`, which writes them into image layers. In CI, define them as masked/secret pipeline variables; the runner exposes them as environment variables to your build or run step.
+
+Use the same names KeriConfigurator referenced (`EPICOR_PASSWORD`, `EPICOR_API_KEY`, `SMTP_PASSWORD`, or whatever you chose). To confirm they're picked up, run KeriConfigurator and press `[T]` to test saved settings — a resolved reference shows `(from env NAME)` in the summary, and an unset one is flagged.
+
 ---
 
 ## Configuring from your own code (`EpicorRESTSessionKey`)
