@@ -15,11 +15,16 @@ namespace KeriConfigurator
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This is the single place the solution reads configuration. It resolves
-    /// from <c>App.config</c> ONLY - there is no environment-variable fallback.
-    /// Production migration paths (environment variables, EpicorRESTSessionKey
-    /// brokering, Windows Credential Manager) are deliberate, documented choices
-    /// a consumer adopts when moving to a live environment; see CONFIGURATION.md.
+    /// This is the single place the solution reads configuration. Values come
+    /// from <c>App.config</c>, and any value may be written as an
+    /// environment-variable reference of the form <c>{ENV:NAME}</c> instead of
+    /// a literal. When a setting holds such a token, its value is read from the
+    /// process environment variable <c>NAME</c> at build time; otherwise the
+    /// literal is used as-is. This keeps App.config the single, self-documenting
+    /// source of configuration shape while letting a live/deployed environment
+    /// supply secrets out of band — open the file and each node states whether
+    /// its value is a literal or an <c>{ENV:...}</c> reference. See
+    /// CONFIGURATION.md for the sandbox-vs-live workflow.
     /// </para>
     /// </remarks>
     public static class KeriConfig
@@ -27,8 +32,9 @@ namespace KeriConfigurator
         /// <summary>
         /// Builds a validated <see cref="EpicorRESTSessionKey"/> from
         /// configuration. Throws <see cref="InvalidOperationException"/> with an
-        /// actionable message if required settings are missing or still hold
-        /// template placeholders.
+        /// actionable message if required settings are missing, still hold
+        /// template placeholders, or reference an environment variable that is
+        /// not set.
         /// </summary>
         public static EpicorRESTSessionKey BuildSession()
         {
@@ -36,15 +42,18 @@ namespace KeriConfigurator
 
             return new EpicorRESTSessionKey
             {
-                Company = Properties.Settings.Default.DefaultCompany,
+                Company = Resolve(Properties.Settings.Default.DefaultCompany),
                 AuthObject = new RESTAuthenticationObject
                 {
-                    Username = Properties.Settings.Default.DefaultUser,
-                    Userkey = Properties.Settings.Default.DefaultPasskey,
-                    ApiKey = ResolveApiKey(),
+                    Username = Resolve(Properties.Settings.Default.DefaultUser),
+                    Userkey = Resolve(Properties.Settings.Default.DefaultPasskey),
+                    // Empty (unset / placeholder / unset {ENV:...}) keeps the
+                    // transport on Basic auth (v1); a real key switches it to
+                    // API-key auth (v2 OData).
+                    ApiKey = Resolve(Properties.Settings.Default.DefaultApiKey),
                     DynamicURLModifier_Basic = "/api/v1/"
                 },
-                BaseUrl = Properties.Settings.Default.DefaultBaseUrl
+                BaseUrl = Resolve(Properties.Settings.Default.DefaultBaseUrl)
             };
         }
 
@@ -61,8 +70,9 @@ namespace KeriConfigurator
         /// <summary>
         /// Builds the email configuration from the unified settings. Returns a
         /// config-free <see cref="SmtpSettings"/> for the email path to consume;
-        /// FileHandling no longer reads any configuration itself. Blank and
-        /// placeholder (<c>YOUR_*</c>) string values resolve to empty.
+        /// FileHandling no longer reads any configuration itself. Blank,
+        /// placeholder (<c>YOUR_*</c>), and unset <c>{ENV:...}</c> values resolve
+        /// to empty.
         /// </summary>
         public static SmtpSettings BuildSmtpSettings()
         {
@@ -79,67 +89,102 @@ namespace KeriConfigurator
         }
 
         /// <summary>
-        /// Resolves the API key from configuration. An unset or still-placeholder
-        /// (<c>YOUR_*</c>) value resolves to empty, which keeps the transport on
-        /// Basic auth (v1); a real key switches it to API-key auth (v2 OData).
+        /// Resolves a configured value to its effective value:
+        /// <list type="bullet">
+        /// <item><description>an <c>{ENV:NAME}</c> token is read from the
+        /// environment variable <c>NAME</c> (unset resolves to empty);</description></item>
+        /// <item><description>a blank or still-placeholder (<c>YOUR_*</c>) value
+        /// resolves to empty;</description></item>
+        /// <item><description>any other value is returned unchanged.</description></item>
+        /// </list>
+        /// Exposed to the configurator console so the live-connection test and the
+        /// runtime build resolve values the same way.
         /// </summary>
-        private static string ResolveApiKey()
+        internal static string Resolve(string value)
         {
-            string apiKey = Properties.Settings.Default.DefaultApiKey;
-            if (string.IsNullOrWhiteSpace(apiKey) ||
-                apiKey.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
-                return string.Empty;
-            return apiKey;
-        }
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            value = value.Trim();
 
-        /// <summary>
-        /// Collapses a blank or still-placeholder (<c>YOUR_*</c>) string to empty;
-        /// otherwise returns the value unchanged.
-        /// </summary>
-        private static string Resolve(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value) ||
-                value.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+            if (IsEnvToken(value, out string varName))
+            {
+                string env = Environment.GetEnvironmentVariable(varName);
+                return string.IsNullOrWhiteSpace(env) ? string.Empty : env;
+            }
+
+            if (value.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
                 return string.Empty;
+
             return value;
         }
 
         /// <summary>
-        /// Validates that required settings are populated and don't still hold
-        /// template placeholders. Throws a clear, actionable exception otherwise.
+        /// Returns true when <paramref name="value"/> is an environment-variable
+        /// reference of the form <c>{ENV:NAME}</c>, yielding the referenced
+        /// variable name in <paramref name="varName"/>.
+        /// </summary>
+        internal static bool IsEnvToken(string value, out string varName)
+        {
+            varName = null;
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            value = value.Trim();
+            if (value.StartsWith("{ENV:", StringComparison.OrdinalIgnoreCase) && value.EndsWith("}"))
+            {
+                varName = value.Substring("{ENV:".Length, value.Length - "{ENV:".Length - 1).Trim();
+                return varName.Length > 0;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Validates that required settings resolve to real values and don't still
+        /// hold template placeholders or reference an unset environment variable.
+        /// Throws a clear, actionable exception otherwise.
         /// </summary>
         private static void ValidateSettings()
         {
             var problems = new List<string>();
 
-            void Check(string name, string value, string hint = null)
+            string rawUser    = Properties.Settings.Default.DefaultUser;
+            string rawPass    = Properties.Settings.Default.DefaultPasskey;
+            string rawApiKey  = Properties.Settings.Default.DefaultApiKey;
+            string rawCompany = Properties.Settings.Default.DefaultCompany;
+            string rawBaseUrl = Properties.Settings.Default.DefaultBaseUrl;
+
+            // Notes when a value is empty *because* its {ENV:...} reference isn't set.
+            void NoteUnsetToken(string name, string raw)
             {
-                bool missing = string.IsNullOrWhiteSpace(value);
-                bool placeholder = value != null && value.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
-                if (missing || placeholder)
-                    problems.Add("  - " + name + (hint != null ? "   (" + hint + ")" : ""));
+                if (IsEnvToken(raw, out string vn)
+                    && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(vn)))
+                    problems.Add("      (" + name + " references environment variable " + vn + ", which is not set)");
             }
 
-            string user = Properties.Settings.Default.DefaultUser;
-            string pass = Properties.Settings.Default.DefaultPasskey;
-            string apiKey = ResolveApiKey();
-            string company = Properties.Settings.Default.DefaultCompany;
-            string baseUrl = Properties.Settings.Default.DefaultBaseUrl;
+            // Required field: must resolve to a non-empty value.
+            void Check(string name, string raw, string hint)
+            {
+                if (!string.IsNullOrWhiteSpace(Resolve(raw))) return;
+                if (IsEnvToken(raw, out string vn))
+                    problems.Add("  - " + name + " references environment variable " + vn + ", which is not set");
+                else
+                    problems.Add("  - " + name + "   (" + hint + ")");
+            }
 
             // Either Basic auth (user + pass) or an API key is acceptable.
-            // Only complain if neither is configured.
-            bool hasBasic = !string.IsNullOrWhiteSpace(user) && !user.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase)
-                          && !string.IsNullOrWhiteSpace(pass) && !pass.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
-            bool hasApiKey = !string.IsNullOrWhiteSpace(apiKey);
+            // Only complain if neither resolves.
+            bool hasBasic = !string.IsNullOrWhiteSpace(Resolve(rawUser))
+                         && !string.IsNullOrWhiteSpace(Resolve(rawPass));
+            bool hasApiKey = !string.IsNullOrWhiteSpace(Resolve(rawApiKey));
 
             if (!hasBasic && !hasApiKey)
             {
                 problems.Add("  - Authentication: set either DefaultUser + DefaultPasskey (Basic auth)");
                 problems.Add("                     or DefaultApiKey (API-key auth)");
+                NoteUnsetToken("DefaultUser", rawUser);
+                NoteUnsetToken("DefaultPasskey", rawPass);
+                NoteUnsetToken("DefaultApiKey", rawApiKey);
             }
 
-            Check("DefaultCompany", company, "e.g. EPIC01");
-            Check("DefaultBaseUrl", baseUrl, "https://your-epicor.example.com/server");
+            Check("DefaultCompany", rawCompany, "e.g. EPIC01");
+            Check("DefaultBaseUrl", rawBaseUrl, "https://your-epicor.example.com/server");
 
             if (problems.Count > 0)
             {
@@ -152,6 +197,9 @@ namespace KeriConfigurator
                 msg.AppendLine("  - Run the KeriConfigurator console and follow the prompts, or");
                 msg.AppendLine("  - Edit App.config in the KeriConfigurator project folder");
                 msg.AppendLine("    (copy App.config.template to App.config if it doesn't exist).");
+                msg.AppendLine();
+                msg.AppendLine("A value may be a literal or an environment-variable reference");
+                msg.AppendLine("written as {ENV:NAME} (resolved from the process environment).");
                 msg.AppendLine();
                 msg.AppendLine("See CONFIGURATION.md for details.");
                 throw new InvalidOperationException(msg.ToString());

@@ -76,12 +76,36 @@ namespace KeriConfigurator
         private static void ShowSummary()
         {
             Console.WriteLine("Existing configuration found:");
-            Console.WriteLine("    Base URL  : " + Properties.Settings.Default.DefaultBaseUrl);
-            Console.WriteLine("    Company   : " + Properties.Settings.Default.DefaultCompany);
-            Console.WriteLine("    User      : " + Properties.Settings.Default.DefaultUser);
-            string host = Properties.Settings.Default.SMTPHost;
-            Console.WriteLine("    SMTP host : " + (NotPlaceholder(host) ? host : "(not configured)"));
+            Console.WriteLine("    Base URL  : " + DescribeValue(Properties.Settings.Default.DefaultBaseUrl));
+            Console.WriteLine("    Company   : " + DescribeValue(Properties.Settings.Default.DefaultCompany));
+            Console.WriteLine("    User      : " + DescribeValue(Properties.Settings.Default.DefaultUser));
+            Console.WriteLine("    Password  : " + DescribeSecret(Properties.Settings.Default.DefaultPasskey));
+            Console.WriteLine("    API key   : " + DescribeSecret(Properties.Settings.Default.DefaultApiKey));
+            Console.WriteLine("    SMTP host : " + DescribeValue(Properties.Settings.Default.SMTPHost));
             Console.WriteLine();
+        }
+
+        // Non-secret value for the summary: its literal, or its {ENV:NAME} source
+        // when it's a reference (flagging a variable not set in this session).
+        private static string DescribeValue(string raw)
+        {
+            if (KeriConfig.IsEnvToken(raw, out string vn))
+                return "{ENV:" + vn + "}" + (EnvIsSet(vn) ? "" : "  (NOT set in this session)");
+            return NotPlaceholder(raw) ? raw : "(not configured)";
+        }
+
+        // Secret for the summary, never printed: its env source, that a literal is
+        // set, or that nothing is configured.
+        private static string DescribeSecret(string raw)
+        {
+            if (KeriConfig.IsEnvToken(raw, out string vn))
+                return "(from env " + vn + ")" + (EnvIsSet(vn) ? "" : "  (NOT set in this session)");
+            return NotPlaceholder(raw) ? "(set in App.config)" : "(not configured)";
+        }
+
+        private static bool EnvIsSet(string name)
+        {
+            return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name));
         }
 
         // ----- test-saved path ---------------------------------------------
@@ -123,6 +147,24 @@ namespace KeriConfigurator
             while (true)
             {
                 conn = GatherConnection();
+
+                // If a referenced secret's variable isn't set in this session, the
+                // live test can't exercise it. Offer to save the reference as-is
+                // (it resolves at runtime on the machine where the variable lives).
+                string unresolved = FirstUnsetTokenField(conn);
+                if (unresolved != null)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine(unresolved + " references an environment variable that is");
+                    Console.WriteLine("not set in this session, so the connection can't be tested here.");
+                    Console.Write("Save the reference without testing? [Y/N]: ");
+                    string saveAnyway = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+                    Console.WriteLine();
+                    if (saveAnyway == "Y")
+                        break;
+                    continue;
+                }
+
                 if (await RunConnectionTestAsync(BuildSession(conn)))
                     break;
 
@@ -213,9 +255,9 @@ namespace KeriConfigurator
             string baseUrl = Prompt("  Base URL (e.g. https://yourco.epicorsaas.com/server)", Properties.Settings.Default.DefaultBaseUrl);
             string company = Prompt("  Company ID (e.g. EPIC01)", Properties.Settings.Default.DefaultCompany);
             string user    = Prompt("  Epicor username", Properties.Settings.Default.DefaultUser);
-            string pass    = PromptSecret("  Epicor password", Properties.Settings.Default.DefaultPasskey);
+            string pass    = PromptSecretOrEnv("  Epicor password", Properties.Settings.Default.DefaultPasskey, "EPICOR_PASSWORD");
             Console.WriteLine("  API key is optional (Enter to use Basic auth):");
-            string apiKey  = PromptSecret("    API key", Properties.Settings.Default.DefaultApiKey);
+            string apiKey  = PromptSecretOrEnv("    API key", Properties.Settings.Default.DefaultApiKey, "EPICOR_API_KEY");
             Console.WriteLine();
 
             return new ConnVals
@@ -239,7 +281,7 @@ namespace KeriConfigurator
             bool ssl = PromptBool("  Use STARTTLS (TLS)?", Properties.Settings.Default.SMTPEnableSsl);
             string username = Prompt("  SMTP username (Enter for an anonymous relay)", Properties.Settings.Default.SMTPUsername);
             string password = NotPlaceholder(username)
-                ? PromptSecret("  SMTP password", Properties.Settings.Default.SMTPPassword)
+                ? PromptSecretOrEnv("  SMTP password", Properties.Settings.Default.SMTPPassword, "SMTP_PASSWORD")
                 : string.Empty;
             string from = Prompt("  From address", Properties.Settings.Default.FromEmail);
             string dev  = Prompt("  Developer / default recipient address", Properties.Settings.Default.DeveloperEmail);
@@ -257,19 +299,22 @@ namespace KeriConfigurator
             };
         }
 
+        // Resolves the gathered values the same way the runtime will (literals
+        // pass through; {ENV:NAME} tokens read the environment), so the live test
+        // exercises exactly what will be saved.
         private static EpicorRESTSessionKey BuildSession(ConnVals c)
         {
             return new EpicorRESTSessionKey
             {
-                Company = c.Company,
+                Company = KeriConfig.Resolve(c.Company),
                 AuthObject = new RESTAuthenticationObject
                 {
-                    Username = c.User,
-                    Userkey = c.Pass,
-                    ApiKey = NotPlaceholder(c.ApiKey) ? c.ApiKey : string.Empty,
+                    Username = KeriConfig.Resolve(c.User),
+                    Userkey = KeriConfig.Resolve(c.Pass),
+                    ApiKey = KeriConfig.Resolve(c.ApiKey),
                     DynamicURLModifier_Basic = "/api/v1/"
                 },
-                BaseUrl = c.BaseUrl
+                BaseUrl = KeriConfig.Resolve(c.BaseUrl)
             };
         }
 
@@ -277,13 +322,13 @@ namespace KeriConfigurator
         {
             return new SmtpSettings
             {
-                host = m.Host,
-                from = m.From,
+                host = KeriConfig.Resolve(m.Host),
+                from = KeriConfig.Resolve(m.From),
                 port = m.Port,
                 enableSsl = m.EnableSsl,
-                username = m.Username,
-                password = m.Password,
-                developerEmail = m.Developer
+                username = KeriConfig.Resolve(m.Username),
+                password = KeriConfig.Resolve(m.Password),
+                developerEmail = KeriConfig.Resolve(m.Developer)
             };
         }
 
@@ -476,6 +521,69 @@ namespace KeriConfigurator
             Console.WriteLine();
             string typed = sb.ToString();
             return (typed.Length == 0 && hasCurrent) ? current : typed;
+        }
+
+        // Offers a value-or-env-reference choice for a sensitive field. [V] takes
+        // a masked literal; [E] writes an {ENV:NAME} reference so the secret stays
+        // out of App.config. Enter keeps the current value (or skips when none).
+        private static string PromptSecretOrEnv(string label, string currentRaw, string defaultVarName)
+        {
+            if (KeriConfig.IsEnvToken(currentRaw, out string curVar))
+                Console.WriteLine(label + " currently references env var " + curVar + ".");
+
+            Console.WriteLine(label + ":");
+            Console.WriteLine("      [V] Enter a value          (stored in App.config)");
+            Console.WriteLine("      [E] Reference an env var    (recommended for live/deployed)");
+            string keep = NotPlaceholder(currentRaw) ? " [Enter to keep current]" : " [Enter to skip]";
+            Console.Write("    Choose [V/E]" + keep + ": ");
+            string choice = (Console.ReadLine() ?? "").Trim().ToUpperInvariant();
+            Console.WriteLine();
+
+            if (choice.Length == 0)
+                return currentRaw;
+
+            if (choice == "E")
+            {
+                string suggested = KeriConfig.IsEnvToken(currentRaw, out string existing) ? existing : defaultVarName;
+                while (true)
+                {
+                    string name = (Prompt("      Environment variable name", suggested) ?? "").Trim();
+                    if (!IsValidEnvVarName(name))
+                    {
+                        Console.WriteLine("      Invalid name - use letters, digits and underscores, not starting with a digit (e.g. EPICOR_API_KEY).");
+                        continue;
+                    }
+                    if (!EnvIsSet(name))
+                        Console.WriteLine("      (note: " + name + " is not set in this session; it will resolve at runtime.)");
+                    Console.WriteLine();
+                    return "{ENV:" + name + "}";
+                }
+            }
+
+            return PromptSecret(label, currentRaw);
+        }
+
+        private static bool IsValidEnvVarName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            if (char.IsDigit(name[0])) return false;
+            foreach (char ch in name)
+                if (!(char.IsLetterOrDigit(ch) || ch == '_')) return false;
+            return true;
+        }
+
+        // Friendly field name when a gathered secret is an {ENV:NAME} reference
+        // whose variable isn't set in this session; otherwise null.
+        private static string FirstUnsetTokenField(ConnVals c)
+        {
+            if (IsUnsetToken(c.Pass))   return "The Epicor password";
+            if (IsUnsetToken(c.ApiKey)) return "The API key";
+            return null;
+        }
+
+        private static bool IsUnsetToken(string raw)
+        {
+            return KeriConfig.IsEnvToken(raw, out string vn) && !EnvIsSet(vn);
         }
     }
 }

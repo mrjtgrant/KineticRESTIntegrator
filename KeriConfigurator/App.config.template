@@ -21,11 +21,17 @@
 		          template stays in source control and is never edited with
 		          real values.
 
-		     Settings resolve from App.config ONLY. There is no environment-
-		     variable fallback. Production migration paths (environment
-		     variables, EpicorRESTSessionKey brokering, Windows Credential
-		     Manager) are deliberate choices a consumer adopts when moving to a
-		     live environment - see CONFIGURATION.md.
+		     LIVE / DEPLOYED:
+		       Any value below may be an environment-variable reference instead
+		       of a literal, written as {ENV:NAME}. For example, a DefaultApiKey
+		       value of {ENV:EPICOR_API_KEY} reads the EPICOR_API_KEY variable
+		       from the environment at runtime - the reference stays in this file
+		       (self-documenting), the secret itself stays off disk. A literal
+		       value is used as-is; the environment is read only where a value is
+		       an {ENV:...} reference. Run KeriConfigurator and choose [E] on a
+		       secret to write one of these for you. For credential brokering
+		       (web portal, Windows Credential Manager), build an
+		       EpicorRESTSessionKey in code - see CONFIGURATION.md.
 		     ================================================================ -->
 
 		<KeriConfigurator.Properties.Settings>
@@ -38,7 +44,9 @@
 				<value>YOUR_EPICOR_USERNAME</value>
 			</setting>
 
-			<!-- Password for DefaultUser (HTTP Basic auth). -->
+			<!-- Password for DefaultUser (HTTP Basic auth).
+			     Live: reference a variable instead of a literal, e.g.
+			     <value>{ENV:EPICOR_PASSWORD}</value> -->
 			<setting name="DefaultPasskey" serializeAs="String">
 				<value>YOUR_EPICOR_PASSWORD</value>
 			</setting>
@@ -59,7 +67,9 @@
 
 			<!-- Optional API key. Its presence alone selects the URL shape: unset
 			     = v1 (Basic), set = v2 OData. Independent of Basic auth - set this
-			     and DefaultUser/DefaultPasskey together if your Epicor needs both. -->
+			     and DefaultUser/DefaultPasskey together if your Epicor needs both.
+			     Live: reference a variable instead of a literal, e.g.
+			     <value>{ENV:EPICOR_API_KEY}</value> -->
 			<setting name="DefaultApiKey" serializeAs="String">
 				<value>YOUR_EPICOR_APIKEY</value>
 			</setting>
@@ -112,9 +122,10 @@
 				<value />
 			</setting>
 
-			<!-- SMTP auth password. WARNING: plain text in App.config. For
-			     production, prefer a secure store rather than a password on disk
-			     (see CONFIGURATION.md). -->
+			<!-- SMTP auth password. WARNING: a literal here is plain text on disk.
+			     Live: reference a variable instead of a literal, e.g.
+			     <value>{ENV:SMTP_PASSWORD}</value>
+			     (or prefer a secure store; see CONFIGURATION.md). -->
 			<setting name="SMTPPassword" serializeAs="String">
 				<value />
 			</setting>
