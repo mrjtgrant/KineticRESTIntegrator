@@ -730,10 +730,17 @@ your data shape:
   `Key1 = "ORDER_TRACKING"`, `Key2 = <OrderNum>` attaches tracking rows
   to sales orders. `Key1` says *what kind* of data this is; `Key2` says
   *which record* it belongs to.
-- **Three or more keys** — adds finer-grained dimensions. A natural
-  shape is `Key1 = "category", Key2 = "instance", Key3 = "year"` for
-  rows that recycle the same instance ID across years.
-- **All five keys** — when uniqueness needs all five dimensions.
+- **Three or more keys** — add finer-grained dimensions onto the
+  foreign-key shape above, when one record reference isn't specific
+  enough. Extend the same example: `Key1 = "ORDER_TRACKING"`,
+  `Key2 = <OrderNum>`, `Key3 = <OrderLine>` tracks data per order
+  *line* rather than per order; `Key1 = "REPAIR_INTAKE"`,
+  `Key2 = <JobNum>`, `Key3 = <OprSeq>` hangs it off a specific
+  operation within the job. `Key3` can also carry a non-record
+  dimension — a `Key3 = <year>` when the same `Key2` instance recycles
+  across years.
+- **All five keys** — when uniqueness needs all five dimensions; each
+  added key is one more *which* on top of `Key1`'s *what kind*.
 
 **The framework requires `Key1` and `Key2` to be mapped on every typed
 DTO.** A DTO without one or both fails validation at first use. The
