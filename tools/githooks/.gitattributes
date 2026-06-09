@@ -1,0 +1,2 @@
+# Git hooks are POSIX shell scripts - they must stay LF or sh chokes on a CR.
+* text eol=lf

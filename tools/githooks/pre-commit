@@ -1,0 +1,37 @@
+#!/bin/sh
+# pre-commit: keep the README test count in sync with the test sources.
+#
+# Derives the count by scanning the test project for [Fact]/[Theory]
+# (no build required) and rewrites the <!--TESTS-->N<!--/TESTS--> span in
+# README.md. To avoid pulling unrelated edits into a commit, README is only
+# auto-staged when it has no other unstaged changes. This hook never blocks
+# a commit; at worst it prints a warning.
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$ROOT" 2>/dev/null || exit 0
+
+SCRIPT="tools/update-readme-counts.ps1"
+[ -f "$SCRIPT" ] || { echo "pre-commit: $SCRIPT not found; skipping test-count sync."; exit 0; }
+
+# Find a PowerShell. If none (e.g. committing from a non-Windows shell),
+# skip quietly rather than blocking the commit.
+PS=""
+for cand in powershell.exe pwsh.exe pwsh; do
+    command -v "$cand" >/dev/null 2>&1 && { PS="$cand"; break; }
+done
+[ -n "$PS" ] || { echo "pre-commit: no PowerShell found; skipping test-count sync."; exit 0; }
+
+if git diff --quiet -- README.md; then
+    # README has no unstaged changes: safe to update + stage (only the
+    # count span changes).
+    "$PS" -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT" && git add README.md
+else
+    # README has unstaged edits: don't auto-stage (would sweep them in).
+    # Verify only; warn if the count is stale.
+    "$PS" -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT" -Check >/dev/null 2>&1 || {
+        echo "pre-commit: README has unstaged edits, so the test count was NOT updated."
+        echo "            Run '$PS -File $SCRIPT' and stage README to refresh it."
+    }
+fi
+
+exit 0
