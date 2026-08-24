@@ -159,6 +159,60 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Builds the <c>Failure</c> result for an internal process step that
+        /// returned a shape the calling orchestrator cannot continue from.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Epicor's process steps (<c>Change*</c>, <c>Validate*</c>, and the
+        /// commit calls) return the mutated dataset on success and an
+        /// error-shaped object on failure. An orchestrator that reaches into
+        /// the dataset without checking turns that failure into a
+        /// <see cref="NullReferenceException"/> — and the Epicor
+        /// <c>ErrorMessage</c> explaining why is sitting in the very object
+        /// that caused it. This helper turns the same halt into a value.
+        /// </para>
+        /// <para>
+        /// Prefers Epicor's own message when the response carries one; falls
+        /// back to naming the step and what the orchestrator expected. The
+        /// response is always attached as <c>RawResponse</c>, and the
+        /// transport's <c>statusCode</c> is carried through when present,
+        /// matching <see cref="OperationResultExtensions.ToOperationResult{T}"/>.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">The success-payload type of the caller's result.</typeparam>
+        /// <param name="ds">The response the step returned.</param>
+        /// <param name="step">The Epicor process step that produced it.</param>
+        /// <param name="expected">
+        /// What the orchestrator expected to find, for the fallback message.
+        /// Optional — omit when the response carries an <c>ErrorMessage</c>
+        /// and the expected shape would add nothing.
+        /// </param>
+        /// <returns>A failure-flavored <see cref="OperationResult{T}"/>.</returns>
+        protected static OperationResult<T> StepFailure<T>(
+            JObject ds,
+            string step,
+            string expected = null)
+        {
+            string epicorError = ds == null || ds["ErrorMessage"] == null
+                ? null
+                : ds["ErrorMessage"].ToString();
+
+            string message;
+            if (!string.IsNullOrWhiteSpace(epicorError))
+                message = string.Format("{0} failed: {1}", step, epicorError);
+            else if (!string.IsNullOrWhiteSpace(expected))
+                message = string.Format("{0} returned a response without {1}.", step, expected);
+            else
+                message = string.Format("{0} returned an unexpected response.", step);
+
+            int? statusCode = ds == null ? null : (int?)ds["statusCode"];
+
+            return OperationResult<T>.Failure(message, statusCode, rawResponse: ds);
+        }
+
+
+        /// <summary>
         /// Normalizes the three response shapes Epicor returns into a
         /// consistent <c>{"ds": ...}</c> envelope: <c>returnObj</c>-wrapped
         /// responses and <c>parameters</c>-wrapped responses are unwrapped;

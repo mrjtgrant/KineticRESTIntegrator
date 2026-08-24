@@ -111,13 +111,13 @@ namespace EpicorSvcs
             // instead, carrying the payload the caller needs.
             JArray dtlRows = ds?["ds"]?["OrderDtl"] as JArray;
             if (dtlRows == null || dtlRows.Count == 0)
-                return StepFailure(ds, "ChangePartNumMaster", "a ds.OrderDtl row");
+                return StepFailure<JObject>(ds, "ChangePartNumMaster", "a ds.OrderDtl row");
 
             JObject dtlRow = dtlRows[0] as JObject;
             JToken custNumToken = dtlRow == null ? null : dtlRow["CustNum"];
             JToken orderQtyToken = dtlRow == null ? null : dtlRow["OrderQty"];
             if (custNumToken == null || orderQtyToken == null)
-                return StepFailure(
+                return StepFailure<JObject>(
                     ds, "ChangePartNumMaster", "CustNum and OrderQty on the ds.OrderDtl row");
 
             string custNum = custNumToken.ToString();
@@ -131,7 +131,7 @@ namespace EpicorSvcs
             // on a null token.
             JToken qtyParams = ds == null ? null : ds["parameters"];
             if (qtyParams == null)
-                return StepFailure(ds, "ChangeSellingQtyMaster", "a parameters envelope");
+                return StepFailure<JObject>(ds, "ChangeSellingQtyMaster", "a parameters envelope");
 
             ds = JObject.FromObject(qtyParams);
 
@@ -189,13 +189,13 @@ namespace EpicorSvcs
             // no OrderHed row to stamp.
             JArray hedRows = ds?["ds"]?["OrderHed"] as JArray;
             if (hedRows == null || hedRows.Count == 0)
-                return StepFailure(
+                return StepFailure<JObject>(
                     ds, "ChangeOrderHedCustomerCustID/ChangeSoldToContact", "a ds.OrderHed row");
 
             JObject hedRow = hedRows[0] as JObject;
             JToken custNumToken = hedRow == null ? null : hedRow["CustNum"];
             if (custNumToken == null)
-                return StepFailure(
+                return StepFailure<JObject>(
                     ds, "ChangeOrderHedCustomerCustID", "CustNum on the ds.OrderHed row");
 
             hedRow["PONum"] = PONum ?? "";
@@ -208,48 +208,6 @@ namespace EpicorSvcs
             // its value is the orchestrator's terminal value, so return directly.
             return await MasterUpdateAsync(
                 ds, custNum, 0, "OrderHed", ct).ConfigureAwait(false);
-        }
-
-        // ---------------------------------------------------------------
-        // Shared failure shaping for the internal process steps
-        // ---------------------------------------------------------------
-
-        /// <summary>
-        /// Builds the <c>Failure</c> result for an internal process step that
-        /// returned a shape the orchestrator cannot continue from.
-        /// </summary>
-        /// <remarks>
-        /// Prefers Epicor's own <c>ErrorMessage</c> when the response carries
-        /// one — that is the reason the shape is wrong, and it is the detail
-        /// the caller actually needs. Falls back to naming the step and what
-        /// was expected. The response is always attached as
-        /// <c>RawResponse</c>, and the transport's <c>statusCode</c> is
-        /// carried through when present, matching
-        /// <see cref="OperationResultExtensions.ToOperationResult{T}"/>.
-        /// </remarks>
-        /// <param name="ds">The response the step returned.</param>
-        /// <param name="step">The Epicor process step that produced it.</param>
-        /// <param name="expected">What the orchestrator expected to find.</param>
-        /// <returns>A failure-flavored <see cref="OperationResult{T}"/>.</returns>
-        private static OperationResult<JObject> StepFailure(
-            JObject ds,
-            string step,
-            string expected)
-        {
-            string epicorError = ds == null || ds["ErrorMessage"] == null
-                ? null
-                : ds["ErrorMessage"].ToString();
-
-            string message = String.IsNullOrWhiteSpace(epicorError)
-                ? String.Format("{0} returned a response without {1}.", step, expected)
-                : String.Format("{0} failed: {1}", step, epicorError);
-
-            int? statusCode = ds == null ? null : (int?)ds["statusCode"];
-
-            return OperationResult<JObject>.Failure(
-                message,
-                statusCode,
-                rawResponse: ds);
         }
     }
 }

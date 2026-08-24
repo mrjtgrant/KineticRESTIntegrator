@@ -47,9 +47,28 @@ namespace EpicorSvcs
         ///   </description></item>
         /// </list>
         /// <para>
-        /// A <c>Failure</c> result indicates a transport or Epicor error, not
-        /// a business rejection — callers should check the outcomes above on
-        /// a <c>Success</c> result before assuming the transfer committed.
+        /// Those three are *business* outcomes: Epicor understood the request
+        /// and declined it, and the caller must check for them before assuming
+        /// the transfer committed. Everything else — a transport error, an
+        /// Epicor-reported error, or a step returning a shape this method
+        /// cannot continue from — is a <c>Failure</c> carrying Epicor's own
+        /// message and the raw response.
+        /// </para>
+        /// <para>
+        /// The terminal commit is evaluated: the result of
+        /// <see cref="CommitTransferAndUpdateHistoryAsync"/> is routed through
+        /// <see cref="OperationResultExtensions.ToOperationResult{T}"/> rather
+        /// than wrapped in an unconditional <c>Success</c>, so a failed commit
+        /// reports as a failure. Nothing downstream of the commit exists to
+        /// trip on a bad shape, so this is the one place in the sequence where
+        /// the check has to be explicit.
+        /// </para>
+        /// <para>
+        /// <b>Not idempotent.</b> Each call that reaches the commit performs a
+        /// distinct inventory movement. Two calls with identical parameters
+        /// move the quantity twice. A caller that retries must first establish,
+        /// from its own records or from Epicor, whether the earlier attempt
+        /// committed.
         /// </para>
         /// </remarks>
         /// <param name="invTrans">The transfer parameters.</param>
@@ -73,12 +92,21 @@ namespace EpicorSvcs
                 return newTransfer;
             JObject ds = newTransfer.Value;
 
-            // Internal process steps below return raw JObject; ErrorMessage
-            // is surfaced via ds["ErrorMessage"] when Epicor reports one.
+            // Internal process steps below return raw JObject. Each read of the
+            // returned dataset is guarded: a failed step returns an error shape
+            // with no rows, and reaching into it unguarded would throw away the
+            // ErrorMessage that explains the failure.
             ds = await ValidatePartNumAsync(ds, invTrans, ct).ConfigureAwait(false);
 
-            bool trackSerialNumbers =
-                Convert.ToBoolean(ds["ds"]["InvTrans"][0]["TrackSerialnumbers"]);
+            JToken trackFlag = ds == null ? null : ds["ds"] == null ? null
+                : ds["ds"]["InvTrans"] == null ? null
+                : ds["ds"]["InvTrans"][0] == null ? null
+                : ds["ds"]["InvTrans"][0]["TrackSerialnumbers"];
+            if (trackFlag == null)
+                return StepFailure<JObject>(
+                    ds, "ValidatePartNum", "TrackSerialnumbers on the ds.InvTrans row");
+
+            bool trackSerialNumbers = Convert.ToBoolean(trackFlag);
 
             if (trackSerialNumbers)
             {
@@ -88,14 +116,37 @@ namespace EpicorSvcs
 
                 JObject trackedSerialNums = tracked.Value;
 
-                if (trackedSerialNums["MissingSerialNumbers"].ToString().Length > 0)
+                // MissingSerialNumbers is added by ProcessSelectedSerialNumbers and
+                // is expected on every response from it. Absent means the shape is
+                // not what this method can reason about — treat as fatal rather
+                // than assume "none missing" and move stock on a guess.
+                JToken missing = trackedSerialNums["MissingSerialNumbers"];
+                if (missing == null)
+                    return StepFailure<JObject>(
+                        trackedSerialNums, "ProcessSelectedSerialNumbers", "MissingSerialNumbers");
+
+                if (missing.ToString().Length > 0)
                     return OperationResult<JObject>.Success(trackedSerialNums);
 
                 // Serial tracking requires exactly one serial number per item.
                 invTrans.TransferQty = 1;
 
-                JArray selectedSerialNumbers =
-                    JArray.FromObject(trackedSerialNums["ds1"]["SelectedSerialNumbers"]);
+                JToken selected = trackedSerialNums["ds1"] == null
+                    ? null
+                    : trackedSerialNums["ds1"]["SelectedSerialNumbers"];
+                if (selected == null)
+                    return StepFailure<JObject>(
+                        trackedSerialNums,
+                        "ProcessSelectedSerialNumbers",
+                        "ds1.SelectedSerialNumbers");
+
+                JArray selectedSerialNumbers = JArray.FromObject(selected);
+                if (selectedSerialNumbers.Count == 0)
+                    return StepFailure<JObject>(
+                        trackedSerialNums,
+                        "ProcessSelectedSerialNumbers",
+                        "at least one selected serial number");
+
                 selectedSerialNumbers[0]["RowMod"] = "A";
 
                 ds["ds"]["SelectedSerialNumbers"] = selectedSerialNumbers;
@@ -109,20 +160,38 @@ namespace EpicorSvcs
             if (invTrans.ToBinNum != "Main")
                 ds = await ChangeToBinRowModAsync(ds, invTrans, ct).ConfigureAwait(false);
 
-            if (ds["ErrorMessage"] != null)
-                return OperationResult<JObject>.Success(ds);
+            // An Epicor error at this point is a failure, not a success carrying
+            // an error. Note this guard only ever sees the most recent step —
+            // each call reassigns ds from its own response — which is why the
+            // steps above are individually shape-checked rather than relying on
+            // one checkpoint to catch all of them.
+            if (ds != null && ds["ErrorMessage"] != null)
+                return StepFailure<JObject>(ds, "The bin/quantity change steps");
 
             ds = await MasterInventoryBinTestsAsync(ds, invTrans, ct).ConfigureAwait(false);
 
+            JToken neqQtyAction = ds == null ? null : ds["pcNeqQtyAction"];
+            if (neqQtyAction == null)
+                return StepFailure<JObject>(ds, "MasterInventoryBinTests", "pcNeqQtyAction");
+
             // Master bin tests can block the transfer — surface that dataset
-            // as-is so the caller can read pcNeqQtyMessage.
-            if (ds["pcNeqQtyAction"].ToString().ToLower() == "stop")
+            // as-is so the caller can read pcNeqQtyMessage. This is a business
+            // rejection, not an error.
+            if (neqQtyAction.ToString().ToLower() == "stop")
                 return OperationResult<JObject>.Success(ds);
 
             ds = await PreCommitTransferAsync(ds, ct).ConfigureAwait(false);
+
+            // Pre-commit is the last point at which nothing has been written.
+            // Stop here rather than committing on a dataset Epicor rejected.
+            if (ds == null || ds["ErrorMessage"] != null)
+                return StepFailure<JObject>(ds, "PreCommitTransfer");
+
             ds = await CommitTransferAndUpdateHistoryAsync(ds, ct).ConfigureAwait(false);
 
-            return OperationResult<JObject>.Success(ds);
+            // The terminal call: nothing downstream exists to trip on a bad
+            // shape, so evaluate it explicitly instead of asserting success.
+            return ds.ToOperationResult(r => r);
         }
 
         /// <summary>
@@ -137,6 +206,8 @@ namespace EpicorSvcs
         /// method appends. It also carries the <c>MissingSerialNumbers</c> and
         /// <c>SerialNumberFound</c> properties added by
         /// <see cref="SelectedSerialNumbersSvc.ProcessSelectedSerialNumbersAsync"/>.
+        /// A parameter step that returns an error shape produces a
+        /// <c>Failure</c> carrying Epicor's message.
         /// </remarks>
         /// <param name="ds">The in-progress transfer dataset.</param>
         /// <param name="invTrans">The transfer parameters (supplies the serial number).</param>
@@ -155,9 +226,28 @@ namespace EpicorSvcs
             // GetSelectSerialNumbersParamsRowModAsync is an internal process step
             // returning raw JObject.
             ds = await GetSelectSerialNumbersParamsRowModAsync(ds, invTrans, ct).ConfigureAwait(false);
-            string whereClause = ds["ds"]["SelectSerialNumbersParams"][0]["whereClause"].ToString();
-            string sourceRowID = ds["ds"]["SelectSerialNumbersParams"][0]["sourceRowID"].ToString();
-            string transType = ds["ds"]["SelectSerialNumbersParams"][0]["transType"].ToString();
+
+            JToken paramRow = ds == null ? null : ds["ds"] == null ? null
+                : ds["ds"]["SelectSerialNumbersParams"] == null ? null
+                : ds["ds"]["SelectSerialNumbersParams"][0];
+            if (paramRow == null)
+                return StepFailure<JObject>(
+                    ds,
+                    "GetSelectSerialNumbersParamsRowMod",
+                    "a ds.SelectSerialNumbersParams row");
+
+            JToken whereClauseToken = paramRow["whereClause"];
+            JToken sourceRowIDToken = paramRow["sourceRowID"];
+            JToken transTypeToken = paramRow["transType"];
+            if (whereClauseToken == null || sourceRowIDToken == null || transTypeToken == null)
+                return StepFailure<JObject>(
+                    ds,
+                    "GetSelectSerialNumbersParamsRowMod",
+                    "whereClause, sourceRowID and transType on the ds.SelectSerialNumbersParams row");
+
+            string whereClause = whereClauseToken.ToString();
+            string sourceRowID = sourceRowIDToken.ToString();
+            string transType = transTypeToken.ToString();
 
             // Get the available serial numbers for the part.
             var retrieved = await SelectedSerialNumbersSvc

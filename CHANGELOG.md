@@ -16,6 +16,32 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.5.0 — 2026-08-24
+
+`MoveInventoryAsync` now reports failures as failures. Its terminal commit is evaluated instead of being wrapped in an unconditional `Success`, an Epicor error partway through is no longer returned as a success carrying an error, and every read of an in-flight dataset is shape-checked. **Minor rather than patch: this changes documented runtime behavior** — calls that previously returned `IsSuccess: true` with an error in the payload now return `IsSuccess: false`. That is the point of the change, but a caller relying on the old shape will see different results.
+
+### Changed
+
+- **`MoveInventoryAsync` evaluates its commit.** The method ended with `OperationResult<JObject>.Success(ds)` regardless of what `PreCommitTransfer` and `CommitTransferAndUpdateHistory` returned — a failed commit reported as a success. The commit result now routes through `ToOperationResult`, and pre-commit is checked before the commit runs so a rejected dataset is never committed. This is the framework's one structural blind spot: the implicit "malformed shape halts the next call" protection needs a *next* call, and the terminal commit has none.
+
+- **An Epicor error after the bin/quantity steps is now a `Failure`.** The existing `ds["ErrorMessage"] != null` guard returned `Success(ds)`, putting an error inside a success. It now returns a failure carrying that message. The three documented *business* outcomes — `MSG`, `MissingSerialNumbers`, and `pcNeqQtyAction == "stop"` — are unchanged and still ride on `Success`, because those are Epicor declining a well-understood request rather than failing.
+
+### Fixed
+
+- **Five unguarded dataset reads in the inventory orchestrators.** `MoveInventoryAsync` read `TrackSerialnumbers` off `ds.InvTrans[0]`, `MissingSerialNumbers` and `ds1.SelectedSerialNumbers` off the serial-tracking result, and `pcNeqQtyAction` off the bin-test result; `TrackSerialNumberAsync` read `whereClause`, `sourceRowID`, and `transType` off `ds.SelectSerialNumbersParams[0]`. Each throws `NullReferenceException` (or `ArgumentNullException`, via `JArray.FromObject`) when the preceding step returns an error shape — discarding the Epicor message that explains why. All are now checked and return a failure carrying that message.
+
+### Added
+
+- **`EpicorSvc.StepFailure<T>()`.** A `protected static` helper shared by every service: builds the failure result for a process step that returned an unusable shape, preferring Epicor's own `ErrorMessage` and falling back to naming the step and the expected shape, with the response attached as `RawResponse` and the transport `statusCode` carried through. Replaces the private copy added to `SalesOrderSvc.Workflows.cs` in 0.4.2, which is removed — two call sites was the right moment to lift it rather than let a third copy appear.
+
+### Documentation
+
+- **`MoveInventoryAsync` remarks** now separate business outcomes from failures, explain why the terminal commit is checked explicitly, and state plainly that the method is **not idempotent** — each call that reaches the commit moves stock again.
+
+### Version
+
+- `EpicorSvcs` 0.4.2 → 0.5.0. `RESTServices` (0.3.1), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.4.2 — 2026-08-24
 
 A patch release hardening the `SalesOrderSvc` orchestrators against Epicor error responses. Both order orchestrators read fields out of an in-flight dataset that a *failed* process step does not return. Those reads are now guarded, and a step that returns an error shape produces a `Failure` carrying Epicor's own message instead of an exception thrown from a missing node. `EpicorSvcs` only; no other project changed.
