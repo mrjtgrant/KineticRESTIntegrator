@@ -60,23 +60,6 @@ Every service method:
 
 The pattern is consistent enough that the existing services are reasonable templates — pick a similar service (read-only? write? orchestrator?) and mirror its shape.
 
-### Entity-set reads: `$select` and `additionalColumns`
-
-A table-name read (`PartsAsync`, `POesAsync`, …) builds its OData `$select` from the row DTO, not a hand-maintained column list. Follow the established shape:
-
-- **Default the `$select` to `SelectFor<T>()`.** The base-class helper reflects the DTO's public properties — skipping the `[JsonExtensionData]` overflow and `[JsonIgnore]` members, honoring `[JsonProperty]` names — and caches the result per type. Because the request mirrors the DTO, every typed property on the returned rows is populated; there is no separate subset to drift out of sync with the type.
-- **Expose two column knobs.** Accept `List<string> select = null` (a full override — when non-null it replaces the default entirely) and `List<string> additionalColumns = null` (appended to the base set, for `_c` or UD columns the DTO doesn't model — they arrive in `ExtraData`). The body is the same in every service:
-
-```csharp
-List<string> cols = select ?? SelectFor<T>();
-if (additionalColumns != null && additionalColumns.Count > 0)
-    cols = cols.Concat(additionalColumns).ToList();
-```
-
-Never mutate the caller's `select` list — `Concat(...).ToList()` builds a new one.
-
-These are OData query options, so they take effect only on the **v2 OData** endpoint (API-key sessions); a Basic/v1 session ignores them and returns the full collection. Note that limitation on the method's XML doc, as the existing services do.
-
 ### File layout for services
 
 Each service is split into two partial-class files:
