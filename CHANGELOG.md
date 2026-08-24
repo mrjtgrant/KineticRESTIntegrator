@@ -16,6 +16,32 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.6.0 — 2026-08-24
+
+Closes the pattern 0.4.2 and 0.5.0 started on: four remaining places where a method asserted an outcome it never established. An audit of all seventeen direct `OperationResult<T>.Success(...)` call sites in the library found these four; the other thirteen are correct — each follows an `IsFailure` check or shapes a value that was already evaluated upstream. **Minor rather than patch:** `TruncateAsync` and `AddMtlsAsync` both change documented runtime behavior.
+
+### Changed
+
+- **`UDXSvc.TruncateAsync` verifies its deletes.** *Breaking.* The loop discarded every `DeleteByIDAsync` result and incremented its counter unconditionally, so a run in which every delete failed still returned `Success` with a count equal to the table's row count — on a destructive operation gated behind an explicit `confirmTruncate: true`, in the one place a caller most needs a true answer. Each delete is now checked; the first failure stops the loop and returns a failure naming how many rows were removed before it. A caller that previously read the count as "rows deleted" was, in the failure case, reading "rows found".
+
+- **`EngWorkBenchSvc.AddMtlsAsync` reports failures as failures.** *Breaking.* A material row that could not be populated set a local `bool isError` and the method then returned `OperationResult<JObject>.Success(ds)` — an explicitly-known error, returned as a success carrying a half-built dataset. It now returns a `Failure` carrying the reason: Epicor's message when `GetNewECOMtl` refused the row, or the captured exception when the dataset did not have the expected `ECOMtl` shape. The group is still unlocked in both cases, and the dataset as it stood is attached to `RawResponse`.
+
+### Fixed
+
+- **`AddMtlsAsync` no longer swallows exceptions.** The row-population block was wrapped in a bare `catch { isError = true; }`, discarding the exception entirely — the result carried no message at all. It now captures the exception into the failure result. It also stops on the first such error rather than continuing to populate rows it will discard, matching the `GetNewECOMtl` failure branch directly above it.
+
+- **`AddMtlsAsync` validates its input.** An empty or null `mtls` list reached `mtls.First()` and threw `InvalidOperationException` / `NullReferenceException` from inside the method. It now throws `ArgumentException` naming the parameter, matching `TruncateAsync`'s argument handling.
+
+- **Three more unguarded dataset reads.** `QuoteSvc.CreateQuoteAsync` stamped six fields onto `ds["ds"]["QuoteHed"][0]` and read `QuoteNum` off the saved dataset; `ProjectSvc.CreateProjectAsync` stamped `Description` onto `ds["ds"]["Project"][0]` and could return a null `Project` inside a success when `ExtractDto` found no row. Each now returns a failure carrying Epicor's message via `EpicorSvc.StepFailure<T>()`, the same treatment the order and inventory orchestrators received in 0.4.2 and 0.5.0.
+
+### Documentation
+
+- **`TruncateAsync` remarks** now state that the row query is capped at 5000 rows — a larger table is not fully cleared by one call, and the returned count is rows deleted, not the table's remaining size. The `<returns>` text describes the new stop-on-first-failure behavior.
+
+### Version
+
+- `EpicorSvcs` 0.5.0 → 0.6.0. `RESTServices` (0.3.1), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.5.0 — 2026-08-24
 
 `MoveInventoryAsync` now reports failures as failures. Its terminal commit is evaluated instead of being wrapped in an unconditional `Success`, an Epicor error partway through is no longer returned as a success carrying an error, and every read of an in-flight dataset is shape-checked. **Minor rather than patch: this changes documented runtime behavior** — calls that previously returned `IsSuccess: true` with an error in the payload now return `IsSuccess: false`. That is the point of the change, but a caller relying on the old shape will see different results.

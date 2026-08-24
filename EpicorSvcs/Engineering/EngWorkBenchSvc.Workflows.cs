@@ -36,6 +36,10 @@ namespace EpicorSvcs
             List<ECOMtlInput> mtls,
             CancellationToken ct = default)
         {
+            if (mtls == null || mtls.Count == 0)
+                throw new ArgumentException(
+                    "At least one material is required.", nameof(mtls));
+
             var firstMtl = mtls.First();
             string[] srcparse = firstMtl.PartNum.Split(' ');
             string sourcepart = srcparse[0];
@@ -119,8 +123,11 @@ namespace EpicorSvcs
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the resulting ECO
         /// dataset. When a material row could not be populated, the group is
-        /// still unlocked but the final update is skipped — inspect the
-        /// returned dataset.
+        /// still unlocked, the final update is skipped, and the result is a
+        /// <c>Failure</c> carrying the reason — Epicor's message when
+        /// <c>GetNewECOMtl</c> refused the row, or the captured exception when
+        /// the returned dataset did not carry the expected shape. The dataset
+        /// as it stood is attached to <c>RawResponse</c>.
         /// </returns>
         public async Task<OperationResult<JObject>> AddMtlsAsync(
             List<ECOMtlInput> mtls,
@@ -155,7 +162,10 @@ namespace EpicorSvcs
                 return groupAndRev;
             ds = groupAndRev.Value;
 
-            bool isError = false;
+            // Holds the first failure seen while populating rows. Replaces a
+            // bare bool: the flag recorded *that* something failed but not
+            // what, and the method then returned Success anyway.
+            OperationResult<JObject> failure = null;
             int mtlseq = 0;
             foreach (ECOMtlInput mtl in mtls)
             {
@@ -181,7 +191,7 @@ namespace EpicorSvcs
                 {
                     // We have the group locked — record the error, stop adding,
                     // and proceed to unlock so we do not leave the group locked.
-                    isError = true;
+                    failure = newMtlResult;
                     break;
                 }
                 ds = newMtlResult.Value;
@@ -214,9 +224,15 @@ namespace EpicorSvcs
                         mtlseq += 10;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    isError = true;
+                    // The dataset did not carry the ECOMtl shape this step
+                    // expects. Capture the exception rather than swallowing it —
+                    // a bare catch left the caller with no way to learn why —
+                    // and stop, matching the GetNewECOMtl failure branch above.
+                    failure = OperationResult<JObject>.Failure(ex);
+                    failure.RawResponse = ds;
+                    break;
                 }
             }
 
@@ -233,8 +249,10 @@ namespace EpicorSvcs
                 ipProcessMfgID = firstMtl.ProcessMfgID
             }), ct).ConfigureAwait(false);
 
-            if (isError)
-                return OperationResult<JObject>.Success(ds);
+            // A row that could not be populated is a failure, not a success
+            // carrying a half-built dataset. The group is unlocked either way.
+            if (failure != null)
+                return failure;
 
             return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }

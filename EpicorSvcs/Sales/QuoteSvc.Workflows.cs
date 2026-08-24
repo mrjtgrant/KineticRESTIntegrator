@@ -25,7 +25,9 @@ namespace EpicorSvcs
         /// <c>Value["QuoteNum"]</c> is the new quote number and
         /// <c>Value["QuoteObj"]</c> is the full quote dataset as echoed back
         /// by Epicor. On failure, <c>ErrorMessage</c> describes what went
-        /// wrong.
+        /// wrong — including a process step that returned a shape this method
+        /// cannot continue from, with the response attached to
+        /// <c>RawResponse</c>.
         /// </returns>
         public async Task<OperationResult<JObject>> CreateQuoteAsync(
             QuoteInput quote,
@@ -48,12 +50,28 @@ namespace EpicorSvcs
             ds = await ValidateShippingDateBeforeUpdateAsync(
                 ds, quote.ShipByDate, quote.NeedByDate, ct).ConfigureAwait(false);
 
-            ds["ds"]["QuoteHed"][0]["PONum"] = quote.PONum;
-            ds["ds"]["QuoteHed"][0]["OTSAddress1"] = quote.OTSAddress1;
-            ds["ds"]["QuoteHed"][0]["OTSCity"] = quote.OTSCity;
-            ds["ds"]["QuoteHed"][0]["OTSState"] = quote.OTSState;
-            ds["ds"]["QuoteHed"][0]["OTSZIP"] = quote.OTSZIP;
-            ds["ds"]["QuoteHed"][0]["OTSCountryNum"] = quote.OTSCountryNum;
+            // A rejected customer or an invalid shipping date leaves an error
+            // shape with no QuoteHed row to stamp. Guard before writing.
+            JArray hedRows = ds == null ? null : ds["ds"] == null
+                ? null
+                : ds["ds"]["QuoteHed"] as JArray;
+            if (hedRows == null || hedRows.Count == 0)
+                return StepFailure<JObject>(
+                    ds,
+                    "QuoteHedCustomerCustIDAfterChange/ValidateShippingDateBeforeUpdate",
+                    "a ds.QuoteHed row");
+
+            JObject hedRow = hedRows[0] as JObject;
+            if (hedRow == null)
+                return StepFailure<JObject>(
+                    ds, "QuoteHedCustomerCustIDAfterChange", "a ds.QuoteHed row object");
+
+            hedRow["PONum"] = quote.PONum;
+            hedRow["OTSAddress1"] = quote.OTSAddress1;
+            hedRow["OTSCity"] = quote.OTSCity;
+            hedRow["OTSState"] = quote.OTSState;
+            hedRow["OTSZIP"] = quote.OTSZIP;
+            hedRow["OTSCountryNum"] = quote.OTSCountryNum;
 
             // UpdateAsync is now public and returns OperationResult. Propagate
             // failure; on success, build the orchestrator's custom result
@@ -63,8 +81,20 @@ namespace EpicorSvcs
                 return updated;
 
             JObject saved = updated.Value;
+
+            // Update reported success, so a missing QuoteNum means Epicor
+            // returned a shape that violates its own contract — report it
+            // rather than dereferencing null.
+            JToken quoteNum = saved == null ? null : saved["ds"] == null ? null
+                : saved["ds"]["QuoteHed"] == null ? null
+                : saved["ds"]["QuoteHed"][0] == null ? null
+                : saved["ds"]["QuoteHed"][0]["QuoteNum"];
+            if (quoteNum == null)
+                return StepFailure<JObject>(
+                    saved, "Update", "QuoteNum on the saved ds.QuoteHed row");
+
             JObject result = new JObject {
-                new JProperty("QuoteNum", saved["ds"]["QuoteHed"][0]["QuoteNum"].ToString()),
+                new JProperty("QuoteNum", quoteNum.ToString()),
                 new JProperty("QuoteObj", saved)
             };
 

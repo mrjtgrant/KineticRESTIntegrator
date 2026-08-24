@@ -27,7 +27,9 @@ namespace EpicorSvcs
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the created
         /// <see cref="Project"/> as echoed back by Epicor's <c>Update</c>.
-        /// On failure, <c>ErrorMessage</c> describes what went wrong.
+        /// On failure, <c>ErrorMessage</c> describes what went wrong —
+        /// including a process step that returned a shape this method cannot
+        /// continue from, with the response attached to <c>RawResponse</c>.
         /// </returns>
         public async Task<OperationResult<Project>> CreateProjectAsync(
             string ProjectID,
@@ -50,7 +52,21 @@ namespace EpicorSvcs
             ds = await OnChangeProjectIDAsync(ds, ProjectID, ct).ConfigureAwait(false);
             ds = await OnChangeStartDateAsync(ds, StartDate, ct).ConfigureAwait(false);
 
-            ds["ds"]["Project"][0]["Description"] = Description;
+            // A duplicate or malformed ProjectID leaves an error shape with no
+            // Project row to stamp the description onto.
+            JArray projectRows = ds == null ? null : ds["ds"] == null
+                ? null
+                : ds["ds"]["Project"] as JArray;
+            if (projectRows == null || projectRows.Count == 0)
+                return StepFailure<Project>(
+                    ds, "OnChangeProjectID/OnChangeStartDate", "a ds.Project row");
+
+            JObject projectRow = projectRows[0] as JObject;
+            if (projectRow == null)
+                return StepFailure<Project>(
+                    ds, "OnChangeProjectID", "a ds.Project row object");
+
+            projectRow["Description"] = Description;
 
             // UpdateAsync is now public and returns OperationResult. Propagate
             // failure (re-typed), then extract the typed Project from the
@@ -61,8 +77,14 @@ namespace EpicorSvcs
                     updated.ErrorMessage, updated.StatusCode,
                     updated.ResourcePath, updated.RawResponse);
 
-            return OperationResult<Project>.Success(
-                updated.Value.ExtractDto<Project>("Project"));
+            // ExtractDto returns default(T) when the table is missing, which
+            // would hand the caller a null Project inside a success.
+            Project created = updated.Value.ExtractDto<Project>("Project");
+            if (created == null)
+                return StepFailure<Project>(
+                    updated.Value, "Update", "a ds.Project row in the saved dataset");
+
+            return OperationResult<Project>.Success(created);
         }
     }
 }

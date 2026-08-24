@@ -189,9 +189,17 @@ namespace EpicorSvcs
         /// <para>
         /// The implementation is a loop of single-row deletes — not a true
         /// SQL-style truncate. It is non-atomic and can partially complete
-        /// on failure. For the small test-table sizes this method is meant
-        /// for, that's fine; for anything larger, it's a sign the table
-        /// has graduated past the audience this method is designed for.
+        /// on failure: the first failed delete stops the loop and returns a
+        /// failure naming how many rows were removed before it. For the small
+        /// test-table sizes this method is meant for, that's fine; for
+        /// anything larger, it's a sign the table has graduated past the
+        /// audience this method is designed for.
+        /// </para>
+        /// <para>
+        /// The row query is capped at 5000 rows, so a table larger than that
+        /// is not fully cleared by a single call and the returned count is the
+        /// number deleted, not the table's remaining size. Another reason this
+        /// method belongs to small tables only.
         /// </para>
         /// <para>
         /// <paramref name="UDTable"/> is required and must be supplied
@@ -224,7 +232,9 @@ namespace EpicorSvcs
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the number of rows
-        /// cleared. Fails if the initial <c>QueryAsync</c> fails.
+        /// cleared. Fails if the initial <c>QueryAsync</c> fails, or if any
+        /// row delete fails — in which case the operation stops at that row
+        /// and <c>ErrorMessage</c> names how many were deleted before it.
         /// </returns>
         /// <exception cref="ArgumentException">
         /// <paramref name="UDTable"/> is null, empty, or whitespace, or
@@ -251,9 +261,21 @@ namespace EpicorSvcs
             int deleted = 0;
             foreach (var ud in all.Value)
             {
-                await DeleteByIDAsync(
+                // Each delete is checked. Incrementing the counter without
+                // inspecting the result reported a row count the method never
+                // verified — on a destructive operation, the one place a caller
+                // most needs an honest answer.
+                var removed = await DeleteByIDAsync(
                     ud.Key1, ud.Key2, ud.Key3, ud.Key4, ud.Key5,
                     table, ct).ConfigureAwait(false);
+
+                if (removed.IsFailure)
+                    return OperationResult<int>.Failure(
+                        String.Format(
+                            "Truncate of '{0}' stopped after {1} row(s) deleted: {2}",
+                            table, deleted, removed.ErrorMessage),
+                        removed.StatusCode, removed.ResourcePath, removed.RawResponse);
+
                 deleted++;
             }
 
