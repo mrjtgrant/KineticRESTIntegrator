@@ -16,6 +16,22 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.4.2 — 2026-08-24
+
+A patch release hardening the `SalesOrderSvc` orchestrators against Epicor error responses. Both order orchestrators read fields out of an in-flight dataset that a *failed* process step does not return. Those reads are now guarded, and a step that returns an error shape produces a `Failure` carrying Epicor's own message instead of an exception thrown from a missing node. `EpicorSvcs` only; no other project changed.
+
+### Fixed
+
+- **`AddOrderLineAsync` no longer throws `NullReferenceException` when a part is rejected.** `ChangePartNumMaster` returns an error-shaped object — no `ds.OrderDtl` row — when the part is invalid, not saleable to the customer, or prompts on a revision change. The method then read `ds["ds"]["OrderDtl"][0]["CustNum"]` unguarded, so the first line-validation failure surfaced as a null dereference and Epicor's `ErrorMessage`, sitting in that same object, was lost. The row and both fields read off it are now checked, and the failure is returned as a value with the message and the raw response attached.
+
+- **`AddOrderLineAsync` no longer throws `ArgumentNullException` when the quantity step fails.** `ChangeSellingQtyMaster` returns a `parameters` envelope on success and none on failure; `JObject.FromObject(ds["parameters"])` threw on the null token. The envelope is now checked before it is unwrapped.
+
+- **`CreateOrderAsync` guards the same pattern.** An unknown `CustID`, or a customer with no valid sold-to contact, leaves no `ds.OrderHed` row to stamp `PONum`, `RequestDate`, and `NeedByDate` onto. The row and its `CustNum` are now checked before use.
+
+### Version
+
+- `EpicorSvcs` 0.4.1 → 0.4.2. `RESTServices` (0.3.1), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## KeriConfigurator 0.5.0 — 2026-06-09
 
 Adds environment-variable references to configuration: any `App.config` value may be written as `{ENV:NAME}` and is resolved from the process environment, so secrets can stay off disk on a live/deployed machine while `App.config` remains the single, self-documenting source of configuration *shape*. Additive and backward-compatible — existing literal values behave exactly as before. `KeriConfigurator` only; `RESTServices` / `EpicorSvcs` / `FileHandling` are unchanged.
@@ -75,7 +91,7 @@ A patch release bundling everything since 0.4.0. The headline change: entity-set
 
 - **`CLEANUP_RECOMMENDATIONS.md`:** marked error feedback as shipped (0.4.0); parked pagination (`$skip` + end-of-data detection) and a warn-on-v1 idea for OData options on Basic sessions.
 
-- **Demo:** the bundled `Parts_BAQ` now uses `OnHoldDate`, and company references were scrubbed (`EPIC01` → `EPIC01`).
+- **Demo:** the bundled `Parts_BAQ` now uses `OnHoldDate`, and a real company code in the sample data was replaced with the `EPIC01` placeholder.
 
 ### Version bumps
 
