@@ -213,11 +213,16 @@ namespace EpicorSvcs
                 // callers narrow by Key1 only, or Key1+Key2, etc., without
                 // specifying trailing empty keys.
                 List<string> filterClauses = new List<string>();
-                if (!string.IsNullOrEmpty(filter.Key1)) filterClauses.Add("Key1 eq '" + filter.Key1 + "'");
-                if (!string.IsNullOrEmpty(filter.Key2)) filterClauses.Add("Key2 eq '" + filter.Key2 + "'");
-                if (!string.IsNullOrEmpty(filter.Key3)) filterClauses.Add("Key3 eq '" + filter.Key3 + "'");
-                if (!string.IsNullOrEmpty(filter.Key4)) filterClauses.Add("Key4 eq '" + filter.Key4 + "'");
-                if (!string.IsNullOrEmpty(filter.Key5)) filterClauses.Add("Key5 eq '" + filter.Key5 + "'");
+                if (!string.IsNullOrEmpty(filter.Key1))
+                    filterClauses.Add("Key1 eq '" + EscapeODataLiteral(filter.Key1) + "'");
+                if (!string.IsNullOrEmpty(filter.Key2))
+                    filterClauses.Add("Key2 eq '" + EscapeODataLiteral(filter.Key2) + "'");
+                if (!string.IsNullOrEmpty(filter.Key3))
+                    filterClauses.Add("Key3 eq '" + EscapeODataLiteral(filter.Key3) + "'");
+                if (!string.IsNullOrEmpty(filter.Key4))
+                    filterClauses.Add("Key4 eq '" + EscapeODataLiteral(filter.Key4) + "'");
+                if (!string.IsNullOrEmpty(filter.Key5))
+                    filterClauses.Add("Key5 eq '" + EscapeODataLiteral(filter.Key5) + "'");
                 if (filterClauses.Count > 0)
                     svc += "&$filter=" + UrlEncode(string.Join(" and ", filterClauses));
             }

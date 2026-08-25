@@ -23,16 +23,38 @@ namespace EpicorSvcs
         /// dataset via <see cref="GetByIDAsync"/>.
         /// </summary>
         /// <remarks>
-        /// PO numbers are expected to be unique per order at the Epicor
-        /// installation level — at most one order will match. When no order
-        /// is found, the failure shape of <see cref="GetByIDAsync"/> for a
-        /// non-existent order number is returned (typically a 404).
+        /// <para>
+        /// Epicor's default is to require unique PO numbers per customer, but a
+        /// company can be configured to allow duplicates, and orders created
+        /// before such a setting changed survive it either way. So the match is
+        /// counted rather than assumed:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item><description>
+        ///   <b>No match</b> — a failure with a 404 status naming the PO number.
+        ///   </description></item>
+        ///   <item><description>
+        ///   <b>Exactly one match</b> — the full dataset for that order, via
+        ///   <see cref="GetByIDAsync"/>.
+        ///   </description></item>
+        ///   <item><description>
+        ///   <b>More than one match</b> — a failure with a 409 status naming the
+        ///   colliding order numbers. The method will not guess which order was
+        ///   meant; use <see cref="SalesOrdersAsync"/> to list them and choose.
+        ///   </description></item>
+        /// </list>
+        /// <para>
+        /// The previous implementation queried with <c>top: 1</c> and returned
+        /// whichever order came back first, so a duplicated PO number silently
+        /// produced the wrong order.
+        /// </para>
         /// </remarks>
         /// <param name="PONum">The customer PO number to match.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the raw multi-table
-        /// order dataset returned by <c>GetByID</c>. Materialize the header
+        /// order dataset returned by <c>GetByID</c> when exactly one order
+        /// matches; otherwise a failure (see remarks). Materialize the header
         /// row from <c>RawResponse</c>:
         /// <c>result.Value["ds"]["OrderHed"][0].ToObject&lt;OrderHed&gt;()</c>.
         /// </returns>
@@ -41,10 +63,14 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             // Step 1: narrow OData query to find the OrderNum for this PO.
+            // top: 2 rather than 1 — one row over the limit is all it takes to
+            // tell "exactly one match" from "more than one", and refusing to
+            // guess is the whole point of the count.
             var lookup = await SalesOrdersAsync(
-                filters: new List<string> { String.Format("PONum eq '{0}'", PONum) },
+                filters: new List<string> {
+                    String.Format("PONum eq '{0}'", EscapeODataLiteral(PONum)) },
                 select: new List<string> { "OrderNum" },
-                top: 1,
+                top: 2,
                 ct: ct).ConfigureAwait(false);
 
             if (lookup.IsFailure)
@@ -52,15 +78,24 @@ namespace EpicorSvcs
                     lookup.ErrorMessage, lookup.StatusCode,
                     lookup.ResourcePath, lookup.RawResponse);
 
-            OrderHed match = lookup.Value.FirstOrDefault();
-            if (match == null)
+            List<OrderHed> matches = lookup.Value ?? new List<OrderHed>();
+
+            if (matches.Count == 0)
                 return OperationResult<JObject>.Failure(
                     String.Format("PONum '{0}' does not match any sales order", PONum),
                     404, lookup.ResourcePath, lookup.RawResponse);
 
-            // Step 2: fetch the full multi-table dataset by the OrderNum we
-            // just found.
-            return await GetByIDAsync(match.OrderNum, ct).ConfigureAwait(false);
+            if (matches.Count > 1)
+                return OperationResult<JObject>.Failure(
+                    String.Format(
+                        "PONum '{0}' matches more than one sales order (at least {1} and {2}). " +
+                        "Use SalesOrdersAsync to list them and choose.",
+                        PONum, matches[0].OrderNum, matches[1].OrderNum),
+                    409, lookup.ResourcePath, lookup.RawResponse);
+
+            // Step 2: fetch the full multi-table dataset by the one OrderNum
+            // this PO resolved to.
+            return await GetByIDAsync(matches[0].OrderNum, ct).ConfigureAwait(false);
         }
 
         /// <summary>

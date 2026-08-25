@@ -32,7 +32,8 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             return await PartsAsync(
-                filters: new List<string> { String.Format("SearchWord eq '{0}'", searchWord) },
+                filters: new List<string> {
+                    String.Format("SearchWord eq '{0}'", EscapeODataLiteral(searchWord)) },
                 select: new List<string> { "PartNum", "PartDescription" },
                 ct: ct).ConfigureAwait(false);
         }

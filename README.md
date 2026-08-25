@@ -40,7 +40,7 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 | Project | Version |
 |---|---|
-| `EpicorSvcs` | <!--VER:EpicorSvcs-->0.6.2<!--/VER--> |
+| `EpicorSvcs` | <!--VER:EpicorSvcs-->0.7.1<!--/VER--> |
 | `RESTServices` | <!--VER:RESTServices-->0.3.1<!--/VER--> |
 | `FileHandling` | <!--VER:FileHandling-->0.3.0<!--/VER--> |
 | `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
@@ -451,7 +451,7 @@ The library has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->140<!--/TESTS--> tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->149<!--/TESTS--> tests, all green.
 
 Test Explorer in Visual Studio also discovers and runs them.
 

@@ -16,6 +16,36 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.7.1 — 2026-08-25
+
+Escapes caller-supplied text in OData `$filter` clauses. A value containing a single quote previously closed the literal early and produced a malformed filter.
+
+### Fixed
+
+- **Single quotes in `$filter` values are escaped.** OData escapes a quote by doubling it. Eight clauses built from caller text did not: `GetByPONumAsync` (`PONum`), `GetPartsBySearchWordsAsync` (`SearchWord`), `GenxDataSvc` (`TypeCode`), and `UDXSvc.QueryAsync`'s five key clauses (`Key1`–`Key5`). A customer ID containing an apostrophe, or a UD key carrying one, produced a filter Epicor rejects — or, worse, misreads. All eight now pass through the new `EpicorSvc.EscapeODataLiteral()`. The UD keys are the likeliest to hit this in practice, since UD rows are commonly keyed on names and other free-text identifiers.
+
+### Added
+
+- **`EpicorSvc.EscapeODataLiteral()`** — `protected internal static`, alongside the other shared service helpers. Doubles single quotes and treats null as empty. Only the single quote terminates an OData string literal; everything else is a URL-encoding concern and is left untouched. Covered by offline `ODataLiteralTests`.
+
+### Version
+
+- `EpicorSvcs` 0.7.0 → 0.7.1. `RESTServices` (0.3.1), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
+## EpicorSvcs 0.7.0 — 2026-08-25
+
+`GetByPONumAsync` stops guessing when a PO number matches more than one order. **Minor rather than patch: this changes documented runtime behavior** — a call that previously returned an order for a duplicated PO now returns a failure.
+
+### Changed
+
+- **`SalesOrderSvc.GetByPONumAsync` counts its matches.** *Breaking.* The method's remarks asserted that "PO numbers are expected to be unique per order at the Epicor installation level — at most one order will match," and the implementation queried with `top: 1` and returned whichever row came back first. Epicor's default is indeed to require unique PO numbers per customer, but a company can be configured to allow duplicates, and orders created before such a setting changed survive it either way — so the assumption was not safe, and when it broke the method silently returned the wrong order. The query now uses `top: 2`, which is one row more than needed to tell "exactly one" from "more than one", and the three outcomes are explicit: no match is a 404 naming the PO; exactly one match returns that order's dataset as before; more than one is a 409 naming the colliding order numbers and pointing at `SalesOrdersAsync`. The method will not choose on the caller's behalf.
+
+  A company-configuration read was considered and rejected: it would cost a round trip, depend on a setting whose field name would need confirming against Epicor's REST help, and still not catch historical duplicates created before the setting was last changed. Counting the result answers the question directly.
+
+### Version
+
+- `EpicorSvcs` 0.6.2 → 0.7.0. `RESTServices` (0.3.1), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.6.2 — 2026-08-25
 
 Extends the commit-boundary vocabulary introduced in 0.6.1 to the remaining five orchestrators, so every multi-step write in the library now reports which side of its commit a failure landed on. Additive — no existing behavior changes.

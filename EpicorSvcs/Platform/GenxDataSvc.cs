@@ -55,7 +55,7 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             string svc = "Ice.BO.GenxDataSvc/GenXDatas";
-            svc += String.Format("?$filter=TypeCode eq '{0}'", TypeCode);
+            svc += String.Format("?$filter=TypeCode eq '{0}'", EscapeODataLiteral(TypeCode));
 
             if (!String.IsNullOrEmpty(filter))
                 svc += " and " + filter;

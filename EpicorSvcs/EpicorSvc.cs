@@ -159,6 +159,24 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Escapes a value for use inside a single-quoted OData string literal.
+        /// </summary>
+        /// <remarks>
+        /// OData escapes a single quote by doubling it, so a value containing
+        /// one — a customer named O'Brien Supply, a UD key carrying an
+        /// apostrophe — otherwise closes the literal early and produces a
+        /// malformed <c>$filter</c> that Epicor rejects or, worse, misreads.
+        /// Every filter clause built from caller-supplied text must pass
+        /// through this.
+        /// </remarks>
+        /// <param name="value">The raw value. Null is treated as empty.</param>
+        /// <returns>The value with single quotes doubled, without the enclosing quotes.</returns>
+        protected internal static string EscapeODataLiteral(string value)
+        {
+            return value == null ? string.Empty : value.Replace("'", "''");
+        }
+
+        /// <summary>
         /// Marks a failure as having happened before anything was written.
         /// </summary>
         /// <remarks>
