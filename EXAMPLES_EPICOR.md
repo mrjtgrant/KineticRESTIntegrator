@@ -321,6 +321,52 @@ Get the dataset from the first call, mutate or reassign it at each step,
 persist at the end. The orchestrators in `*Svc.Workflows.cs` are not a closed
 system; they are worked examples of the pattern you would write yourself.
 
+### Deciding whether a failed orchestrator is safe to retry
+
+Every orchestrator has exactly one **commit boundary** — the single call that
+writes. `MasterUpdate` for orders and quotes, `CommitTransferAndUpdateHistory`
+for an inventory move, `Update` for projects and ECO materials. Everything
+before it is preparation that changes nothing.
+
+Which side of that line a failure landed on is the thing a caller most needs to
+know, and it is not recoverable from the error message. So every orchestrator
+reports it on the result:
+
+```csharp
+var result = await epicorClient.SalesOrder.CreateOrderAsync("ACME01", needByDate, poNum);
+
+if (result.IsFailure)
+{
+    if (result.FailureStage == FailureStage.Uncommitted)
+    {
+        // Nothing was written. Either a step before the commit failed, or
+        // Epicor received the commit and declined it — an invalid customer,
+        // a credit hold, a validation error. Retry as-is.
+    }
+    else
+    {
+        // FailureStage.Indeterminate — the commit was attempted and its
+        // outcome is unknown: a timeout, a dropped connection, a 5xx. An
+        // order may exist. Establish whether it does before retrying.
+    }
+}
+```
+
+The classification is deliberately pessimistic. Anything that cannot be placed
+confidently is reported as `Indeterminate`, because an unnecessary check costs
+a query while a wrong "safe to retry" costs a duplicate record.
+
+**Keri does not deduplicate, and will not.** It has no store of its own and
+requires no schema of yours — no UD table, no custom `_c` column, nothing an
+Epicor administrator has to add before the library works. `Indeterminate` tells
+you to check; how you check is your application's decision, and it depends on
+what identifies a record uniquely in your install.
+
+`FailureStage` is null on success, and null on any method without a commit
+boundary — reads and single BO wrappers classify nothing. A null on a failure
+means the method does not classify; treat it as `Indeterminate` if you are
+about to retry a write.
+
 ---
 
 ## 2. Using a single service directly
@@ -655,8 +701,19 @@ var one = await epicorClient.UDTable.DeleteByIDAsync(
 var all = await epicorClient.UDTable.TruncateAsync("UDXX", confirmTruncate: true);
 
 if (all.IsFailure)
+    // The message names how many rows were removed before the failure.
     Console.WriteLine($"Truncate failed: {all.ErrorMessage}");
+else
+    Console.WriteLine($"{all.Value} row(s) deleted.");
 ```
+
+`TruncateAsync` is a loop of single-row deletes, not a SQL-style truncate, and
+each delete is checked: the first failure stops the loop and returns a failure
+naming how many rows were removed before it. The operation is therefore not
+atomic and can partially complete — which is fine at the test-table sizes it is
+meant for. The row query is also capped at 5000, so a larger table is not fully
+cleared by one call, and the returned count is rows deleted rather than the
+table's remaining size.
 
 ---
 
