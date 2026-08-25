@@ -70,6 +70,7 @@ namespace EpicorSvcs
         /// the selling quantity, then master-update.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The internal process steps return the mutated dataset on success
         /// and an error-shaped object on failure. Each read of that dataset is
         /// guarded: when a step returns a shape this method cannot continue
@@ -77,6 +78,15 @@ namespace EpicorSvcs
         /// <c>ErrorMessage</c> (when the response has one) and the response
         /// itself in <c>RawResponse</c>, rather than dereferencing a missing
         /// node.
+        /// </para>
+        /// <para>
+        /// <b>Not idempotent.</b> Each successful call adds another line. Every
+        /// failure carries <see cref="OperationResult{T}.FailureStage"/>:
+        /// <see cref="EpicorSvcs.FailureStage.Uncommitted"/> means no line was
+        /// written and the call can be retried as-is;
+        /// <see cref="EpicorSvcs.FailureStage.Indeterminate"/> means the commit
+        /// was attempted and a line may exist — check before retrying.
+        /// </para>
         /// </remarks>
         /// <param name="orderNum">The order number to add the line to.</param>
         /// <param name="partNum">The part number for the line.</param>
@@ -95,7 +105,7 @@ namespace EpicorSvcs
             // propagate transport/Epicor failures up immediately.
             var newDtl = await GetNewOrderDtlAsync(orderNum, ct).ConfigureAwait(false);
             if (newDtl.IsFailure)
-                return newDtl;
+                return MarkUncommitted(newDtl);
             JObject ds = newDtl.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
@@ -111,14 +121,15 @@ namespace EpicorSvcs
             // instead, carrying the payload the caller needs.
             JArray dtlRows = ds?["ds"]?["OrderDtl"] as JArray;
             if (dtlRows == null || dtlRows.Count == 0)
-                return StepFailure<JObject>(ds, "ChangePartNumMaster", "a ds.OrderDtl row");
+                return MarkUncommitted(
+                    StepFailure<JObject>(ds, "ChangePartNumMaster", "a ds.OrderDtl row"));
 
             JObject dtlRow = dtlRows[0] as JObject;
             JToken custNumToken = dtlRow == null ? null : dtlRow["CustNum"];
             JToken orderQtyToken = dtlRow == null ? null : dtlRow["OrderQty"];
             if (custNumToken == null || orderQtyToken == null)
-                return StepFailure<JObject>(
-                    ds, "ChangePartNumMaster", "CustNum and OrderQty on the ds.OrderDtl row");
+                return MarkUncommitted(StepFailure<JObject>(
+                    ds, "ChangePartNumMaster", "CustNum and OrderQty on the ds.OrderDtl row"));
 
             string custNum = custNumToken.ToString();
             int orderQty = Convert.ToInt32(orderQtyToken);
@@ -131,14 +142,15 @@ namespace EpicorSvcs
             // on a null token.
             JToken qtyParams = ds == null ? null : ds["parameters"];
             if (qtyParams == null)
-                return StepFailure<JObject>(ds, "ChangeSellingQtyMaster", "a parameters envelope");
+                return MarkUncommitted(
+                    StepFailure<JObject>(ds, "ChangeSellingQtyMaster", "a parameters envelope"));
 
             ds = JObject.FromObject(qtyParams);
 
-            // MasterUpdateAsync is now public and returns OperationResult —
-            // its value is the orchestrator's terminal value, so return directly.
-            return await MasterUpdateAsync(
-                ds, custNum, orderNum, "OrderDtl", ct).ConfigureAwait(false);
+            // MasterUpdate is the commit boundary — classify its result so the
+            // caller can tell a rejected line from a lost response.
+            return ClassifyCommit(await MasterUpdateAsync(
+                ds, custNum, orderNum, "OrderDtl", ct).ConfigureAwait(false));
         }
 
         /// <summary>

@@ -29,6 +29,14 @@ namespace EpicorSvcs
         /// cannot continue from, with the response attached to
         /// <c>RawResponse</c>.
         /// </returns>
+        /// <remarks>
+        /// <b>Not idempotent.</b> Each successful call creates a new quote.
+        /// Every failure carries <see cref="OperationResult{T}.FailureStage"/>:
+        /// <see cref="EpicorSvcs.FailureStage.Uncommitted"/> means nothing was
+        /// written and the call can be retried as-is;
+        /// <see cref="EpicorSvcs.FailureStage.Indeterminate"/> means a quote may
+        /// exist — establish whether it does before retrying.
+        /// </remarks>
         public async Task<OperationResult<JObject>> CreateQuoteAsync(
             QuoteInput quote,
             CancellationToken ct = default)
@@ -37,7 +45,7 @@ namespace EpicorSvcs
             // propagate transport/Epicor failures up immediately.
             var newQuote = await GetNewQuoteHedAsync(ct).ConfigureAwait(false);
             if (newQuote.IsFailure)
-                return newQuote;
+                return MarkUncommitted(newQuote);
             JObject ds = newQuote.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
@@ -56,15 +64,15 @@ namespace EpicorSvcs
                 ? null
                 : ds["ds"]["QuoteHed"] as JArray;
             if (hedRows == null || hedRows.Count == 0)
-                return StepFailure<JObject>(
+                return MarkUncommitted(StepFailure<JObject>(
                     ds,
                     "QuoteHedCustomerCustIDAfterChange/ValidateShippingDateBeforeUpdate",
-                    "a ds.QuoteHed row");
+                    "a ds.QuoteHed row"));
 
             JObject hedRow = hedRows[0] as JObject;
             if (hedRow == null)
-                return StepFailure<JObject>(
-                    ds, "QuoteHedCustomerCustIDAfterChange", "a ds.QuoteHed row object");
+                return MarkUncommitted(StepFailure<JObject>(
+                    ds, "QuoteHedCustomerCustIDAfterChange", "a ds.QuoteHed row object"));
 
             hedRow["PONum"] = quote.PONum;
             hedRow["OTSAddress1"] = quote.OTSAddress1;
@@ -76,9 +84,10 @@ namespace EpicorSvcs
             // UpdateAsync is now public and returns OperationResult. Propagate
             // failure; on success, build the orchestrator's custom result
             // shape ({QuoteNum, QuoteObj}) from the saved dataset.
+            // Update is the commit boundary for this orchestrator.
             var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
             if (updated.IsFailure)
-                return updated;
+                return ClassifyCommit(updated);
 
             JObject saved = updated.Value;
 
@@ -90,8 +99,11 @@ namespace EpicorSvcs
                 : saved["ds"]["QuoteHed"][0] == null ? null
                 : saved["ds"]["QuoteHed"][0]["QuoteNum"];
             if (quoteNum == null)
-                return StepFailure<JObject>(
-                    saved, "Update", "QuoteNum on the saved ds.QuoteHed row");
+                // Update succeeded, so a quote was created — this failure is on
+                // the far side of the commit. Indeterminate, not Uncommitted:
+                // retrying would create a second quote.
+                return MarkIndeterminate(StepFailure<JObject>(
+                    saved, "Update", "QuoteNum on the saved ds.QuoteHed row"));
 
             JObject result = new JObject {
                 new JProperty("QuoteNum", quoteNum.ToString()),

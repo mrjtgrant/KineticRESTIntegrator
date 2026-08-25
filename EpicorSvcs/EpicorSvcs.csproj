@@ -13,9 +13,9 @@
     <Description>Strongly typed C# wrappers for Epicor Kinetic Business Objects (BOs) and Business Activity Queries (BAQs). Built on RESTServices.</Description>
     <Company></Company>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
-    <Version>0.6.1</Version>
-    <AssemblyVersion>0.6.1.0</AssemblyVersion>
-    <FileVersion>0.6.1.0</FileVersion>
+    <Version>0.6.2</Version>
+    <AssemblyVersion>0.6.2.0</AssemblyVersion>
+    <FileVersion>0.6.2.0</FileVersion>
 
     <!-- Keep the original ProjectGuid so the .sln reference still resolves -->
     <ProjectGuid>{B3F0BB2A-2325-4177-A8E0-462A86FBBB66}</ProjectGuid>

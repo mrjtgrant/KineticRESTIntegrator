@@ -31,6 +31,14 @@ namespace EpicorSvcs
         /// including a process step that returned a shape this method cannot
         /// continue from, with the response attached to <c>RawResponse</c>.
         /// </returns>
+        /// <remarks>
+        /// <b>Not idempotent.</b> Each successful call creates a new project.
+        /// Every failure carries <see cref="OperationResult{T}.FailureStage"/>:
+        /// <see cref="EpicorSvcs.FailureStage.Uncommitted"/> means nothing was
+        /// written and the call can be retried as-is;
+        /// <see cref="EpicorSvcs.FailureStage.Indeterminate"/> means a project
+        /// may exist — establish whether it does before retrying.
+        /// </remarks>
         public async Task<OperationResult<Project>> CreateProjectAsync(
             string ProjectID,
             DateTime StartDate,
@@ -42,9 +50,9 @@ namespace EpicorSvcs
             // the orchestrator's typed return.
             var newProject = await GetNewProjectAsync(ct).ConfigureAwait(false);
             if (newProject.IsFailure)
-                return OperationResult<Project>.Failure(
+                return MarkUncommitted(OperationResult<Project>.Failure(
                     newProject.ErrorMessage, newProject.StatusCode,
-                    newProject.ResourcePath, newProject.RawResponse);
+                    newProject.ResourcePath, newProject.RawResponse));
             JObject ds = newProject.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
@@ -58,31 +66,34 @@ namespace EpicorSvcs
                 ? null
                 : ds["ds"]["Project"] as JArray;
             if (projectRows == null || projectRows.Count == 0)
-                return StepFailure<Project>(
-                    ds, "OnChangeProjectID/OnChangeStartDate", "a ds.Project row");
+                return MarkUncommitted(StepFailure<Project>(
+                    ds, "OnChangeProjectID/OnChangeStartDate", "a ds.Project row"));
 
             JObject projectRow = projectRows[0] as JObject;
             if (projectRow == null)
-                return StepFailure<Project>(
-                    ds, "OnChangeProjectID", "a ds.Project row object");
+                return MarkUncommitted(StepFailure<Project>(
+                    ds, "OnChangeProjectID", "a ds.Project row object"));
 
             projectRow["Description"] = Description;
 
             // UpdateAsync is now public and returns OperationResult. Propagate
             // failure (re-typed), then extract the typed Project from the
             // saved dataset.
+            // Update is the commit boundary for this orchestrator.
             var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
             if (updated.IsFailure)
-                return OperationResult<Project>.Failure(
+                return ClassifyCommit(OperationResult<Project>.Failure(
                     updated.ErrorMessage, updated.StatusCode,
-                    updated.ResourcePath, updated.RawResponse);
+                    updated.ResourcePath, updated.RawResponse));
 
             // ExtractDto returns default(T) when the table is missing, which
             // would hand the caller a null Project inside a success.
             Project created = updated.Value.ExtractDto<Project>("Project");
             if (created == null)
-                return StepFailure<Project>(
-                    updated.Value, "Update", "a ds.Project row in the saved dataset");
+                // Update succeeded, so a project was created — this failure is
+                // past the commit. Indeterminate, not Uncommitted.
+                return MarkIndeterminate(StepFailure<Project>(
+                    updated.Value, "Update", "a ds.Project row in the saved dataset"));
 
             return OperationResult<Project>.Success(created);
         }

@@ -177,6 +177,29 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Marks a failure whose commit is known to have succeeded, but which
+        /// failed afterwards — so a record exists.
+        /// </summary>
+        /// <remarks>
+        /// The case this exists for: Epicor accepted the write and then
+        /// returned a response the orchestrator could not build its result
+        /// from. The operation failed, but a record was created, so a blind
+        /// retry would create a second one.
+        /// <see cref="FailureStage.Indeterminate"/> is the correct label —
+        /// "establish what exists before retrying" — even though in this
+        /// particular case something definitely does.
+        /// </remarks>
+        /// <typeparam name="T">The result's payload type.</typeparam>
+        /// <param name="result">The result to mark.</param>
+        /// <returns>The same result, marked when it is a failure.</returns>
+        protected internal static OperationResult<T> MarkIndeterminate<T>(OperationResult<T> result)
+        {
+            if (result != null && result.IsFailure)
+                result.FailureStage = FailureStage.Indeterminate;
+            return result;
+        }
+
+        /// <summary>
         /// Classifies the result of an orchestrator's commit call — the one
         /// call that writes to Epicor.
         /// </summary>

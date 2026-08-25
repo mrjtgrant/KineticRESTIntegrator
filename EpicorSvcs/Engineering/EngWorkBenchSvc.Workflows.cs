@@ -129,6 +129,17 @@ namespace EpicorSvcs
         /// the returned dataset did not carry the expected shape. The dataset
         /// as it stood is attached to <c>RawResponse</c>.
         /// </returns>
+        /// <remarks>
+        /// <b>Not idempotent for materials.</b> Each successful call adds the
+        /// supplied materials again. Every failure carries
+        /// <see cref="OperationResult{T}.FailureStage"/>:
+        /// <see cref="EpicorSvcs.FailureStage.Uncommitted"/> means no materials
+        /// were written and the call can be retried as-is — an ECO group
+        /// created earlier in the same call is adopted rather than duplicated;
+        /// <see cref="EpicorSvcs.FailureStage.Indeterminate"/> means a write was
+        /// attempted and its outcome is unknown, so inspect the group before
+        /// retrying.
+        /// </remarks>
         public async Task<OperationResult<JObject>> AddMtlsAsync(
             List<ECOMtlInput> mtls,
             CancellationToken ct = default)
@@ -141,9 +152,11 @@ namespace EpicorSvcs
             if (groupResult.IsFailure)
             {
                 // Group does not exist — try to create it.
+                // GenerateGroup writes — it is a commit in its own right, so a
+                // failure here is classified rather than assumed uncommitted.
                 var generated = await GenerateGroupAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
                 if (generated.IsFailure)
-                    return generated;
+                    return ClassifyCommit(generated);
                 ds = generated.Value;
             }
             else
@@ -159,7 +172,7 @@ namespace EpicorSvcs
 
             var groupAndRev = await GetECOGroupAndECORevAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
             if (groupAndRev.IsFailure)
-                return groupAndRev;
+                return MarkUncommitted(groupAndRev);
             ds = groupAndRev.Value;
 
             // Holds the first failure seen while populating rows. Replaces a
@@ -251,10 +264,15 @@ namespace EpicorSvcs
 
             // A row that could not be populated is a failure, not a success
             // carrying a half-built dataset. The group is unlocked either way.
+            // No materials were written — Update was never reached — so this is
+            // Uncommitted even though an ECO group may have been created by the
+            // GenerateGroup step above. Retrying is safe: the flow adopts an
+            // existing group rather than creating a second one.
             if (failure != null)
-                return failure;
+                return MarkUncommitted(failure);
 
-            return await UpdateAsync(ds, ct).ConfigureAwait(false);
+            // Update is the commit boundary for the materials.
+            return ClassifyCommit(await UpdateAsync(ds, ct).ConfigureAwait(false));
         }
 
         /// <summary>

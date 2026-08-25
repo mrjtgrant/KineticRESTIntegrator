@@ -66,9 +66,14 @@ namespace EpicorSvcs
         /// <para>
         /// <b>Not idempotent.</b> Each call that reaches the commit performs a
         /// distinct inventory movement. Two calls with identical parameters
-        /// move the quantity twice. A caller that retries must first establish,
-        /// from its own records or from Epicor, whether the earlier attempt
-        /// committed.
+        /// move the quantity twice. Every failure carries
+        /// <see cref="OperationResult{T}.FailureStage"/>:
+        /// <see cref="EpicorSvcs.FailureStage.Uncommitted"/> means no stock
+        /// moved and the call can be retried as-is;
+        /// <see cref="EpicorSvcs.FailureStage.Indeterminate"/> means the commit
+        /// was attempted and stock may have moved — establish whether it did
+        /// before retrying. The three business outcomes above are successes, not
+        /// failures, and carry no stage.
         /// </para>
         /// </remarks>
         /// <param name="invTrans">The transfer parameters.</param>
@@ -89,7 +94,7 @@ namespace EpicorSvcs
             // method — propagate transport/Epicor failures up immediately.
             var newTransfer = await GetNewInventoryTransferAsync(invTrans, ct).ConfigureAwait(false);
             if (newTransfer.IsFailure)
-                return newTransfer;
+                return MarkUncommitted(newTransfer);
             JObject ds = newTransfer.Value;
 
             // Internal process steps below return raw JObject. Each read of the
@@ -103,8 +108,8 @@ namespace EpicorSvcs
                 : ds["ds"]["InvTrans"][0] == null ? null
                 : ds["ds"]["InvTrans"][0]["TrackSerialnumbers"];
             if (trackFlag == null)
-                return StepFailure<JObject>(
-                    ds, "ValidatePartNum", "TrackSerialnumbers on the ds.InvTrans row");
+                return MarkUncommitted(StepFailure<JObject>(
+                    ds, "ValidatePartNum", "TrackSerialnumbers on the ds.InvTrans row"));
 
             bool trackSerialNumbers = Convert.ToBoolean(trackFlag);
 
@@ -112,7 +117,7 @@ namespace EpicorSvcs
             {
                 var tracked = await TrackSerialNumberAsync(ds, invTrans, ct).ConfigureAwait(false);
                 if (tracked.IsFailure)
-                    return tracked;
+                    return MarkUncommitted(tracked);
 
                 JObject trackedSerialNums = tracked.Value;
 
@@ -122,8 +127,8 @@ namespace EpicorSvcs
                 // than assume "none missing" and move stock on a guess.
                 JToken missing = trackedSerialNums["MissingSerialNumbers"];
                 if (missing == null)
-                    return StepFailure<JObject>(
-                        trackedSerialNums, "ProcessSelectedSerialNumbers", "MissingSerialNumbers");
+                    return MarkUncommitted(StepFailure<JObject>(
+                        trackedSerialNums, "ProcessSelectedSerialNumbers", "MissingSerialNumbers"));
 
                 if (missing.ToString().Length > 0)
                     return OperationResult<JObject>.Success(trackedSerialNums);
@@ -135,17 +140,17 @@ namespace EpicorSvcs
                     ? null
                     : trackedSerialNums["ds1"]["SelectedSerialNumbers"];
                 if (selected == null)
-                    return StepFailure<JObject>(
+                    return MarkUncommitted(StepFailure<JObject>(
                         trackedSerialNums,
                         "ProcessSelectedSerialNumbers",
-                        "ds1.SelectedSerialNumbers");
+                        "ds1.SelectedSerialNumbers"));
 
                 JArray selectedSerialNumbers = JArray.FromObject(selected);
                 if (selectedSerialNumbers.Count == 0)
-                    return StepFailure<JObject>(
+                    return MarkUncommitted(StepFailure<JObject>(
                         trackedSerialNums,
                         "ProcessSelectedSerialNumbers",
-                        "at least one selected serial number");
+                        "at least one selected serial number"));
 
                 selectedSerialNumbers[0]["RowMod"] = "A";
 
@@ -166,13 +171,15 @@ namespace EpicorSvcs
             // steps above are individually shape-checked rather than relying on
             // one checkpoint to catch all of them.
             if (ds != null && ds["ErrorMessage"] != null)
-                return StepFailure<JObject>(ds, "The bin/quantity change steps");
+                return MarkUncommitted(
+                    StepFailure<JObject>(ds, "The bin/quantity change steps"));
 
             ds = await MasterInventoryBinTestsAsync(ds, invTrans, ct).ConfigureAwait(false);
 
             JToken neqQtyAction = ds == null ? null : ds["pcNeqQtyAction"];
             if (neqQtyAction == null)
-                return StepFailure<JObject>(ds, "MasterInventoryBinTests", "pcNeqQtyAction");
+                return MarkUncommitted(
+                    StepFailure<JObject>(ds, "MasterInventoryBinTests", "pcNeqQtyAction"));
 
             // Master bin tests can block the transfer — surface that dataset
             // as-is so the caller can read pcNeqQtyMessage. This is a business
@@ -185,13 +192,16 @@ namespace EpicorSvcs
             // Pre-commit is the last point at which nothing has been written.
             // Stop here rather than committing on a dataset Epicor rejected.
             if (ds == null || ds["ErrorMessage"] != null)
-                return StepFailure<JObject>(ds, "PreCommitTransfer");
+                // Pre-commit is still preparation — nothing has moved yet.
+                return MarkUncommitted(StepFailure<JObject>(ds, "PreCommitTransfer"));
 
             ds = await CommitTransferAndUpdateHistoryAsync(ds, ct).ConfigureAwait(false);
 
-            // The terminal call: nothing downstream exists to trip on a bad
-            // shape, so evaluate it explicitly instead of asserting success.
-            return ds.ToOperationResult(r => r);
+            // The terminal call and the commit boundary: nothing downstream
+            // exists to trip on a bad shape, so evaluate it explicitly instead
+            // of asserting success, then classify which side of the write a
+            // failure landed on.
+            return ClassifyCommit(ds.ToOperationResult(r => r));
         }
 
         /// <summary>

@@ -126,6 +126,43 @@ namespace KineticRESTIntegrator.Tests
         }
 
         // -----------------------------------------------------------------
+        // MarkIndeterminate — a failure past a commit that is known to have run
+        // -----------------------------------------------------------------
+
+        [Fact]
+        public void MarkIndeterminate_MarksAFailure()
+        {
+            var result = OperationResult<string>.Failure("Saved, but the response had no QuoteNum.");
+
+            EpicorSvc.MarkIndeterminate(result);
+
+            Assert.Equal(FailureStage.Indeterminate, result.FailureStage);
+        }
+
+        [Fact]
+        public void MarkIndeterminate_OverridesAnEarlierMark()
+        {
+            // A guard may mark Uncommitted before the orchestrator learns the
+            // commit had already run; the later, worse label must win.
+            var result = OperationResult<string>.Failure("shape violation", 200);
+            EpicorSvc.MarkUncommitted(result);
+
+            EpicorSvc.MarkIndeterminate(result);
+
+            Assert.Equal(FailureStage.Indeterminate, result.FailureStage);
+        }
+
+        [Fact]
+        public void MarkIndeterminate_LeavesASuccessUnmarked()
+        {
+            var result = OperationResult<string>.Success("ok");
+
+            EpicorSvc.MarkIndeterminate(result);
+
+            Assert.Null(result.FailureStage);
+        }
+
+        // -----------------------------------------------------------------
         // The property's own default
         // -----------------------------------------------------------------
 

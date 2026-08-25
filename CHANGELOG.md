@@ -16,6 +16,32 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.6.2 — 2026-08-25
+
+Extends the commit-boundary vocabulary introduced in 0.6.1 to the remaining five orchestrators, so every multi-step write in the library now reports which side of its commit a failure landed on. Additive — no existing behavior changes.
+
+### Added
+
+- **`FailureStage` on `AddOrderLineAsync`, `MoveInventoryAsync`, `AddMtlsAsync`, `CreateQuoteAsync`, and `CreateProjectAsync`.** Each identifies its commit boundary — `MasterUpdate` for order lines, `CommitTransferAndUpdateHistory` for inventory, `Update` for materials, quotes, and projects — marks every failure before it `Uncommitted`, and classifies the commit's own result. With `CreateOrderAsync` from 0.6.1, all six orchestrators now carry the label.
+
+- **`EpicorSvc.MarkIndeterminate<T>()`.** For the case the other two helpers don't cover: Epicor accepted the write and then returned a response the orchestrator could not build its result from. The operation failed but a record exists, so a blind retry would create a second one. `CreateQuoteAsync` (a saved quote with no `QuoteNum` in the response) and `CreateProjectAsync` (a saved project with no row in the returned dataset) both hit this.
+
+- **Three more `FailureStageTests` cases** covering `MarkIndeterminate`, including that it overrides an earlier `Uncommitted` mark — the worse label must win.
+
+### Notes
+
+Three methods needed judgment rather than the mechanical pattern:
+
+- **`MoveInventoryAsync`** has three documented *business* outcomes that ride on `Success` — `MSG`, `MissingSerialNumbers`, and `pcNeqQtyAction == "stop"`. Those are Epicor declining a well-understood request, not failures, and they carry no stage. Its `PreCommitTransfer` failure is `Uncommitted`: pre-commit is still preparation and no stock has moved.
+
+- **`AddMtlsAsync`** has two write points, not one. `GenerateGroup` creates an ECO group and is a commit in its own right, so a failure there is classified rather than assumed uncommitted. A later failure before `Update` is `Uncommitted` — no materials were written — even though a group may exist from the earlier step. Retrying is safe: the flow adopts an existing group rather than creating a second.
+
+- **`CreateQuoteAsync` and `CreateProjectAsync`** can fail *after* a successful commit, when the saved dataset is missing the field the result is built from. Those are `Indeterminate`, not `Uncommitted`.
+
+### Version
+
+- `EpicorSvcs` 0.6.1 → 0.6.2. `RESTServices` (0.3.1), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.6.1 — 2026-08-25
 
 Adds the commit-boundary vocabulary: a failure now says which side of the write it landed on, so a caller can tell a retry that is safe from one that needs a look first. Additive — nothing existing changes behavior. `CreateOrderAsync` is the reference implementation; the other orchestrators follow in a later change.
