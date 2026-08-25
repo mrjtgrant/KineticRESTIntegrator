@@ -46,9 +46,17 @@ namespace EpicorSvcs
         public int? StatusCode { get; set; }
 
         /// <summary>
-        /// The service path that was called (e.g. <c>Erp.BO.PartSvc/GetByID</c>).
-        /// Useful for logging and debugging which BO triggered the failure.
+        /// The fully-qualified URL the transport called. Populated on success and
+        /// on failure alike.
         /// </summary>
+        /// <remarks>
+        /// Besides naming which BO was reached, the URL's shape is what
+        /// identifies the API version in use: an <c>/api/v1/</c> path is the
+        /// Basic-auth v1 endpoint, and <c>/api/v2/odata/{Company}/</c> is the
+        /// API-key v2 OData endpoint. That distinction matters — OData query
+        /// options (<c>filters</c>, <c>select</c>, <c>top</c>) are honored only
+        /// on v2 and are silently dropped on v1.
+        /// </remarks>
         public string ResourcePath { get; set; }
 
         /// <summary>
@@ -218,11 +226,17 @@ namespace EpicorSvcs
             if (response == null)
                 return OperationResult<T>.Failure("Empty response from Epicor.");
 
+            // The URL the transport called. Present on every response, so it is
+            // read once here and carried on both the success and failure paths —
+            // the endpoint's shape is what tells a caller which API version was
+            // used.
+            string resourcePath = response["resource"] == null ? null : response["resource"].ToString();
+
             string err = response["ErrorMessage"] == null ? null : response["ErrorMessage"].ToString();
             if (!string.IsNullOrEmpty(err))
             {
                 int? status = (int?)response["statusCode"];
-                string resource = response["resource"] == null ? null : response["resource"].ToString();
+                string resource = resourcePath;
 
                 // The transport carries the raw HTTP error body verbatim and stays
                 // vendor-neutral. Parse Epicor's error envelope here, in the Epicor
@@ -260,7 +274,7 @@ namespace EpicorSvcs
             try
             {
                 T value = success(response);
-                return OperationResult<T>.Success(value, response);
+                return OperationResult<T>.Success(value, response, resourcePath);
             }
             catch (Exception ex)
             {

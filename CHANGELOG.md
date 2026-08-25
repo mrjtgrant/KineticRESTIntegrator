@@ -16,6 +16,26 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.7.2 / RESTServices 0.3.2 — 2026-08-25
+
+`ResourcePath` is now populated on success as well as on failure, so every result records the URL the call actually used. The URL is what identifies the API version — an `/api/v1/` path is the Basic-auth v1 endpoint, `/api/v2/odata/{Company}/` is the API-key v2 OData endpoint — and that distinction decides whether OData query options are honored or silently dropped.
+
+### Changed
+
+- **The transport reports the URL it called on every response.** `RESTConnect.RESTCallAsync` attached the `resource` property only when the response carried an `ErrorMessage`, so a successful call left `OperationResult.ResourcePath` null and there was no record of which endpoint had been reached. It is now attached unconditionally. The request `payload` is still attached on failures only — it exists for diagnosis, not for logging every successful write. `RESTServices` — 0.3.2.
+
+- **`ToOperationResult` carries the resource path on both paths.** It read `resource` inside the failure branch; it now reads it once and passes it to `Success(...)` as well as `Failure(...)`.
+
+- **`HandleResponse` preserves the resource path across an unwrap.** Unwrapping a `returnObj` or `parameters` envelope returns the inner object and discarded the transport properties along with it. The resource URL is now copied onto the unwrapped dataset, so the roughly seventy call sites that normalize before converting keep it.
+
+### Notes
+
+No new type, property, or configuration was added for API-version reporting. The endpoint shape already carries the answer, and the fix was to stop dropping it — the alternatives considered (a stamped version field threaded through the transport, or a version argument at all ~128 result-construction sites) were more machinery for information the URL already holds.
+
+### Version
+
+- `EpicorSvcs` 0.7.1 → 0.7.2, `RESTServices` 0.3.1 → 0.3.2. `FileHandling` (0.3.0) and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.7.1 — 2026-08-25
 
 Escapes caller-supplied text in OData `$filter` clauses. A value containing a single quote previously closed the literal early and produced a malformed filter.

@@ -246,12 +246,15 @@ namespace RESTServices
 
             JObject result = await RESTTransactionAsync(resource, payload, ct).ConfigureAwait(false);
 
-            if (result["ErrorMessage"] != null)
-            {
-                result.AddFirst(new JProperty("resource", resource));
-                if (payload != null)
-                    result.AddFirst(new JProperty("payload", payload));
-            }
+            // The URL this call actually used, reported on every response rather
+            // than only on failures. It is the record of which endpoint shape
+            // was reached — for Epicor, an "/api/v1/" path versus an
+            // "/api/v2/odata/{Company}/" one — and it is useful for logging a
+            // successful call, not just diagnosing a failed one.
+            result.AddFirst(new JProperty("resource", resource));
+
+            if (result["ErrorMessage"] != null && payload != null)
+                result.AddFirst(new JProperty("payload", payload));
 
             return result;
         }

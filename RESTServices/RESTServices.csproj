@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net48;net8.0</TargetFrameworks>
@@ -13,9 +13,9 @@
     <Description>Generic REST client library. Provides session, authentication (Basic auth or API key), environment selection, and JSON error handling. Vendor-agnostic.</Description>
     <Company></Company>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
-    <Version>0.3.1</Version>
-    <AssemblyVersion>0.3.1.0</AssemblyVersion>
-    <FileVersion>0.3.1.0</FileVersion>
+    <Version>0.3.2</Version>
+    <AssemblyVersion>0.3.2.0</AssemblyVersion>
+    <FileVersion>0.3.2.0</FileVersion>
 
     <!-- Keep the original ProjectGuid so the .sln reference still resolves -->
     <ProjectGuid>{FDE58B4C-D608-4412-AB9B-07E91748C174}</ProjectGuid>

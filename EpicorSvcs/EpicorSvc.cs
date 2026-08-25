@@ -334,6 +334,14 @@ namespace EpicorSvcs
             else
                 dataset = response;
 
+            // Unwrapping discards the transport's own properties. Carry the
+            // resource URL across so it still reaches OperationResult.
+            if (!ReferenceEquals(dataset, response) && response["resource"] != null
+                && dataset["resource"] == null)
+            {
+                dataset["resource"] = response["resource"];
+            }
+
             return dataset;
         }
 

@@ -10,7 +10,7 @@ The README's [Quick start](README.md#quick-start) covers clone, restore, build. 
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-Expected: <!--TESTS-->149<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
+Expected: <!--TESTS-->154<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
 
 The library multi-targets `net48` and `net8.0`. `dotnet build` produces both target framework outputs from each library project; if you change library code, make sure both targets still compile. Consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`, the test project) remain single-target `net48`.
 
