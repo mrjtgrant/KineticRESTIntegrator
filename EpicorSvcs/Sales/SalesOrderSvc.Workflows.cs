@@ -147,10 +147,44 @@ namespace EpicorSvcs
         /// sold-to contact, stamp the PO number and dates, then master-update.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// As with <see cref="AddOrderLineAsync"/>, reads of an in-flight
         /// dataset are guarded: a process step that returns an error shape
         /// produces a <c>Failure</c> carrying Epicor's <c>ErrorMessage</c>
         /// rather than a <see cref="NullReferenceException"/>.
+        /// </para>
+        /// <para>
+        /// <b>Not idempotent.</b> Each successful call creates a new order;
+        /// two calls with the same <paramref name="CustID"/> and
+        /// <paramref name="PONum"/> produce two orders. Every failure carries
+        /// <see cref="OperationResult{T}.FailureStage"/> so a caller can tell
+        /// which retries are safe:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item><description>
+        ///   <see cref="EpicorSvcs.FailureStage.Uncommitted"/> — nothing was
+        ///   written, either because a step before <c>MasterUpdate</c> failed
+        ///   or because Epicor received the commit and declined it. Retry as-is.
+        ///   </description></item>
+        ///   <item><description>
+        ///   <see cref="EpicorSvcs.FailureStage.Indeterminate"/> — the commit
+        ///   was attempted and the outcome is unknown (a timeout, a dropped
+        ///   connection, a server error). An order may exist. Establish whether
+        ///   it does before retrying; Keri does not deduplicate for you.
+        ///   </description></item>
+        /// </list>
+        /// <example>
+        /// <code>
+        /// var result = await client.SalesOrder.CreateOrderAsync("ACME01", needBy, poNum);
+        /// if (result.IsFailure)
+        /// {
+        ///     if (result.FailureStage == FailureStage.Uncommitted)
+        ///         // nothing was written — safe to retry
+        ///     else
+        ///         // an order may exist — reconcile before retrying
+        /// }
+        /// </code>
+        /// </example>
         /// </remarks>
         /// <param name="CustID">The customer ID the order is for.</param>
         /// <param name="NeedByDate">
@@ -173,10 +207,12 @@ namespace EpicorSvcs
             CancellationToken ct = default)
         {
             // GetNewOrderHedAsync is now public and returns OperationResult —
-            // propagate transport/Epicor failures up immediately.
+            // propagate transport/Epicor failures up immediately. Everything
+            // before MasterUpdate writes nothing, so its failures are marked
+            // Uncommitted and are safe for the caller to retry as-is.
             var newHed = await GetNewOrderHedAsync(ct).ConfigureAwait(false);
             if (newHed.IsFailure)
-                return newHed;
+                return MarkUncommitted(newHed);
             JObject ds = newHed.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
@@ -189,14 +225,14 @@ namespace EpicorSvcs
             // no OrderHed row to stamp.
             JArray hedRows = ds?["ds"]?["OrderHed"] as JArray;
             if (hedRows == null || hedRows.Count == 0)
-                return StepFailure<JObject>(
-                    ds, "ChangeOrderHedCustomerCustID/ChangeSoldToContact", "a ds.OrderHed row");
+                return MarkUncommitted(StepFailure<JObject>(
+                    ds, "ChangeOrderHedCustomerCustID/ChangeSoldToContact", "a ds.OrderHed row"));
 
             JObject hedRow = hedRows[0] as JObject;
             JToken custNumToken = hedRow == null ? null : hedRow["CustNum"];
             if (custNumToken == null)
-                return StepFailure<JObject>(
-                    ds, "ChangeOrderHedCustomerCustID", "CustNum on the ds.OrderHed row");
+                return MarkUncommitted(StepFailure<JObject>(
+                    ds, "ChangeOrderHedCustomerCustID", "CustNum on the ds.OrderHed row"));
 
             hedRow["PONum"] = PONum ?? "";
             hedRow["RequestDate"] = NeedByDate;
@@ -204,10 +240,12 @@ namespace EpicorSvcs
 
             string custNum = custNumToken.ToString();
 
-            // MasterUpdateAsync is now public and returns OperationResult —
-            // its value is the orchestrator's terminal value, so return directly.
-            return await MasterUpdateAsync(
-                ds, custNum, 0, "OrderHed", ct).ConfigureAwait(false);
+            // MasterUpdate is this orchestrator's commit boundary — the one call
+            // that writes. Classify its result so the caller can tell a rejected
+            // order (nothing written, retry freely) from a lost response (an
+            // order may exist; check before retrying).
+            return ClassifyCommit(await MasterUpdateAsync(
+                ds, custNum, 0, "OrderHed", ct).ConfigureAwait(false));
         }
     }
 }

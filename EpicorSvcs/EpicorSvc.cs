@@ -159,6 +159,69 @@ namespace EpicorSvcs
         }
 
         /// <summary>
+        /// Marks a failure as having happened before anything was written.
+        /// </summary>
+        /// <remarks>
+        /// Use for every failure an orchestrator returns from before its commit
+        /// call. Nothing reached Epicor's write path, so the operation can be
+        /// retried as-is. A successful result is returned untouched.
+        /// </remarks>
+        /// <typeparam name="T">The result's payload type.</typeparam>
+        /// <param name="result">The result to mark.</param>
+        /// <returns>The same result, marked when it is a failure.</returns>
+        protected internal static OperationResult<T> MarkUncommitted<T>(OperationResult<T> result)
+        {
+            if (result != null && result.IsFailure)
+                result.FailureStage = FailureStage.Uncommitted;
+            return result;
+        }
+
+        /// <summary>
+        /// Classifies the result of an orchestrator's commit call — the one
+        /// call that writes to Epicor.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// An Epicor HTTP status in the 4xx range means the server received the
+        /// request, processed it, and declined it: nothing was written, so the
+        /// failure is <see cref="FailureStage.Uncommitted"/>. That covers the
+        /// ordinary case — a validation error, a record not found, a rejected
+        /// customer.
+        /// </para>
+        /// <para>
+        /// Anything else is <see cref="FailureStage.Indeterminate"/>: a timeout
+        /// or dropped connection (no status at all), or a 5xx, either of which
+        /// may have occurred after Epicor committed. The classification is
+        /// deliberately pessimistic — an unnecessary reconciliation costs a
+        /// query, a wrong "safe to retry" costs a duplicate record.
+        /// </para>
+        /// <para>
+        /// A timeout cannot be resolved any further. The request may or may not
+        /// have been written, and no information about which survives on this
+        /// side of the connection.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">The result's payload type.</typeparam>
+        /// <param name="result">The commit call's result.</param>
+        /// <returns>The same result, classified when it is a failure.</returns>
+        protected internal static OperationResult<T> ClassifyCommit<T>(OperationResult<T> result)
+        {
+            if (result == null || result.IsSuccess) return result;
+
+            bool epicorAnswered =
+                result.StatusCode.HasValue &&
+                result.StatusCode.Value >= 400 &&
+                result.StatusCode.Value < 500;
+
+            result.FailureStage = epicorAnswered
+                ? FailureStage.Uncommitted
+                : FailureStage.Indeterminate;
+
+            return result;
+        }
+
+
+        /// <summary>
         /// Builds the <c>Failure</c> result for an internal process step that
         /// returned a shape the calling orchestrator cannot continue from.
         /// </summary>

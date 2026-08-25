@@ -16,6 +16,30 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.6.1 — 2026-08-25
+
+Adds the commit-boundary vocabulary: a failure now says which side of the write it landed on, so a caller can tell a retry that is safe from one that needs a look first. Additive — nothing existing changes behavior. `CreateOrderAsync` is the reference implementation; the other orchestrators follow in a later change.
+
+### Added
+
+- **`FailureStage` and `OperationResult<T>.FailureStage`.** Every orchestrator has exactly one commit boundary — the single call that writes to Epicor (`MasterUpdate` for orders, `CommitTransferAndUpdateHistory` for inventory). Which side of it a failure landed on is the most useful fact a caller can have and is not recoverable from the error message. `Uncommitted` means nothing was written and the call can be retried as-is. `Indeterminate` means a commit was attempted and its outcome is unknown, so the caller must establish whether the record exists first. The property is null on success, and null on any method with no commit boundary — reads and single BO wrappers classify nothing.
+
+- **`EpicorSvc.MarkUncommitted<T>()` and `EpicorSvc.ClassifyCommit<T>()`.** `protected internal static` helpers shared by every service. `MarkUncommitted` labels a failure returned from before the commit call. `ClassifyCommit` labels the commit's own result: an Epicor HTTP status in the 4xx range means the server received the request, processed it, and declined it — nothing was written, so `Uncommitted`. Anything else (no status at all, as with a timeout or dropped connection; or a 5xx) is `Indeterminate`, because it may have happened after Epicor committed. The classification is deliberately pessimistic: an unnecessary reconciliation costs a query, a wrong "safe to retry" costs a duplicate record.
+
+- **`SalesOrderSvc.CreateOrderAsync` classifies its failures.** Failures from `GetNewOrderHed`, the `Change*` steps, and the dataset guards are marked `Uncommitted`; the `MasterUpdate` result is passed through `ClassifyCommit`. Its `<remarks>` now state plainly that the method is not idempotent, and show the caller-side branch.
+
+- **`FailureStageTests`.** Offline coverage for both helpers across the 4xx range, 5xx, a status-less timeout, an unexpected status, success, and null.
+
+### Notes
+
+A timeout cannot be classified any further, by anyone. `HttpClient` reports it without saying whether the request was sent, so the information does not exist on this side of the connection. That is the case that produces duplicate records, and it is why `FailureStage` is a label rather than a guarantee.
+
+**Keri does not deduplicate and will not.** It has no store of its own and requires no schema of yours — no UD table, no custom `_c` column, nothing an Epicor admin has to add before the library works. `Indeterminate` tells a caller to check; how they check is their application's decision.
+
+### Version
+
+- `EpicorSvcs` 0.6.0 → 0.6.1. `RESTServices` (0.3.1), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.6.0 — 2026-08-24
 
 Closes the pattern 0.4.2 and 0.5.0 started on: four remaining places where a method asserted an outcome it never established. An audit of all seventeen direct `OperationResult<T>.Success(...)` call sites in the library found these four; the other thirteen are correct — each follows an `IsFailure` check or shapes a value that was already evaluated upstream. **Minor rather than patch:** `TruncateAsync` and `AddMtlsAsync` both change documented runtime behavior.

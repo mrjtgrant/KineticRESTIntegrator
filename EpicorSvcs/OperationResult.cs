@@ -74,6 +74,24 @@ namespace EpicorSvcs
         public string ErrorType { get; set; }
 
         /// <summary>
+        /// Where a failed operation stood relative to its commit — see
+        /// <see cref="EpicorSvcs.FailureStage"/>. Null on success, and null on
+        /// any method with no commit boundary (reads, single BO wrappers).
+        /// </summary>
+        /// <remarks>
+        /// Set by the multi-step orchestrators in <c>*Svc.Workflows.cs</c>.
+        /// <see cref="EpicorSvcs.FailureStage.Uncommitted"/> means nothing was
+        /// written and the call can be retried as-is;
+        /// <see cref="EpicorSvcs.FailureStage.Indeterminate"/> means a commit
+        /// was attempted and its outcome is unknown, so the caller must
+        /// establish whether the record exists before retrying. A null value on
+        /// a failure means the method does not classify — treat it the same as
+        /// <see cref="EpicorSvcs.FailureStage.Indeterminate"/> if you are about
+        /// to retry a write.
+        /// </remarks>
+        public FailureStage? FailureStage { get; set; }
+
+        /// <summary>
         /// The provider correlation id for the failed call, when present — Epicor's
         /// <c>CorrelationId</c>, for matching a failure to a server-side log entry.
         /// Null on success or when none was returned.
