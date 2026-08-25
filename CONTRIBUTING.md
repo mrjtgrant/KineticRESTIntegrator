@@ -214,7 +214,7 @@ Open an issue with:
 
 - What you ran (the call, with arguments redacted if needed)
 - What you expected
-- What happened instead — including the `OperationResult`'s `ErrorMessage`, `StatusCode`, and `ResourcePath` if available
+- What happened instead — including the `OperationResult`'s `ErrorMessage`, `StatusCode`, `ErrorType`, `CorrelationId`, and `ResourcePath`. `ResourcePath` is populated on every Epicor call, and its shape tells us which API version you were on (`/api/v1/` versus `/api/v2/odata/`), which is often the answer. Redact the company code and any filter values in the URL if they are sensitive
 - Your Epicor version, if you know it (the upper-right corner of the Epicor client usually shows it)
 - Whether the issue reproduces against pilot or only against your specific config
 

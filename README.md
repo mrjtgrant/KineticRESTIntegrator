@@ -224,9 +224,12 @@ On a failure, `Value` returns `default(T)` rather than throwing — so the check
 
 The `OperationResult` also carries:
 - `StatusCode` — HTTP status (when applicable)
-- `ResourcePath` — which BO path was called (useful for logging)
+- `ResourcePath` — the full URL the call used, on success and failure alike. Besides naming which BO was reached, its shape identifies the API version: `/api/v1/` is the Basic-auth v1 endpoint, `/api/v2/odata/{Company}/` is the API-key v2 OData endpoint. That matters, because OData query options (`filters`, `select`, `top`, `additionalColumns`) are honored only on v2 and are silently dropped on v1. Note the URL also carries the company code and any `$filter` you passed, so decide deliberately what your logs keep.
 - `RawResponse` — the underlying `JObject`, an escape hatch for columns the typed DTO doesn't model
 - `Exception` — the underlying exception on transport-level failures
+- `ErrorType` — Epicor's fully-qualified exception class (e.g. `Ice.Common.RecordNotFoundException`). Branch on this rather than matching `ErrorMessage` text
+- `CorrelationId` — Epicor's per-call id, for matching a failure to a server-side log entry
+- `FailureStage` — on a failure from a multi-step orchestrator, which side of the commit it landed on: `Uncommitted` means nothing was written and the call can be retried as-is; `Indeterminate` means a commit was attempted and a record may exist, so establish what exists before retrying. Null on success, and null on any method without a commit boundary. See [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md#deciding-whether-a-failed-orchestrator-is-safe-to-retry)
 
 ### Naming conventions
 
