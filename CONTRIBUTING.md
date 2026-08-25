@@ -10,7 +10,7 @@ The README's [Quick start](README.md#quick-start) covers clone, restore, build. 
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-Expected: 109 tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
+Expected: <!--TESTS-->120<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
 
 The library multi-targets `net48` and `net8.0`. `dotnet build` produces both target framework outputs from each library project; if you change library code, make sure both targets still compile. Consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`, the test project) remain single-target `net48`.
 
@@ -20,9 +20,9 @@ The library multi-targets `net48` and `net8.0`. `dotnet build` produces both tar
 
 The single most important rule:
 
-> **`App.config` is gitignored. Don't remove the gitignore rule. Don't commit `App.config` directly. Add any new settings to the single template, `EpicorSvcDemo/App.config.template`.**
+> **`App.config` is gitignored. Don't remove the gitignore rule. Don't commit `App.config` directly. Add any new settings to the single template, `KeriConfigurator/App.config.template`.**
 
-`App.config` holds credentials, internal URLs, and SMTP host details. A committed `App.config` exposes all three. The repo's `.gitignore` excludes every `App.config` (via `**/App.config`) while keeping every `*.template`. The startup project's config (`EpicorSvcDemo/App.config`) is the only one read at runtime, and it holds both the Epicor connection and email/SMTP sections. There is a single template, `EpicorSvcDemo/App.config.template`; add any new setting there. If you add another startup or consumer project that needs its own config, the glob already ignores its `App.config` too.
+`App.config` holds credentials, internal URLs, and SMTP host details. A committed `App.config` exposes all three. The repo's `.gitignore` excludes every `App.config` (via `**/App.config`) while keeping every `*.template`. Configuration is owned by **KeriConfigurator**, the composition root: `KeriConfigurator/App.config` is the one config file, holding both the Epicor connection and the email/SMTP sections, and the solution's executables (`EpicorSvcDemo`, `EpicorSvcPOCs`) share it through an MSBuild `<AppConfig>` link rather than carrying their own. There is a single template, `KeriConfigurator/App.config.template`; add any new setting there. See [CONFIGURATION.md](CONFIGURATION.md) for the full picture. If you add another consumer project that needs its own config, the glob already ignores its `App.config` too.
 
 The same logic extends:
 
@@ -59,6 +59,23 @@ Every service method:
 - Uses `OperationResultExtensions.ToOperationResult` and `ExtractDto`/`ExtractDtoList`/`ExtractValueList` to convert raw `JObject` responses
 
 The pattern is consistent enough that the existing services are reasonable templates — pick a similar service (read-only? write? orchestrator?) and mirror its shape.
+
+### Entity-set reads: `$select` and `additionalColumns`
+
+A table-name read (`PartsAsync`, `POesAsync`, …) builds its OData `$select` from the row DTO, not a hand-maintained column list. Follow the established shape:
+
+- **Default the `$select` to `SelectFor<T>()`.** The base-class helper reflects the DTO's public properties — skipping the `[JsonExtensionData]` overflow and `[JsonIgnore]` members, honoring `[JsonProperty]` names — and caches the result per type. Because the request mirrors the DTO, every typed property on the returned rows is populated; there is no separate subset to drift out of sync with the type.
+- **Expose two column knobs.** Accept `List<string> select = null` (a full override — when non-null it replaces the default entirely) and `List<string> additionalColumns = null` (appended to the base set, for `_c` or UD columns the DTO doesn't model — they arrive in `ExtraData`). The body is the same in every service:
+
+```csharp
+List<string> cols = select ?? SelectFor<T>();
+if (additionalColumns != null && additionalColumns.Count > 0)
+    cols = cols.Concat(additionalColumns).ToList();
+```
+
+Never mutate the caller's `select` list — `Concat(...).ToList()` builds a new one.
+
+These are OData query options, so they take effect only on the **v2 OData** endpoint (API-key sessions); a Basic/v1 session ignores them and returns the full collection. Note that limitation on the method's XML doc, as the existing services do.
 
 ### File layout for services
 
@@ -183,6 +200,7 @@ The convention exists so a contributor or user running the POCs against a real e
 ## Pull requests
 
 - One thing per PR. A bug fix, a feature, a doc update — not a mix.
+- **Propose before you expand scope.** If you spot a second bug while fixing the first, or a refactor that would make the change cleaner, say so in the issue or the PR description — don't fold it into the same PR. Surfacing what you found is welcome and useful; deciding on the maintainer's behalf that it belongs in this change is not. A PR that arrives larger than what was discussed is harder to review, and "I mentioned it in the description" doesn't make it easier to decline. The same applies to work drafted with an AI assistant: keeping a change to what was agreed is the contributor's job, not the reviewer's.
 - Short description: what changed, and why. Link the issue if there is one.
 - The build must pass and the tests must stay green. CI may be added in a future release ([CLEANUP_RECOMMENDATIONS.md](CLEANUP_RECOMMENDATIONS.md) #2); in the meantime, please run `dotnet build` and `dotnet test` locally before opening the PR.
 - If you change a public API, update the relevant XML doc and any examples in `EXAMPLES_EPICOR.md` that reference it.

@@ -14,21 +14,23 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
-      # The demo's CreateAppConfigFromTemplate target fails the build once on a
-      # fresh checkout that has no App.config (by design, to make a developer
-      # fill it in). CI is always a fresh checkout, so seed a placeholder config
-      # first — the target then sees App.config already exists and skips. The
-      # offline test suite needs no real connection values.
+      # KeriConfigurator owns the solution's single App.config (the consumer
+      # exes link to it via <AppConfig>). Its CreateAppConfigFromTemplate target
+      # seeds the file on a fresh checkout and then fails the build once, by
+      # design, so a developer fills it in. CI is always a fresh checkout, so
+      # seed a placeholder first — the target's !Exists('App.config') condition
+      # is then false and it is skipped. The offline test suite needs no real
+      # connection values.
       - name: Seed placeholder App.config
         shell: pwsh
-        run: Copy-Item EpicorSvcDemo/App.config.template EpicorSvcDemo/App.config -Force
+        run: Copy-Item KeriConfigurator/App.config.template KeriConfigurator/App.config -Force
 
       - name: Restore
         run: dotnet restore KineticRESTIntegrator.sln

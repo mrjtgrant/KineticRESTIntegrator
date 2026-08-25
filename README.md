@@ -40,10 +40,10 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 | Project | Version |
 |---|---|
-| `EpicorSvcs` | 0.4.1 |
-| `RESTServices` | 0.3.1 |
-| `FileHandling` | 0.3.0 |
-| `KeriConfigurator` | 0.5.0 |
+| `EpicorSvcs` | <!--VER:EpicorSvcs-->0.6.0<!--/VER--> |
+| `RESTServices` | <!--VER:RESTServices-->0.3.1<!--/VER--> |
+| `FileHandling` | <!--VER:FileHandling-->0.3.0<!--/VER--> |
+| `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
 
 All the Epicor service wrappers are converted, and the libraries are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The library builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
 
@@ -451,7 +451,7 @@ The library has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->118<!--/TESTS--> tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->120<!--/TESTS--> tests, all green.
 
 Test Explorer in Visual Studio also discovers and runs them.
 

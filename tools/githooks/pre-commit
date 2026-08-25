@@ -1,17 +1,19 @@
 #!/bin/sh
-# pre-commit: keep the README test count in sync with the test sources.
+# pre-commit: keep the generated values in README.md and CONTRIBUTING.md in sync
+# with the source — the test count, and each project's version.
 #
-# Derives the count by scanning the test project for [Fact]/[Theory]
-# (no build required) and rewrites the <!--TESTS-->N<!--/TESTS--> span in
-# README.md. To avoid pulling unrelated edits into a commit, README is only
-# auto-staged when it has no other unstaged changes. This hook never blocks
-# a commit; at worst it prints a warning.
+# Derives the test count by scanning the test project for [Fact]/[InlineData]
+# (no build required) and reads each project's version from its .csproj, then
+# rewrites the <!--TESTS-->N<!--/TESTS--> and <!--VER:Project-->X.Y.Z<!--/VER-->
+# spans. To avoid pulling unrelated edits into a commit, a document is only
+# auto-staged when it has no other unstaged changes. This hook never blocks a
+# commit; at worst it prints a warning.
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 cd "$ROOT" 2>/dev/null || exit 0
 
 SCRIPT="tools/update-readme-counts.ps1"
-[ -f "$SCRIPT" ] || { echo "pre-commit: $SCRIPT not found; skipping test-count sync."; exit 0; }
+[ -f "$SCRIPT" ] || { echo "pre-commit: $SCRIPT not found; skipping doc sync."; exit 0; }
 
 # Find a PowerShell. If none (e.g. committing from a non-Windows shell),
 # skip quietly rather than blocking the commit.
@@ -19,18 +21,29 @@ PS=""
 for cand in powershell.exe pwsh.exe pwsh; do
     command -v "$cand" >/dev/null 2>&1 && { PS="$cand"; break; }
 done
-[ -n "$PS" ] || { echo "pre-commit: no PowerShell found; skipping test-count sync."; exit 0; }
+[ -n "$PS" ] || { echo "pre-commit: no PowerShell found; skipping doc sync."; exit 0; }
 
-if git diff --quiet -- README.md; then
-    # README has no unstaged changes: safe to update + stage (only the
-    # count span changes).
-    "$PS" -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT" && git add README.md
+DOCS="README.md CONTRIBUTING.md"
+
+# Documents that are clean apart from the generated spans can be updated and
+# staged. If any target has unstaged edits, updating it would sweep those into
+# the commit — so verify only and warn instead.
+DIRTY=""
+for doc in $DOCS; do
+    [ -f "$doc" ] || continue
+    git diff --quiet -- "$doc" || DIRTY="$DIRTY $doc"
+done
+
+if [ -z "$DIRTY" ]; then
+    if "$PS" -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT"; then
+        for doc in $DOCS; do
+            [ -f "$doc" ] && git add "$doc"
+        done
+    fi
 else
-    # README has unstaged edits: don't auto-stage (would sweep them in).
-    # Verify only; warn if the count is stale.
     "$PS" -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT" -Check >/dev/null 2>&1 || {
-        echo "pre-commit: README has unstaged edits, so the test count was NOT updated."
-        echo "            Run '$PS -File $SCRIPT' and stage README to refresh it."
+        echo "pre-commit: unstaged edits in$DIRTY, so generated doc values were NOT updated."
+        echo "            Run '$PS -File $SCRIPT' and stage the docs to refresh them."
     }
 fi
 
