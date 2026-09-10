@@ -163,3 +163,6 @@ CLAUDE_CONTEXT.md
 
 # Local-only MSBuild extensions (per-developer DLL-copy destinations, etc.)
 Local.targets
+
+# Files delivered by Claude, not part of the source tree
+Claude outputs/
