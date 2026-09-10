@@ -10,7 +10,7 @@ The README's [Quick start](README.md#quick-start) covers clone, restore, build. 
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-Expected: <!--TESTS-->154<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
+Expected: <!--TESTS-->197<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
 
 The library multi-targets `net48` and `net8.0`. `dotnet build` produces both target framework outputs from each library project; if you change library code, make sure both targets still compile. Consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`, the test project) remain single-target `net48`.
 
@@ -30,6 +30,8 @@ The same logic extends:
 - **No internal URLs.** Use the `company-live.example.com/server` pattern (or any other `example.com`-anchored stub) when an example needs a URL.
 - **No real email addresses, customer IDs, part numbers, vendor names, or other identifiable production data** in examples, tests, or POCs. The library is intended to be open-source; whatever lands here is public forever once pushed.
 
+Use the established placeholders so it's obvious at a glance that a value is fake: **`EPIC01`** for a company code (the primary one, used throughout the README and CHANGELOG), with `DEMO01` and `TESTCO` as alternates; **`ACME01`**, **`ACME-MFG`**, and **`TESTCUST`** for customer and vendor IDs. This rule exists because a real company code once shipped in test data and had to be sanitized after the fact.
+
 If you accidentally commit any of the above, a force-push to overwrite the commit isn't enough — assume the secret is compromised and rotate it.
 
 ---
@@ -44,6 +46,7 @@ When adding a new service or method, the names follow Epicor's. A reader who kno
 
 - **The class name matches the last segment of the Epicor service path.** `Erp.BO.PartSvc` → `PartSvc`. `Erp.BO.SalesOrderSvc` → `SalesOrderSvc`. No prefix, no suffix.
 - **A direct method wrapper matches the Epicor method name, with `Async` appended.** `Erp.BO.PartSvc/GetByID` → `PartSvc.GetByIDAsync`. `Erp.BO.PartSvc/DuplicatePart` → `PartSvc.DuplicatePartAsync`. The OData entity-set pattern works the same way — `Erp.BO.PartSvc/Parts` → `PartSvc.PartsAsync`.
+- **Always confirm the actual entity-set name against Epicor's REST help.** Epicor uses awkward plurals the convention still requires us to match — `JobEntries` for `JobHead` rows, `POes` for `POHeader` rows. Inferring the name from the pattern rather than checking produces an inconsistency that ships as part of the public API.
 - **Orchestrators are named for what they accomplish.** A method in `*Svc.Workflows.cs` composes multiple BO calls and has no single Epicor counterpart, so there is no name to mirror. Use a verb-phrase name that reads as the intent: `ChangePartUnitPriceAsync`, `GetNewPartRevAsync`, `AddMtlsAsync`. A reader should know roughly what the method does without opening it.
 
 The single documented architectural exception is `UDTableSvc`, which parameterizes over Epicor's per-table UD services (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`, etc.) rather than wrapping each as its own class. Don't generalize like this for any new service without discussion — `UDTableSvc` exists because the UD-table interface is uniform across 30+ services, which is a special case. See [EXAMPLES_EPICOR.md — Finding your way around `EpicorSvcs`](EXAMPLES_EPICOR.md#1-finding-your-way-around-epicorsvcs) for the user-facing version of these rules, including the worked mapping tables.
@@ -88,6 +91,12 @@ Both files declare `public partial class XxxSvc`. The split is for contributors;
 
 Whether a new method belongs in `*Svc.cs` or `*Svc.Workflows.cs` follows from its naming (above): a method named after an Epicor BO method belongs in `*Svc.cs`; a method named for an intent (and composing multiple BO calls) belongs in `*Svc.Workflows.cs`.
 
+Where those files sit:
+
+- **Service files are grouped into subfolders by domain** — `Sales/`, `Engineering/`, `Production/`, `Purchasing/`, `Inventory/`, `MasterData/`, `Platform/`, `AR/`. A new service goes into whichever fits; if none do, a new single-service folder is acceptable (`Production/` began as just `JobEntrySvc`, `Purchasing/` as just `POSvc`).
+- **DTOs are flat in `EpicorSvcs/Dtos/`.** Every typed DTO lives in that one folder regardless of which service consumes it. No subfolders.
+- **Top-level concept files** — `EpicorSvc.cs`, `EpicorClient.cs`, `OperationResult.cs`, `ODataFilter.cs`, `FailureStage.cs` — sit at the root of `EpicorSvcs/`. The one exception is `EpicorRESTSessionKey.cs`, which lives under `Dtos/` but is conceptually top-level; the README's layout tree lists it at the top level with a note about where it actually is.
+
 ### Public methods vs internal helpers
 
 Not every method on a service is part of the public API. Methods are classified by *audience*:
@@ -98,6 +107,24 @@ Not every method on a service is part of the public API. Methods are classified 
 The entry point for any multi-step operation is the **orchestrator** in `*Svc.Workflows.cs` (`AddMtlsAsync`, `MoveInventoryAsync`, `NewOrderAsync`, …). Orchestrators are always `public`, always return `OperationResult<T>`, and own the sequencing — get a template, populate it, run the required `OnChange*`/process steps, persist through `Update`/`MasterUpdate`. From a caller's perspective, the orchestrator *is* the operation.
 
 This split keeps the public surface small and consistent: every public method either returns data, requests a template, or persists a write — no half-step operations sitting next to whole-step ones. When you add an orchestrator, keep its internal process-steps `internal`.
+
+### Design decisions already settled
+
+These were decided deliberately. A change proposal that reverses one needs to argue against the reasoning, not just prefer something else.
+
+**Session types.** `RESTSessionKey` lives in the transport and is vendor-neutral. `EpicorRESTSessionKey` (in `EpicorSvcs.Dtos`) is the Epicor subclass and the one that carries `Company`. Programmatic constructors throughout `EpicorSvcs` take `EpicorRESTSessionKey`; a non-Epicor REST API uses the bare `RESTSessionKey`.
+
+**Authentication — read this carefully, it gets misdescribed.** The transport is permissive: it sends whatever credentials the `RESTAuthenticationObject` carries. `Username`/`Userkey` produce a Basic `Authorization` header; `ApiKey` produces a separate header (default `X-API-Key`); `BearerToken` takes the `Authorization` header instead of Basic. They are independent knobs.
+
+**Epicor specifically** requires `Username` and `Userkey` *always*. Its v1 endpoints (URL shape `/api/v1/`) take Basic only; its v2 OData endpoints (`/api/v2/odata/{Company}/`) take Basic **plus** the API key — both, not either. Setting `ApiKey` is what selects the v2 URL shape; it does not "switch from Basic to API-key auth." Don't reason about this from analogy to other REST APIs.
+
+**`UDXSvc` is the only naming exception**, because it parameterizes over Epicor's 30-plus per-table UD services rather than wrapping each as its own class. Don't generalize the pattern to a new service without discussion.
+
+**No leading-underscore method names.** An earlier pass removed every `_FooAsync`-style method from the public surface. If a method needs a hint that it's internal or advanced, make it `internal` — don't prefix it.
+
+**Custom columns flow through `ExtraData`.** Every Epicor-table DTO carries `[JsonExtensionData] public IDictionary<string, JToken> ExtraData`, and installation-specific `_c` columns round-trip through it in both directions. `RawResponse` remains the escape hatch for data outside the row's own table — other tables in a multi-table response, or the wide `GetByID` dataset.
+
+**UD-row company resolution.** `UDRow.Company` is a real property. Left empty, `UDXSvc.UpdateAsync` falls back to the session's company through a `ResolveCompany` helper; multi-company shops set it per row. Don't try to default it on the property getter — the DTO can't see the session, and making it session-aware would couple a DTO to runtime state.
 
 ### The dataset envelope (`ds`)
 
@@ -159,6 +186,31 @@ Typed DTOs live in `EpicorSvcs/Dtos/` (Epicor business-object models) and `FileH
 ### XML doc comments
 
 Every public method, property, class, and DTO carries `/// <summary>` documentation. Include `<remarks>`, `<example>`, `<param>`, `<returns>` where they add real information. Skip them where they'd just restate the obvious — but err on the side of documenting.
+
+### Documentation style
+
+**Match the existing voice.** The docs are concise and opinionated and assume an intelligent reader. They don't over-explain, they don't decorate with emoji, and headers stay flat where they can.
+
+**Code in the docs has to compile.** Snippets in `README.md`, `EXAMPLES_EPICOR.md` and the rest should build with the obvious `using` statements implied. No pseudo-code, no "you get the idea" placeholders.
+
+**Changelog entries are honest.** `Keep a Changelog` format: `### Added` for new public API, `### Changed` for breaking changes, `### Fixed` for bug fixes — including bugs introduced earlier in the same pre-1.0 cycle — and `### Removed` for deletions, with a migration example. Say what a change actually does to a caller, not just what was written.
+
+---
+
+## Adding a new service
+
+Recent additions have settled into a consistent first-cut shape. The first commit for a new Epicor service wrapper should:
+
+- **Declare it as a `partial class`** even when there's only one file. The partial declaration documents intent — orchestrators land later in a `*Svc.Workflows.cs` companion — and avoids a breaking declaration change.
+- **Include OData entity-set wrappers** for the practical-core tables the service exposes, each taking `filters`, `select`, `additionalColumns`, `top`, and `ct`.
+- **Include a `GetByIDAsync` wrapper** for the wide multi-table dataset. It returns raw `JObject` rather than a DTO, because the dataset *is* the response — callers materialize rows off `Value["ds"][tableName]`.
+- **Include `GetNew*` template-fetchers** for each writable shape the BO exposes (`GetNewPOHeader`, `GetNewPODetail`, `GetNewPORel`), returning raw `JObject` for the same reason.
+- **Add auto-numbering only where Epicor exposes a discrete `GetNext*` action.** `JobEntrySvc` has a separate `GetNextJobNum` that needs its own wrapper and carries a side effect — it advances the sequence, leaving a gap if you don't then create the record. Other services auto-number inside the create flow when the key is left at `0`; document that in the relevant `GetNew*` method's `<remarks>` instead.
+- **Follow the practical-core DTO pattern.** Model the columns every install has. Omit cost-rollup variants (`TLA`/`TLE`/`LLA`/`LLE` on job tables, `Doc*` and `Rpt1*`–`Rpt3*` multi-currency variants on PO tables), emissions-tracking (`Carbon*`) and other narrow column groups — they stay reachable through `ExtraData`. Match Epicor's exact JSON property names including its casing quirks (`PODetail.PONUM` is all-caps while `POHeader.PONum` and `PORel.PONum` are mixed) — that's Epicor's inconsistency, and the DTO must match it to deserialize.
+- **Integrate into `EpicorClient.cs`** with a backing field, a lazily-constructed property under the appropriate region, and a dispose call.
+- **Add a `### Added` entry to `CHANGELOG.md`** describing the shipped surface plainly: which entity-set wrappers, which action wrappers, which DTOs, and what was deliberately left out.
+- **Defer** the write primitive (`UpdateAsync` or whatever Epicor names it), orchestrators, and the wider tables that appear in the `GetByID` dataset but don't need their own wrapper. Note them in the changelog entry as intentionally not in the first cut, and on the partial-class declaration as ready to host a `*Svc.Workflows.cs`.
+- **Defer the README and `CLEANUP_RECOMMENDATIONS.md` updates** to a separate follow-up commit — small, low-risk, and a natural verification step once the service has shipped.
 
 ---
 
