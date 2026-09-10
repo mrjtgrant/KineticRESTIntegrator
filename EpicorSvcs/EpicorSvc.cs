@@ -168,12 +168,17 @@ namespace EpicorSvcs
         /// malformed <c>$filter</c> that Epicor rejects or, worse, misreads.
         /// Every filter clause built from caller-supplied text must pass
         /// through this.
+        /// <para>
+        /// Delegates to <see cref="ODataFilter.Escape"/>, which is public — that
+        /// is the entry point for a consumer building a clause of their own, and
+        /// <see cref="ODataFilter"/> can usually build the whole clause instead.
+        /// </para>
         /// </remarks>
         /// <param name="value">The raw value. Null is treated as empty.</param>
         /// <returns>The value with single quotes doubled, without the enclosing quotes.</returns>
         protected internal static string EscapeODataLiteral(string value)
         {
-            return value == null ? string.Empty : value.Replace("'", "''");
+            return ODataFilter.Escape(value);
         }
 
         /// <summary>

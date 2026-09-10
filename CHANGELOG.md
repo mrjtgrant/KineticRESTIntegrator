@@ -16,6 +16,36 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.7.3 — 2026-09-10
+
+Adds `ODataFilter`, a clause builder for the `filters` parameter. Values travel as their own argument, so the library escapes them rather than the caller remembering to. Purely additive — every hand-written filter string keeps working exactly as before.
+
+### Added
+
+- **`ODataFilter` — OData `$filter` clause construction.** `Eq`, `Ne`, `Gt`, `Ge`, `Lt`, `Le`, `IsNull`, `IsNotNull`, `Contains`, `StartsWith`, `EndsWith`, `EqualsIgnoreCase`, `ContainsIgnoreCase`, `In`, `And`, `Or`, `Not`, plus the primitives `Field`, `Literal`, `Raw` and `Escape`. Every method returns a plain clause string, so it drops into the existing `filters: List<string>` parameter with no change to any service — the services already join that list with `and`.
+
+  The reason it exists: `filters` takes raw OData, which means a value interpolated into a clause by the caller is syntax as much as data. A value containing an apostrophe closes the literal early, and a crafted value can widen what the filter matches — the same shape as SQL injection, and unreachable by the library once the string has been assembled. Passing the field and the value separately is what lets the escaping happen inside Keri.
+
+  `Or` parenthesizes, so an alternative dropped into the `and`-joined `filters` list cannot leak precedence into the surrounding clauses. `In` expands to an `or` chain rather than OData's `in` operator, so it does not depend on which dialect the endpoint implements. Field references are validated — an identifier, or identifiers joined by `/` for a navigation path such as `Customer/CustID` — because a field name is syntax that escaping cannot make safe. Numbers use the invariant culture, so a machine set to a comma decimal separator still emits `1.5`. An unsupported type throws rather than falling back to `ToString()`, since a silently stringified value produces a filter that looks valid and matches nothing.
+
+  This escapes; it does not validate. Whether a value is a plausible PO number remains the application's question to answer.
+
+- **`ODataFilterTests`** — 43 offline cases covering each operator, every supported type, the crafted-value case, field-reference rejection, composition and nesting, and decimal formatting under a comma-decimal culture.
+
+### Changed
+
+- **`EpicorSvc.EscapeODataLiteral()` delegates to `ODataFilter.Escape()`.** Same behavior, one implementation. The helper stays `protected internal static` so the eight internal call sites from 0.7.1 are untouched; `ODataFilter.Escape` is the public entry point.
+
+### Notes
+
+A `DateTime` whose `Kind` is `Unspecified` — what `DateTime.Parse("2026-01-15")` produces — is treated as UTC, not local. Pass a `DateTimeOffset` where the offset matters.
+
+Dates, GUIDs and the `contains` / `startswith` / `endswith` functions are emitted in their OData v4 forms. Epicor's v2 endpoint is v4, so this should be correct, but it has not yet been confirmed against a live install — worth one filtered call before relying on a date filter.
+
+### Version
+
+- `EpicorSvcs` 0.7.2 → 0.7.3. `RESTServices` (0.3.2), `FileHandling` (0.3.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.7.2 / RESTServices 0.3.2 — 2026-08-25
 
 `ResourcePath` is now populated on success as well as on failure, so every result records the URL the call actually used. The URL is what identifies the API version — an `/api/v1/` path is the Basic-auth v1 endpoint, `/api/v2/odata/{Company}/` is the API-key v2 OData endpoint — and that distinction decides whether OData query options are honored or silently dropped.
