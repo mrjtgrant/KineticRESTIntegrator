@@ -40,9 +40,9 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 | Project | Version |
 |---|---|
-| `EpicorSvcs` | <!--VER:EpicorSvcs-->0.7.3<!--/VER--> |
-| `RESTServices` | <!--VER:RESTServices-->0.3.2<!--/VER--> |
-| `FileHandling` | <!--VER:FileHandling-->0.3.0<!--/VER--> |
+| `EpicorSvcs` | <!--VER:EpicorSvcs-->0.7.4<!--/VER--> |
+| `RESTServices` | <!--VER:RESTServices-->0.3.3<!--/VER--> |
+| `FileHandling` | <!--VER:FileHandling-->0.3.1<!--/VER--> |
 | `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
 
 All the Epicor service wrappers are converted, and the libraries are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The library builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.

@@ -16,6 +16,28 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## EpicorSvcs 0.7.4 / RESTServices 0.3.3 / FileHandling 0.3.1 — 2026-09-10
+
+Adds the NuGet package metadata the three library projects were missing. No code changed; the version bumps mark that the produced artifact differs.
+
+### Added
+
+- **Package metadata on `RESTServices`, `EpicorSvcs`, and `FileHandling`.** `PackageId`, `PackageLicenseExpression`, `PackageProjectUrl`, `RepositoryUrl`, `RepositoryType`, `PackageTags`, `PackageReadmeFile`, and `PackageRequireLicenseAcceptance`, plus `Authors` and a filled-in `Company` (both were empty). Each project also packs the repository README so a gallery page has content.
+
+  The one that matters is `PackageLicenseExpression`. Without it `dotnet pack` produces an artifact carrying **no declared license at all**, regardless of what `LICENSE` says at the repository root — which would have quietly undone the decision to license under Apache 2.0.
+
+- **Package identifiers follow the naming `CLEANUP_RECOMMENDATIONS.md` proposed:** `Keri.RestServices`, `Keri.Epicor`, `Keri.FileHandling`. The assembly names are unchanged. The default identifier would have been the assembly name — `RESTServices` and `FileHandling` are far too generic to claim on a public feed, and neither says what the package is.
+
+### Notes
+
+Nothing is published yet and no feed has been chosen. This makes the projects *packable correctly* when that decision is made; it does not make it.
+
+The executables (`KeriConfigurator`, `EpicorSvcDemo`, `EpicorSvcPOCs`) carry no package metadata and are not marked `IsPackable=false`, so a solution-wide `dotnet pack` would still emit packages for them. Worth setting before any real packing run.
+
+### Version
+
+- `EpicorSvcs` 0.7.3 → 0.7.4, `RESTServices` 0.3.2 → 0.3.3, `FileHandling` 0.3.0 → 0.3.1. `KeriConfigurator` (0.5.0) is unchanged.
+
 ## EpicorSvcs 0.7.3 — 2026-09-10
 
 Adds `ODataFilter`, a clause builder for the `filters` parameter. Values travel as their own argument, so the library escapes them rather than the caller remembering to. Purely additive — every hand-written filter string keeps working exactly as before.
