@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
@@ -12,33 +12,52 @@ namespace FileHandling
 {
     public static class FileProcessing
     {
+        /// <summary>
+        /// Sentinel value in a header map that drops a column entirely rather
+        /// than renaming it. Honored by both the CSV writer
+        /// (<see cref="ConvertJArrayToCSV"/>) and the Excel writer
+        /// (<see cref="ExcelWriter.CreateExcelFileFromDT"/>).
+        /// </summary>
+        public const string RemoveColumnToken = "REMOVE_COLUMN";
+
+        // A CSV field containing any of these has to be quoted per RFC 4180.
+        private static readonly char[] CsvQuoteTriggers = { ',', '"', '\r', '\n' };
+
         public static List<string> EmailReport(EMailMeta mailMeta, SmtpSettings smtp)
         {
             var steplist = new List<string> { "Emailer Start" };
             try
             {
                 steplist.Add(1.ToString() + " EMAIL Setup");
+
+                // Email configuration is supplied by the caller (the composition
+                // root), not read from config here — FileHandling owns no config.
+                //
+                // Resolve it onto a private copy for THIS message. The caller
+                // builds one SmtpSettings and reuses it across sends, so writing
+                // a per-message host override back into their instance would
+                // repoint every later call. Copy, then override the copy.
+                SmtpSettings effectiveSmtp = ResolveSmtp(smtp, mailMeta.SMTPHost);
+
                 var EmailSpecs = new EmailSpecs
                 {
                     EmailSubject = mailMeta.Subject,
                     EmailBody = mailMeta.Body
                 };
 
-                // Email configuration is supplied by the caller (the composition
-                // root), not read from config here — FileHandling owns no config.
-                EmailSpecs.smtpspecs = smtp;
-                EmailSpecs.EmailRecipientDefault = new List<string> { smtp.developerEmail };
-                EmailSpecs.EmailFrom = smtp.from;
+                EmailSpecs.smtpspecs = effectiveSmtp;
+                EmailSpecs.EmailRecipientDefault = new List<string> { effectiveSmtp.developerEmail };
+                EmailSpecs.EmailFrom = effectiveSmtp.from;
 
                 steplist.Add(2.ToString() + " Create " + mailMeta.AttachmentType);
                 EmailSpecs.FileAddress = mailMeta.AttachmentType == "csv" ?
-                    WriteDataToCSVFile(mailMeta.AttachmentData, mailMeta.AttachmentName) :
+                    WriteDataToCSVFile(mailMeta.AttachmentData, mailMeta.AttachmentName, mailMeta.AttachmentHeaderMap) :
                     WriteDataToExcelFile(mailMeta.AttachmentData, mailMeta.AttachmentName, mailMeta.ExcelSheetName, mailMeta.AttachmentHeaderMap);
 
                 if(!String.IsNullOrEmpty(mailMeta.Error))
                 {
                     EmailSpecs.FileAddress = null;
-                    EmailSpecs.EmailError = mailMeta.Error; 
+                    EmailSpecs.EmailError = mailMeta.Error;
                     EmailSpecs.EmailBody = mailMeta.Error;
                 }
 
@@ -60,22 +79,56 @@ namespace FileHandling
                 if (!String.IsNullOrEmpty(mailMeta.BCC))
                     EmailSpecs.EmailBCCRecipients = new List<string> { mailMeta.BCC };
 
-                if (!String.IsNullOrEmpty(mailMeta.SMTPHost))
-                    EmailSpecs.smtpspecs.host = mailMeta.SMTPHost;
-
 
                 var emailresult = JObject.FromObject(Emailer.Send(EmailSpecs)).ToString();
 
                 steplist.Add(emailresult);
 
-                
+
             }
             catch (Exception ex)
             {
                 steplist.Add("ProcessFile ERROR: " + ex.Message);
             }
 
-            return steplist; 
+            return steplist;
+        }
+
+        /// <summary>
+        /// Builds the SMTP settings for a single message: a field-by-field copy
+        /// of the caller's instance, with the per-message host override applied
+        /// to the copy when one is supplied.
+        /// </summary>
+        /// <remarks>
+        /// The copy is the point. <see cref="EmailSpecs.smtpspecs"/> holds a
+        /// reference, so overriding the host through it used to write straight
+        /// back into the caller's own <see cref="SmtpSettings"/> — the instance
+        /// the composition root built once and reuses. One message with an
+        /// override would silently repoint every send after it.
+        /// </remarks>
+        /// <param name="configured">The caller's settings. Null yields a bare
+        /// instance carrying the neutral defaults.</param>
+        /// <param name="perMessageHost">Optional host for this message only.</param>
+        /// <returns>A new instance; <paramref name="configured"/> is never written to.</returns>
+        internal static SmtpSettings ResolveSmtp(SmtpSettings configured, string perMessageHost)
+        {
+            var copy = new SmtpSettings();
+
+            if (configured != null)
+            {
+                copy.host = configured.host;
+                copy.from = configured.from;
+                copy.port = configured.port;
+                copy.enableSsl = configured.enableSsl;
+                copy.username = configured.username;
+                copy.password = configured.password;
+                copy.developerEmail = configured.developerEmail;
+            }
+
+            if (!String.IsNullOrEmpty(perMessageHost))
+                copy.host = perMessageHost;
+
+            return copy;
         }
 
         /// <summary>
@@ -98,7 +151,7 @@ namespace FileHandling
             {
                 sw.Write(ConvertJArrayToCSV(data, ColumnMapping));
             }
-            return tempFilePath;    
+            return tempFilePath;
         }
 
         public static string WriteDataToExcelFile(JArray data, string filename, string SheetName = null, Dictionary<string,string> HeaderMap = null)
@@ -110,7 +163,7 @@ namespace FileHandling
 
             DataTable dt = (DataTable)JsonConvert.DeserializeObject(data.ToString(Formatting.None), (typeof(DataTable)));
 
-            return ExcelWriter.CreateExcelFileFromDT(dt, tempFilePath, SheetName, HeaderMap); 
+            return ExcelWriter.CreateExcelFileFromDT(dt, tempFilePath, SheetName, HeaderMap);
         }
 
         /**
@@ -139,18 +192,79 @@ namespace FileHandling
             return html;
         }
 
-        public static string ConvertJArrayToCSV(JArray data, Dictionary<string, string> HeaderMap = null) 
+        /// <summary>
+        /// Renders <paramref name="data"/> as RFC 4180 CSV.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The column set is resolved once, from the first row: each column
+        /// carries the source property name used to read its cells and the
+        /// header text that gets printed. A column whose
+        /// <paramref name="HeaderMap"/> entry is
+        /// <see cref="RemoveColumnToken"/> is dropped from both, matching the
+        /// Excel writer. Cells are then read <em>by name</em>, so a row that is
+        /// missing a property emits an empty field rather than shifting every
+        /// later value into the wrong column.
+        /// </para>
+        /// <para>
+        /// Fields containing a comma, a double quote, or a line break are
+        /// quoted, and embedded quotes are doubled. Before 0.4.0 commas were
+        /// deleted from values instead — which kept the column count correct
+        /// but silently changed the data.
+        /// </para>
+        /// </remarks>
+        public static string ConvertJArrayToCSV(JArray data, Dictionary<string, string> HeaderMap = null)
         {
             if (data == null || data.Count == 0) return string.Empty;
 
-            List<string> Columns = GetPropertyNames(JObject.FromObject(data[0]), HeaderMap);
-            StringBuilder csv = new StringBuilder();
-            csv.AppendLine(String.Join(",", Columns)); 
-            //add rows
+            var sourceKeys = new List<string>();
+            var headers = new List<string>();
+
+            foreach (JProperty prop in JObject.FromObject(data[0]).Properties())
+            {
+                string mapped;
+                if (HeaderMap != null && HeaderMap.TryGetValue(prop.Name, out mapped))
+                {
+                    if (mapped == RemoveColumnToken) continue;
+                    headers.Add(mapped);
+                }
+                else
+                {
+                    headers.Add(prop.Name);
+                }
+
+                sourceKeys.Add(prop.Name);
+            }
+
+            if (sourceKeys.Count == 0) return string.Empty;
+
+            var csv = new StringBuilder();
+            csv.AppendLine(String.Join(",", headers.Select(EscapeCsvField).ToArray()));
+
             foreach (JObject line in data)
-                csv.AppendLine(String.Join(",", GetPropertyValues(line))); 
+            {
+                var cells = new List<string>(sourceKeys.Count);
+                foreach (string key in sourceKeys)
+                {
+                    JToken cell = line[key];
+                    cells.Add(EscapeCsvField(
+                        cell == null || cell.Type == JTokenType.Null ? string.Empty : cell.ToString()));
+                }
+
+                csv.AppendLine(String.Join(",", cells.ToArray()));
+            }
 
             return csv.ToString();
+        }
+
+        // RFC 4180: quote a field that contains a delimiter, a quote, or a line
+        // break, and double any quote inside it.
+        private static string EscapeCsvField(string value)
+        {
+            if (String.IsNullOrEmpty(value)) return string.Empty;
+            if (value.IndexOfAny(CsvQuoteTriggers) < 0) return value;
+
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
         }
 
         public static List<string> GetPropertyNames(JObject line, Dictionary<string,string> HeaderMap = null)
@@ -162,11 +276,5 @@ namespace FileHandling
             }
             return headers;
         }
-        private static List<dynamic> GetPropertyValues(JObject line)
-        {
-            return (from row in line.Properties() select row.Value.ToString().Replace(",", "")).ToList<dynamic>();
-        }
-
-
     }
 }

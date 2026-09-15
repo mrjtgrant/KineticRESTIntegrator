@@ -16,6 +16,46 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## FileHandling 0.4.0 — 2026-09-15
+
+Four defects in the file/email module, and the first tests it has ever had. `FileHandling` was the one library the suite did not reference, which is why all four survived this long.
+
+### Fixed
+
+- **`EMailMeta` held its attachment prefix and sheet name in `private static` fields.** Instance properties backed by static storage: every `EMailMeta` in the process shared one value, so constructing a second one silently renamed the first one's attachment. Two reports built in a single run — or any host handling two at once — produced two files under the same name. Now per-instance. *Behavioral fix; no API change.*
+
+- **A per-message SMTP host override wrote back into the caller's `SmtpSettings`.** `EmailSpecs.smtpspecs` holds a reference, so `EmailReport` applying `EMailMeta.SMTPHost` mutated the instance the composition root built once and reuses. A single overridden message repointed every send after it. Resolution now happens on a private copy (`FileProcessing.ResolveSmtp`); the caller's object is never written to.
+
+- **The CSV writer deleted commas from values instead of quoting them.** `Acme, Inc.` was written as `Acme Inc.` — column count preserved, data silently altered, no error. Embedded quotes and line breaks were unhandled as well. `ConvertJArrayToCSV` now emits RFC 4180: a field containing a comma, a double quote, or a line break is quoted, and embedded quotes are doubled. *This changes the bytes of every CSV containing such a value — for the better, but a downstream parser that relied on commas never appearing will see quoted fields now.*
+
+- **`AttachmentHeaderMap` was ignored on the CSV path.** `EmailReport` passed the map to `WriteDataToExcelFile` but not to `WriteDataToCSVFile`, so the same `EMailMeta` produced an xlsx that honored the rename/remove map and a csv that did not. The map is now passed, and the CSV writer honors `REMOVE_COLUMN` the way the Excel writer does — dropping the header *and* the values. (Passing the map through without that would have produced a column literally headed `REMOVE_COLUMN`, which is worse than ignoring it.)
+
+- **`AttachmentName` threw on the documented `null` date format.** The getter called `AttachmentDateFormat.ToLower()` one line *before* the `AttachmentDateFormat == null` guard, so the null the XML doc lists as valid raised a `NullReferenceException` and the guard was unreachable. Null, empty, and `none` (any casing) now all suppress the date suffix. *Fixed in the same property as the static-field defect above; it is not independently reachable once tests exist for that property.*
+
+### Added
+
+- **`FileProcessing.RemoveColumnToken`** — the `"REMOVE_COLUMN"` sentinel as a public constant. It was a bare literal duplicated between `ExcelWriter` and the caller's map; the CSV path now has to agree with it, and two copies of a magic string that must match is how they stop matching.
+
+- **34 offline tests for `FileHandling`**, under `KineticRESTIntegrator.Tests/Files/`: `EMailMetaTests` (instance isolation, the date-suffix rules, the sheet-name fallback), `CsvRenderingTests` (RFC 4180 escaping, header-map rename and removal, column alignment when a row is missing a property), and `SmtpResolutionTests` (copy fidelity and the non-mutation guarantee). No network, no temp files, no ClosedXML — same offline/deterministic character as the rest of the suite.
+
+### Changed
+
+- **The test project references `FileHandling`.** It previously referenced only `EpicorSvcs`. The reference brings ClosedXML onto this `net48` project, so `AutoGenerateBindingRedirects` / `GenerateBindingRedirectsOutputType` and an `MSB3277` suppression were added to match what `FileHandling.csproj` already carries — without the redirects, ClosedXML-backed tests fail at runtime with an assembly-version `FileLoadException` that reads like a broken test. MailKit does not come along: it is `net8.0`-only in `FileHandling`, and this project is `net48`.
+
+- **`InternalsVisibleTo("KineticRESTIntegrator.Tests")` on `FileHandling`.** `ResolveSmtp` is an implementation detail; making it public purely so a test could reach it would widen the shipping API for no consumer benefit. The alternative — driving it through `EmailReport` — means attempting a real send, which the offline suite will not do.
+
+### Notes
+
+Three things found while reading, deliberately **not** changed here:
+
+- `WriteDataToCSVFile` does not null-check `data` the way `WriteDataToExcelFile` does, so null data yields an empty `.csv` attachment on the CSV path and no attachment on the Excel path. `README.md` documents the Excel behavior as the contract. Diverging, but the fix is a behavior decision, not a bug fix.
+- `AttachmentType` is compared with `== "csv"` exactly, so `"CSV"` silently routes to the Excel writer and produces an xlsx named `.CSV`. The value is also unvalidated and becomes the file extension verbatim.
+- `EmailReport` with a null `SmtpSettings` previously threw inside the try block and recorded a step error; it now proceeds with the neutral defaults and fails at the send instead. Same outcome — a failure in the returned step list — by a different route.
+
+### Version
+
+- `FileHandling` 0.3.1 → 0.4.0. The CSV output format changes for any value containing a comma, a quote, or a line break, which is altered runtime behavior rather than a pure fix. `EpicorSvcs` (0.7.4), `RESTServices` (0.3.3), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## EpicorSvcs 0.7.4 / RESTServices 0.3.3 / FileHandling 0.3.1 — 2026-09-10
 
 Adds the NuGet package metadata the three library projects were missing. No code changed; the version bumps mark that the produced artifact differs.

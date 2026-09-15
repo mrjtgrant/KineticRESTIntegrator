@@ -66,8 +66,9 @@ namespace FileHandling
         /// <para>
         /// The <paramref name="HeaderMap"/> renames or removes columns before
         /// writing — keys are the source <see cref="DataTable"/> column
-        /// names; values are the destination display names, or the literal
-        /// string <c>"REMOVE_COLUMN"</c> to drop the column entirely.
+        /// names; values are the destination display names, or
+        /// <see cref="FileProcessing.RemoveColumnToken"/> to drop the column
+        /// entirely.
         /// </para>
         /// </remarks>
         /// <param name="dt">The data to write. Mutated in place when
@@ -97,7 +98,7 @@ namespace FileHandling
                 {
                     if (dt.Columns[map.Key] != null)
                     {
-                        if (map.Value == "REMOVE_COLUMN")
+                        if (map.Value == FileProcessing.RemoveColumnToken)
                             dt.Columns.Remove(map.Key);
                         else
                             dt.Columns[map.Key].ColumnName = map.Value;
