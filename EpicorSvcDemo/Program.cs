@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using EpicorSvcs;
-using FileHandling;
-using FileHandling.Dtos;
+using Keri.Files;
+using Keri.Mail;
 using KeriConfigurator;
 using Newtonsoft.Json.Linq;
 
@@ -349,7 +349,7 @@ namespace EpicorSvcDemo
                     }
 
                     SmtpSettings smtp = KeriConfig.BuildSmtpSettings();
-                    if (!FileProcessing.IsEmailConfigured(smtp))
+                    if (!Emailer.IsConfigured(smtp))
                     {
                         Console.WriteLine("Skipping the email step — no SMTP host is configured.");
                         Console.WriteLine("  With SMTP settings in App.config (SMTPHost and FromEmail), this step");
@@ -385,7 +385,7 @@ namespace EpicorSvcDemo
                             };
 
                             Console.WriteLine($"Emailing the spreadsheet to {toAddress}...");
-                            Console.WriteLine(FileProcessing.EmailReport(mail, smtp));
+                            Console.WriteLine(Emailer.SendReport(mail, smtp));
                         }
                     }
 

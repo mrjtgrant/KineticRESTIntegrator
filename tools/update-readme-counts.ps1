@@ -52,7 +52,8 @@ if ($targets.Count -eq 0) { throw "No target documents found (README.md, CONTRIB
 $projects = [ordered]@{
     'EpicorSvcs'       = 'EpicorSvcs/EpicorSvcs.csproj'
     'RESTServices'     = 'RESTServices/RESTServices.csproj'
-    'FileHandling'     = 'FileHandling/FileHandling.csproj'
+    'Keri.Files'       = 'Keri.Files/Keri.Files.csproj'
+    'Keri.Mail'        = 'Keri.Mail/Keri.Mail.csproj'
     'KeriConfigurator' = 'KeriConfigurator/KeriConfigurator.csproj'
 }
 

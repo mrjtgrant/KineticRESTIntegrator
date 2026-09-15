@@ -32,7 +32,7 @@
   </PropertyGroup>
 
   <!-- Build-warning suppression - same handled-binding-redirect cause as
-       FileHandling: this project pulls in FileHandling's transitive closure
+       Keri.Mail: this project pulls in Keri.Mail's transitive closure
        (ClosedXML, MailKit, and friends). MSB3277 (net48 BCL-facade conflict)
        and MSB3836 (net8 overlapping redirects) are resolved by binding
        redirects / AutoGenerateBindingRedirects; the warnings are noise. -->
@@ -43,7 +43,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RESTServices\RESTServices.csproj" />
     <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
-    <ProjectReference Include="..\FileHandling\FileHandling.csproj" />
+    <ProjectReference Include="..\Keri.Mail\Keri.Mail.csproj" />
   </ItemGroup>
 
   <!-- System.Configuration.ConfigurationManager: makes Properties.Settings.Default.X

@@ -1,9 +1,11 @@
-namespace FileHandling.Dtos
+using Keri.Files;
+
+namespace Keri.Mail
 {
     /// <summary>
     /// Describes one outbound report email: who it goes to, what it says, and
     /// what it carries. Passed to
-    /// <see cref="FileHandling.FileProcessing.EmailReport"/> along with the
+    /// <see cref="Emailer.SendReport"/> along with the
     /// <see cref="SmtpSettings"/> the composition root owns.
     /// </summary>
     /// <remarks>
@@ -18,7 +20,7 @@ namespace FileHandling.Dtos
     /// exclusive: set <see cref="Attachment"/> to have the file built as part of
     /// sending, or <see cref="AttachmentPath"/> to attach a file that already
     /// exists — including one an earlier
-    /// <see cref="FileHandling.FileWriter.Save"/> call just wrote. The second is
+    /// <see cref="Keri.Files.FileWriter.Save"/> call just wrote. The second is
     /// what keeps "save it, then mail it" from writing the file twice.
     /// </para>
     /// </remarks>

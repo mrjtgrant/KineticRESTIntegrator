@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using RESTServices;
 using EpicorSvcs;
-using FileHandling.Dtos;
+using Keri.Mail;
 using EpicorSvcs.Dtos;
 
 namespace KeriConfigurator
@@ -70,7 +70,7 @@ namespace KeriConfigurator
         /// <summary>
         /// Builds the email configuration from the unified settings. Returns a
         /// config-free <see cref="SmtpSettings"/> for the email path to consume;
-        /// FileHandling no longer reads any configuration itself. Blank,
+        /// Keri.Mail reads no configuration itself. Blank,
         /// placeholder (<c>YOUR_*</c>), and unset <c>{ENV:...}</c> values resolve
         /// to empty.
         /// </summary>

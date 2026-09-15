@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using ClosedXML.Excel;
 
-namespace FileHandling
+namespace Keri.Files
 {
     /// <summary>
     /// Reads Excel <c>.xlsx</c> files into in-memory data structures

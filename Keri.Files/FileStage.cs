@@ -1,4 +1,4 @@
-namespace FileHandling
+namespace Keri.Files
 {
     /// <summary>
     /// Where a file operation stopped. Reported on

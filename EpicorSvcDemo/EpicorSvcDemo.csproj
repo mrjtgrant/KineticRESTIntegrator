@@ -40,7 +40,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
-    <ProjectReference Include="..\FileHandling\FileHandling.csproj" />
+    <ProjectReference Include="..\Keri.Files\Keri.Files.csproj" />
+    <ProjectReference Include="..\Keri.Mail\Keri.Mail.csproj" />
     <ProjectReference Include="..\RESTServices\RESTServices.csproj" />
     <ProjectReference Include="..\KeriConfigurator\KeriConfigurator.csproj" />
   </ItemGroup>

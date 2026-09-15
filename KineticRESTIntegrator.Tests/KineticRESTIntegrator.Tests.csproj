@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -10,13 +10,13 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Deterministic>true</Deterministic>
 
-    <!-- Referencing FileHandling pulls ClosedXML onto this net48 project, and
+    <!-- Referencing Keri.Files pulls ClosedXML onto this net48 project, and
          ClosedXML (a netstandard2.0 library) wants newer System.Memory,
          System.Buffers, System.Numerics.Vectors and
          System.Runtime.CompilerServices.Unsafe than the 4.8 facades provide.
          Without these redirects the ClosedXML-backed tests fail at RUNTIME with
          a FileLoadException on assembly version, which reads like a broken test
-         rather than a missing binding redirect. FileHandling.csproj carries the
+         rather than a missing binding redirect. Keri.Files.csproj carries the
          same pair for the same reason. MSB3277 is the build-time complaint
          about the state these redirects resolve. -->
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -47,12 +47,13 @@
          nothing here touches the transport layer. -->
     <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
 
-    <!-- FileHandling's offline surface: the CSV renderer, the header-map rules,
-         EMailMeta's computed attachment name, and the per-message SMTP
-         resolution. Tests live under Files/. Nothing here opens a socket or
-         writes a file — MailKit is net8.0-only in FileHandling, so this net48
-         project never sees it. -->
-    <ProjectReference Include="..\FileHandling\FileHandling.csproj" />
+    <!-- The file/mail surface: the CSV renderer, the header-map rules,
+         FileSpec's computed filename, FileWriter's validation and collision
+         handling, and the per-message SMTP resolution. Tests live under Files/.
+         Nothing opens a socket — MailKit is net8.0-only in Keri.Mail, so this
+         net48 project never sees it. -->
+    <ProjectReference Include="..\Keri.Files\Keri.Files.csproj" />
+    <ProjectReference Include="..\Keri.Mail\Keri.Mail.csproj" />
   </ItemGroup>
 
 </Project>

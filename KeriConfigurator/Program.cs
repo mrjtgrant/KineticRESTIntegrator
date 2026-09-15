@@ -6,8 +6,7 @@ using System.Xml.Linq;
 using RESTServices;
 using EpicorSvcs;
 using EpicorSvcs.Dtos;
-using FileHandling;
-using FileHandling.Dtos;
+using Keri.Mail;
 
 namespace KeriConfigurator
 {

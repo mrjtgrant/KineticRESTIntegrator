@@ -3,33 +3,34 @@
   <PropertyGroup>
     <TargetFrameworks>net48;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
-    <RootNamespace>FileHandling</RootNamespace>
-    <AssemblyName>FileHandling</AssemblyName>
+    <RootNamespace>Keri.Files</RootNamespace>
+    <AssemblyName>Keri.Files</AssemblyName>
 
     <!-- Assembly metadata (replaces AssemblyInfo.cs) -->
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Product>FileHandling</Product>
-    <AssemblyTitle>FileHandling</AssemblyTitle>
-    <Description>File output for the Kinetic REST Integrator: write query results to Excel or CSV on disk, and optionally deliver them by SMTP.</Description>
+    <Product>Keri.Files</Product>
+    <AssemblyTitle>Keri.Files</AssemblyTitle>
+    <Description>File output for the Kinetic REST Integrator: render query results to Excel or CSV and write them to disk.</Description>
     <Company>Justin Grant</Company>
     <Authors>Justin Grant</Authors>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
-    <Version>0.5.0</Version>
-    <AssemblyVersion>0.5.0.0</AssemblyVersion>
-    <FileVersion>0.5.0.0</FileVersion>
+    <Version>0.6.0</Version>
+    <AssemblyVersion>0.6.0.0</AssemblyVersion>
+    <FileVersion>0.6.0.0</FileVersion>
 
     <!-- NuGet package metadata. Without PackageLicenseExpression a packed
          artifact carries no license at all, whatever LICENSE says. -->
-    <PackageId>Keri.FileHandling</PackageId>
+    <PackageId>Keri.Files</PackageId>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/mrjtgrant/KineticRESTIntegrator</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mrjtgrant/KineticRESTIntegrator</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>excel;csv;smtp;closedxml;epicor;kinetic</PackageTags>
+    <PackageTags>excel;csv;closedxml;epicor;kinetic;report</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
-    <!-- Keep the original ProjectGuid so the .sln reference still resolves -->
+    <!-- Carried from FileHandling so the .sln reference resolves through the
+         rename rather than orphaning the project entry. -->
     <ProjectGuid>{FB7502DF-C1CE-4F76-8B28-B68035F8A7FE}</ProjectGuid>
 
     <!-- COM visibility -->
@@ -51,21 +52,19 @@
        MSB3836 fires on net8.0 because <AutoGenerateBindingRedirects> produces
        its own redirects that overlap with the hand-coded ones in App.config
        (which are there for the net48 runtime path). Same underlying root
-       cause; same "already handled, please stop complaining" character.
-       Both suppressed here rather than papered over with a more invasive fix
-       that risks changing the runtime binding behavior App.config provides. -->
+       cause; same "already handled, please stop complaining" character. -->
   <PropertyGroup>
     <NoWarn>$(NoWarn);MSB3277;MSB3836</NoWarn>
   </PropertyGroup>
 
   <!-- For net8.0 only: copy transitive NuGet package DLLs (ClosedXML,
-       MailKit, Newtonsoft.Json, and their transitives) into the output
-       folder. Default for library projects is to NOT copy them (consumers
-       resolve NuGet themselves), but this library is consumed by projects
-       that reference its DLLs directly from a local lib/ folder rather than
-       via NuGet — so the DLLs need to be alongside the library's own output.
-       Not applied to net48 to avoid disturbing the existing binding-redirect
-       and BCL-facade-conflict handling on that target. -->
+       Newtonsoft.Json, and their transitives) into the output folder. Default
+       for library projects is to NOT copy them (consumers resolve NuGet
+       themselves), but this library is consumed by projects that reference its
+       DLLs directly from a local lib/ folder rather than via NuGet — so the
+       DLLs need to be alongside the library's own output. Not applied to net48
+       to avoid disturbing the existing binding-redirect and BCL-facade-conflict
+       handling on that target. -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
@@ -75,21 +74,14 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
-  <!-- MailKit 4.16.0+ for SMTP on .NET 6+. The net48 build uses
-       System.Net.Mail.SmtpClient (BCL) instead - MailKit 4.x dropped
-       .NET Framework support, and the only net48-compatible MailKit (3.x)
-       has an unpatched STARTTLS-Response-Injection CVE (GHSA-9j88-vvj5-vhgr).
-       Using System.Net.Mail on net48 avoids that CVE entirely. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <PackageReference Include="MailKit" Version="4.16.0" />
-  </ItemGroup>
-
-  <!-- The offline test suite reaches a few internals directly: the per-message
-       SMTP resolution in FileProcessing and EmailSpecs.smtpspecs. Exposing them
-       publicly only to test them would widen the shipping API for no consumer
-       benefit; InternalsVisibleTo keeps the surface the same and keeps the
-       tests pure (no network, no temp files). -->
+  <!-- Keri.Mail builds FileOperationResult instances while orchestrating a
+       report send, and the offline suite reaches the same internals. Making
+       the construction API public purely to cross an assembly boundary inside
+       one product would widen the shipping surface for no consumer benefit. -->
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Keri.Mail</_Parameter1>
+    </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>KineticRESTIntegrator.Tests</_Parameter1>
     </AssemblyAttribute>

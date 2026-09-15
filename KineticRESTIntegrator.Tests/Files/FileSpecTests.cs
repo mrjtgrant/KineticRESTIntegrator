@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using FileHandling.Dtos;
+using Keri.Files;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests.Files

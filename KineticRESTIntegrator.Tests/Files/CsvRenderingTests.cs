@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
-using FileHandling;
+using Keri.Files;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests.Files
 {
     /// <summary>
-    /// Tests for <see cref="FileProcessing.ConvertJArrayToCSV"/> — RFC 4180
+    /// Tests for <see cref="TabularRenderer.ConvertJArrayToCSV"/> — RFC 4180
     /// escaping, and the header-map rules it shares with the Excel writer.
     /// </summary>
     public class CsvRenderingTests
@@ -32,7 +32,7 @@ namespace KineticRESTIntegrator.Tests.Files
             // The comma used to be deleted from the value outright: "Acme, Inc."
             // was written as "Acme Inc.". Column count stayed right; the data
             // silently stopped matching Epicor.
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { CustID = "ACME01", Name = "Acme, Inc." }));
 
             Assert.Equal("CustID,Name", Lines(csv)[0]);
@@ -42,7 +42,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void AnEmbeddedQuoteIsDoubledAndTheFieldQuoted()
         {
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { Desc = "14\" pipe" }));
 
             Assert.Equal("\"14\"\" pipe\"", Lines(csv)[1]);
@@ -51,7 +51,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void AnEmbeddedNewlineIsQuoted()
         {
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { Notes = "line one\nline two" }));
 
             Assert.Contains("\"line one\nline two\"", csv);
@@ -60,7 +60,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void APlainValueIsNotQuoted()
         {
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { PartNum = "WIDGET-01", Qty = 5 }));
 
             Assert.Equal("WIDGET-01,5", Lines(csv)[1]);
@@ -71,7 +71,7 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             var map = new Dictionary<string, string> { { "Name", "Customer, Legal" } };
 
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { Name = "Acme" }), map);
 
             Assert.Equal("\"Customer, Legal\"", Lines(csv)[0]);
@@ -80,7 +80,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void ANullValueBecomesAnEmptyField()
         {
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { A = "x", B = (string)null, C = "z" }));
 
             Assert.Equal("x,,z", Lines(csv)[1]);
@@ -93,7 +93,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void WithNoMapThePropertyNamesAreTheHeaders()
         {
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { PartNum = "A", TypeCode = "M" }));
 
             Assert.Equal("PartNum,TypeCode", Lines(csv)[0]);
@@ -104,7 +104,7 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             var map = new Dictionary<string, string> { { "PartNum", "Part Number" } };
 
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { PartNum = "A", TypeCode = "M" }), map);
 
             Assert.Equal("Part Number,TypeCode", Lines(csv)[0]);
@@ -118,26 +118,26 @@ namespace KineticRESTIntegrator.Tests.Files
             // headed "REMOVE_COLUMN" — worse than ignoring the map.
             var map = new Dictionary<string, string>
             {
-                { "Category", FileProcessing.RemoveColumnToken },
+                { "Category", TabularRenderer.RemoveColumnToken },
                 { "PartNum", "Part Number" }
             };
 
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { Category = "Keri_Demo_Parts", PartNum = "A", TypeCode = "M" }), map);
 
             Assert.Equal("Part Number,TypeCode", Lines(csv)[0]);
             Assert.Equal("A,M", Lines(csv)[1]);
             Assert.DoesNotContain("Keri_Demo_Parts", csv);
-            Assert.DoesNotContain(FileProcessing.RemoveColumnToken, csv);
+            Assert.DoesNotContain(TabularRenderer.RemoveColumnToken, csv);
         }
 
         [Fact]
         public void RemovingEveryColumnYieldsNothing()
         {
-            var map = new Dictionary<string, string> { { "Only", FileProcessing.RemoveColumnToken } };
+            var map = new Dictionary<string, string> { { "Only", TabularRenderer.RemoveColumnToken } };
 
             Assert.Equal(string.Empty,
-                FileProcessing.ConvertJArrayToCSV(Rows(new { Only = "x" }), map));
+                TabularRenderer.ConvertJArrayToCSV(Rows(new { Only = "x" }), map));
         }
 
         // -----------------------------------------------------------------
@@ -158,7 +158,7 @@ namespace KineticRESTIntegrator.Tests.Files
                 JObject.Parse("{'A':'a2','C':'c2'}")
             };
 
-            string csv = FileProcessing.ConvertJArrayToCSV(rows);
+            string csv = TabularRenderer.ConvertJArrayToCSV(rows);
 
             Assert.Equal("A,B,C", Lines(csv)[0]);
             Assert.Equal("a1,b1,c1", Lines(csv)[1]);
@@ -181,7 +181,7 @@ namespace KineticRESTIntegrator.Tests.Files
             // keyboard, sit inert in the ERP, and then execute when somebody
             // opens the report Keri built. The person who typed it never
             // touched the machine that runs it.
-            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Desc = payload }));
+            string csv = TabularRenderer.ConvertJArrayToCSV(Rows(new { Desc = payload }));
 
             Assert.StartsWith("'", Lines(csv)[1].TrimStart('"'));
         }
@@ -197,7 +197,7 @@ namespace KineticRESTIntegrator.Tests.Files
             // Negative amounts are ordinary ERP data. A mitigation that
             // corrupts every credit, variance and adjustment in the file to
             // catch the rare payload is not a mitigation.
-            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Amount = number }));
+            string csv = TabularRenderer.ConvertJArrayToCSV(Rows(new { Amount = number }));
 
             Assert.Equal(number, Lines(csv)[1]);
         }
@@ -205,7 +205,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void APlainValueIsNeverPrefixed()
         {
-            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { PartNum = "WIDGET-01" }));
+            string csv = TabularRenderer.ConvertJArrayToCSV(Rows(new { PartNum = "WIDGET-01" }));
 
             Assert.Equal("WIDGET-01", Lines(csv)[1]);
         }
@@ -214,7 +214,7 @@ namespace KineticRESTIntegrator.Tests.Files
         public void NeutralizationCanBeTurnedOff()
         {
             // For a file a machine parses rather than a person opens.
-            string csv = FileProcessing.ConvertJArrayToCSV(
+            string csv = TabularRenderer.ConvertJArrayToCSV(
                 Rows(new { Desc = "=1+1" }), null, false);
 
             Assert.Equal("=1+1", Lines(csv)[1]);
@@ -226,7 +226,7 @@ namespace KineticRESTIntegrator.Tests.Files
             // A header is the caller's own text, not source data.
             var map = new Dictionary<string, string> { { "Amount", "-Amount" } };
 
-            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Amount = "1" }), map);
+            string csv = TabularRenderer.ConvertJArrayToCSV(Rows(new { Amount = "1" }), map);
 
             Assert.Equal("-Amount", Lines(csv)[0]);
         }
@@ -234,7 +234,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void APrefixedValueIsStillQuotedWhenItNeedsToBe()
         {
-            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Desc = "=A1,B1" }));
+            string csv = TabularRenderer.ConvertJArrayToCSV(Rows(new { Desc = "=A1,B1" }));
 
             Assert.Equal("\"'=A1,B1\"", Lines(csv)[1]);
         }
@@ -246,13 +246,13 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void NullDataYieldsAnEmptyString()
         {
-            Assert.Equal(string.Empty, FileProcessing.ConvertJArrayToCSV(null));
+            Assert.Equal(string.Empty, TabularRenderer.ConvertJArrayToCSV(null));
         }
 
         [Fact]
         public void AnEmptyArrayYieldsAnEmptyString()
         {
-            Assert.Equal(string.Empty, FileProcessing.ConvertJArrayToCSV(new JArray()));
+            Assert.Equal(string.Empty, TabularRenderer.ConvertJArrayToCSV(new JArray()));
         }
     }
 }

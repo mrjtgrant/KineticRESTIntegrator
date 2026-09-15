@@ -1,11 +1,10 @@
-using FileHandling;
-using FileHandling.Dtos;
+using Keri.Mail;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests.Files
 {
     /// <summary>
-    /// Tests for <see cref="FileProcessing.ResolveSmtp"/> — the per-message SMTP
+    /// Tests for <see cref="Emailer.ResolveSmtp"/> — the per-message SMTP
     /// copy that keeps a host override from leaking back into the caller's
     /// settings.
     /// </summary>
@@ -38,7 +37,7 @@ namespace KineticRESTIntegrator.Tests.Files
             // overridden message repointed every send after it.
             var caller = Configured();
 
-            FileProcessing.ResolveSmtp(caller, "other-relay.example");
+            Emailer.ResolveSmtp(caller, "other-relay.example");
 
             Assert.Equal("relay.internal.example", caller.host);
         }
@@ -46,7 +45,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void TheOverrideIsAppliedToTheCopy()
         {
-            SmtpSettings resolved = FileProcessing.ResolveSmtp(Configured(), "other-relay.example");
+            SmtpSettings resolved = Emailer.ResolveSmtp(Configured(), "other-relay.example");
 
             Assert.Equal("other-relay.example", resolved.host);
         }
@@ -56,8 +55,8 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             var caller = Configured();
 
-            SmtpSettings first = FileProcessing.ResolveSmtp(caller, "one-off.example");
-            SmtpSettings second = FileProcessing.ResolveSmtp(caller, null);
+            SmtpSettings first = Emailer.ResolveSmtp(caller, "one-off.example");
+            SmtpSettings second = Emailer.ResolveSmtp(caller, null);
 
             Assert.Equal("one-off.example", first.host);
             Assert.Equal("relay.internal.example", second.host);
@@ -72,13 +71,13 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             var caller = Configured();
 
-            Assert.NotSame(caller, FileProcessing.ResolveSmtp(caller, null));
+            Assert.NotSame(caller, Emailer.ResolveSmtp(caller, null));
         }
 
         [Fact]
         public void EveryFieldIsCarriedOntoTheCopy()
         {
-            SmtpSettings resolved = FileProcessing.ResolveSmtp(Configured(), null);
+            SmtpSettings resolved = Emailer.ResolveSmtp(Configured(), null);
 
             Assert.Equal("relay.internal.example", resolved.host);
             Assert.Equal("reports@example.test", resolved.from);
@@ -94,7 +93,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [InlineData("")]
         public void ABlankOverrideLeavesTheConfiguredHost(string hostOverride)
         {
-            SmtpSettings resolved = FileProcessing.ResolveSmtp(Configured(), hostOverride);
+            SmtpSettings resolved = Emailer.ResolveSmtp(Configured(), hostOverride);
 
             Assert.Equal("relay.internal.example", resolved.host);
         }
@@ -102,7 +101,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void ANullSourceYieldsTheNeutralDefaults()
         {
-            SmtpSettings resolved = FileProcessing.ResolveSmtp(null, null);
+            SmtpSettings resolved = Emailer.ResolveSmtp(null, null);
 
             Assert.Null(resolved.host);
             Assert.Equal(25, resolved.port);
@@ -113,7 +112,7 @@ namespace KineticRESTIntegrator.Tests.Files
         [Fact]
         public void ANullSourceStillTakesAnOverride()
         {
-            SmtpSettings resolved = FileProcessing.ResolveSmtp(null, "relay.example");
+            SmtpSettings resolved = Emailer.ResolveSmtp(null, "relay.example");
 
             Assert.Equal("relay.example", resolved.host);
         }

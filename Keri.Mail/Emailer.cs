@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Text;
-using FileHandling.Dtos;
+using Keri.Files;
 using Newtonsoft.Json.Linq;
 
 #if NET48
@@ -12,10 +14,11 @@ using MailKit.Security;
 using MimeKit;
 #endif
 
-namespace FileHandling
+namespace Keri.Mail
 {
     /// <summary>
-    /// Sends emails via SMTP. Uses <see cref="System.Net.Mail.SmtpClient"/> on
+    /// Sends emails via SMTP, and composes the build-then-send flow for a report
+    /// email (<see cref="SendReport"/>). Uses <see cref="System.Net.Mail.SmtpClient"/> on
     /// .NET Framework 4.8 and <see cref="MailKit.Net.Smtp.SmtpClient"/> on
     /// .NET 8+. The implementation choice is invisible to callers — the same
     /// configurations behave the same way on both targets. Default behavior is
@@ -190,6 +193,184 @@ namespace FileHandling
 #endif
 
             return report;
+        }
+
+        // -----------------------------------------------------------------
+        // Report orchestration
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Builds a report email from <paramref name="mail"/> and sends it:
+        /// resolve the SMTP settings for this message, produce or locate the
+        /// attachment, assemble the message, hand it to the relay.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The attachment comes from one of three places, in order:
+        /// <see cref="MailSpec.Error"/> being set means the message carries the
+        /// error text and no file at all; otherwise
+        /// <see cref="MailSpec.AttachmentPath"/> attaches an existing file;
+        /// otherwise <see cref="MailSpec.Attachment"/> is built through
+        /// <see cref="Keri.Files.FileWriter.Save"/>. A <see cref="MailSpec"/>
+        /// with none of the three sends a message with no attachment.
+        /// </para>
+        /// <para>
+        /// When a file is built, its path is on
+        /// <see cref="FileOperationResult.OutputPath"/> even if the send then
+        /// fails — the report exists; only the delivery did not happen.
+        /// </para>
+        /// </remarks>
+        /// <param name="mail">The message to send.</param>
+        /// <param name="smtp">The relay configuration. Never written to — the
+        /// per-message host override is applied to a private copy.</param>
+        /// <returns>The outcome, with the step-by-step breakdown on
+        /// <see cref="FileOperationResult.Steps"/>.</returns>
+        public static FileOperationResult SendReport(MailSpec mail, SmtpSettings smtp)
+        {
+            var result = new FileOperationResult();
+
+            if (mail == null)
+                return result.Failed(FileStage.Build, "No mail specification was supplied.");
+
+            try
+            {
+                // Email configuration is supplied by the caller (the composition
+                // root), not read from config here — Keri.Mail owns no config.
+                //
+                // Resolve it onto a private copy for THIS message. The caller
+                // builds one SmtpSettings and reuses it across sends, so writing
+                // a per-message host override back into their instance would
+                // repoint every later call. Copy, then override the copy.
+                SmtpSettings effectiveSmtp = ResolveSmtp(smtp, mail.SMTPHost);
+                result.Step("Setup: relay " + (effectiveSmtp.host ?? "(none configured)"));
+
+                var specs = new EmailSpecs
+                {
+                    EmailSubject = mail.Subject,
+                    EmailBody = mail.Body,
+                    smtpspecs = effectiveSmtp,
+                    EmailRecipientDefault = new List<string> { effectiveSmtp.developerEmail },
+                    EmailFrom = effectiveSmtp.from
+                };
+
+                // ---- Attachment ---------------------------------------------
+                if (!String.IsNullOrEmpty(mail.Error))
+                {
+                    // A run that could not produce data still has something to
+                    // say. The error travels as the body, with no attachment.
+                    specs.FileAddress = null;
+                    specs.EmailError = mail.Error;
+                    specs.EmailBody = mail.Error;
+                    result.Step("Build: skipped — reporting an error instead of an attachment");
+                }
+                else if (!String.IsNullOrEmpty(mail.AttachmentPath))
+                {
+                    if (!File.Exists(mail.AttachmentPath))
+                    {
+                        return result.Failed(FileStage.Build,
+                            "The file named by AttachmentPath does not exist: " + mail.AttachmentPath);
+                    }
+
+                    specs.FileAddress = mail.AttachmentPath;
+                    result.OutputPath = mail.AttachmentPath;
+                    result.Step("Build: attaching existing file " + mail.AttachmentPath);
+                }
+                else if (mail.Attachment != null
+                         && mail.Attachment.Data != null
+                         && mail.Attachment.Data.Count > 0)
+                {
+                    FileOperationResult saved = FileWriter.Save(mail.Attachment);
+
+                    foreach (string step in saved.Steps)
+                        result.Step(step);
+
+                    if (saved.IsFailure)
+                        return result.Failed(saved.FailedAt, saved.ErrorMessage);
+
+                    specs.FileAddress = saved.OutputPath;
+                    result.OutputPath = saved.OutputPath;
+                }
+                else
+                {
+                    result.Step("Build: no data to report — sending without an attachment");
+                }
+
+                // ---- Addressing ---------------------------------------------
+                if (!String.IsNullOrEmpty(mail.From))
+                    specs.EmailFrom = mail.From;
+
+                if (!String.IsNullOrEmpty(mail.To))
+                    specs.EmailRecipients = new List<string> { mail.To };
+
+                if (!String.IsNullOrEmpty(mail.CC))
+                    specs.EmailCCRecipients = new List<string> { mail.CC };
+
+                if (!String.IsNullOrEmpty(mail.BCC))
+                    specs.EmailBCCRecipients = new List<string> { mail.BCC };
+
+                // ---- Send ----------------------------------------------------
+                EmailSpecs sent = Send(specs);
+
+                if (!String.IsNullOrEmpty(sent.EmailError))
+                    return result.Failed(FileStage.Send, sent.EmailError);
+
+                result.Step("Send: delivered to " + (mail.To ?? "the default recipient"));
+                return result.Succeeded(result.OutputPath);
+            }
+            catch (Exception ex)
+            {
+                return result.Failed(FileStage.Send, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Returns true when the supplied <see cref="SmtpSettings"/> has a usable
+        /// host — non-blank and not still a <c>YOUR_</c> template placeholder.
+        /// Lets a caller decide whether to offer an email step before attempting
+        /// a send.
+        /// </summary>
+        public static bool IsConfigured(SmtpSettings smtp)
+        {
+            string host = smtp?.host;
+            return !String.IsNullOrWhiteSpace(host)
+                && !host.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Builds the SMTP settings for a single message: a field-by-field copy
+        /// of the caller's instance, with the per-message host override applied
+        /// to the copy when one is supplied.
+        /// </summary>
+        /// <remarks>
+        /// The copy is the point. <see cref="EmailSpecs.smtpspecs"/> holds a
+        /// reference, so overriding the host through it used to write straight
+        /// back into the caller's own <see cref="SmtpSettings"/> — the instance
+        /// the composition root built once and reuses. One message with an
+        /// override would silently repoint every send after it.
+        /// </remarks>
+        /// <param name="configured">The caller's settings. Null yields a bare
+        /// instance carrying the neutral defaults.</param>
+        /// <param name="perMessageHost">Optional host for this message only.</param>
+        /// <returns>A new instance; <paramref name="configured"/> is never written to.</returns>
+        internal static SmtpSettings ResolveSmtp(SmtpSettings configured, string perMessageHost)
+        {
+            var copy = new SmtpSettings();
+
+            if (configured != null)
+            {
+                copy.host = configured.host;
+                copy.from = configured.from;
+                copy.port = configured.port;
+                copy.enableSsl = configured.enableSsl;
+                copy.username = configured.username;
+                copy.password = configured.password;
+                copy.developerEmail = configured.developerEmail;
+            }
+
+            if (!String.IsNullOrEmpty(perMessageHost))
+                copy.host = perMessageHost;
+
+            return copy;
         }
 
         /// <summary>

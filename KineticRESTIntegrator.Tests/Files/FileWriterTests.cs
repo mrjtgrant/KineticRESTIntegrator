@@ -1,7 +1,6 @@
 using System;
 using System.IO;
-using FileHandling;
-using FileHandling.Dtos;
+using Keri.Files;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -277,7 +276,7 @@ namespace KineticRESTIntegrator.Tests.Files
             spec.HeaderMap = new System.Collections.Generic.Dictionary<string, string>
             {
                 { "PartNum", "Part Number" },
-                { "Qty", FileProcessing.RemoveColumnToken }
+                { "Qty", TabularRenderer.RemoveColumnToken }
             };
 
             FileOperationResult result = FileWriter.Save(spec);

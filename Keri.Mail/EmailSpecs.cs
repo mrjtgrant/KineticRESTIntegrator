@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace FileHandling.Dtos
+namespace Keri.Mail
 {
     /// <summary>
     /// The data contract for a single outbound email. Populate one of these
-    /// and pass it to <see cref="FileHandling.Emailer.Send"/>. On failure,
+    /// and pass it to <see cref="Emailer.Send"/>. On failure,
     /// <see cref="EmailError"/> is set on the returned instance.
     /// </summary>
     public class EmailSpecs
@@ -61,7 +61,7 @@ namespace FileHandling.Dtos
         /// <summary>
         /// Default recipient list — the developer address. Also the sole
         /// recipient when <see cref="IsDebug"/> is true. Populated from
-        /// configuration by <see cref="FileHandling.FileProcessing.EmailReport"/>;
+        /// configuration by <see cref="Emailer.SendReport"/>;
         /// empty on a bare instance.
         /// </summary>
         public List<string> EmailRecipientDefault { get; set; } = new List<string>();
@@ -78,7 +78,7 @@ namespace FileHandling.Dtos
         internal string FileName { get { return Path.GetFileName(FileAddress); } }
 
         /// <summary>
-        /// Error message, set by <see cref="FileHandling.Emailer.Send"/> when the
+        /// Error message, set by <see cref="Emailer.Send"/> when the
         /// send fails or the SMTP configuration is invalid. Empty on success.
         /// </summary>
         public string EmailError { get; set; } = "";
@@ -97,7 +97,7 @@ namespace FileHandling.Dtos
 
         /// <summary>
         /// SMTP-connection parameters for this message. Internal — set by
-        /// <see cref="FileHandling.FileProcessing.EmailReport"/> from the
+        /// <see cref="Emailer.SendReport"/> from the
         /// <see cref="SmtpSettings"/> the caller supplies; <c>host</c> may be
         /// overridden per message. A bare instance carries neutral defaults.
         /// </summary>

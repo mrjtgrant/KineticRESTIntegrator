@@ -1,15 +1,15 @@
-namespace FileHandling.Dtos
+namespace Keri.Mail
 {
     /// <summary>
     /// Public carrier for the configuration an email send needs: the SMTP
     /// connection, the <c>From:</c> address, and the default/debug recipient.
-    /// FileHandling reads no configuration itself — the composition root
+    /// Keri.Mail reads no configuration itself — the composition root
     /// (KeriConfigurator) builds this and passes it to
-    /// <see cref="FileHandling.FileProcessing.EmailReport"/>.
+    /// <see cref="Emailer.SendReport"/>.
     /// </summary>
     /// <remarks>
     /// Travels inside <see cref="EmailSpecs"/> as the internal <c>smtpspecs</c>
-    /// member, set by <see cref="FileHandling.FileProcessing.EmailReport"/> from
+    /// member, set by <see cref="Emailer.SendReport"/> from
     /// the instance the caller supplies. A plain <c>new SmtpSettings()</c>
     /// carries neutral defaults (anonymous relay, port 25, no TLS).
     /// </remarks>

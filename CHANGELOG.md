@@ -16,6 +16,49 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## Keri.Files 0.6.0 / Keri.Mail 0.6.0 — 2026-09-15
+
+`FileHandling` becomes two assemblies. **Breaking:** the namespaces, the assembly names, and the package identifiers all change; `FileProcessing` no longer exists. No behavior changes — every line of logic here shipped in `FileHandling 0.5.0`.
+
+### Changed
+
+- **`FileHandling` splits into `Keri.Files` and `Keri.Mail`.** `Keri.Files` holds `FileSpec`, `FileWriter`, `FileOperationResult`, `FileStage`, `TabularRenderer`, `ExcelReader` and `ExcelWriter`, and depends on ClosedXML and Newtonsoft.Json. `Keri.Mail` holds `MailSpec`, `EmailSpecs`, `SmtpSettings` and `Emailer`, and depends on MailKit, Newtonsoft.Json, and `Keri.Files`.
+
+  The dependency points one way and can only point one way: sending a report means building one first. Nothing in `Keri.Files` knows `Keri.Mail` exists.
+
+  The reason for the split is what a consumer is made to carry. Writing a CSV previously pulled MailKit, MimeKit and BouncyCastle.Cryptography — roughly 7 MB, and, more to the point, their advisories — onto somebody whose code never opens a socket. `SECURITY.md` already tells consumers that dependencies are theirs to watch; this stops charging them for a feature they do not use.
+
+- **Namespaces are now `Keri.*`, matching the package identifiers.** A consumer who installs `Keri.Files` types `using Keri.Files;`. The `Dtos` sub-namespace is gone — it held three types across two now-separate concerns, and a folder-shaped namespace inside a package this small was structure for its own sake.
+
+- **`FileProcessing` is split and retired.** It held two unrelated jobs, which is precisely why it could not survive a split along that line. The renderers — `ConvertJArrayToCSV`, `ConvertJArrayToHTMLTable`, `GetPropertyNames`, `RemoveColumnToken` — become `Keri.Files.TabularRenderer`. The orchestration moves onto the class that was already doing the sending:
+
+  | Was | Now |
+  | --- | --- |
+  | `FileProcessing.ConvertJArrayToCSV` | `TabularRenderer.ConvertJArrayToCSV` |
+  | `FileProcessing.ConvertJArrayToHTMLTable` | `TabularRenderer.ConvertJArrayToHTMLTable` |
+  | `FileProcessing.GetPropertyNames` | `TabularRenderer.GetPropertyNames` |
+  | `FileProcessing.RemoveColumnToken` | `TabularRenderer.RemoveColumnToken` |
+  | `FileProcessing.EmailReport` | `Emailer.SendReport` |
+  | `FileProcessing.IsEmailConfigured` | `Emailer.IsConfigured` |
+
+  `Emailer` now reads as one class with two entry points at different levels: `Send` for a message you have assembled yourself, `SendReport` for the build-and-deliver flow.
+
+- **`InternalsVisibleTo` from `Keri.Files` to `Keri.Mail`.** `SendReport` builds `FileOperationResult` instances, and that construction API is internal on purpose. Making it public to cross an assembly boundary *inside one product* would widen the shipping surface for no consumer benefit.
+
+- **Consumers updated.** `EpicorSvcDemo` references both packages; `KeriConfigurator` references only `Keri.Mail`, since all it uses is `SmtpSettings` and `Emailer.TestConnection`. The test project references both. The solution file, the pre-commit hook's project map, and the README version and assembly tables follow the rename.
+
+### Notes
+
+The `Keri.Files` project keeps `FileHandling`'s `ProjectGuid` so the solution entry survives the rename rather than orphaning; `Keri.Mail` gets a new one.
+
+Version numbers continue `FileHandling`'s lineage rather than restarting — these are its two halves, and starting one of them at `0.1.0` would imply new, untested code when every line here shipped as 0.5.0. They are free to diverge from here.
+
+The wider documentation still describes `FileHandling` in prose — README's architecture narrative, `CONTRIBUTING.md`, `EXAMPLES_*.md`, `CONFIGURATION.md` and `SECURITY.md`. That sweep lands after the remaining renames, so it is written once rather than three times.
+
+### Version
+
+- `FileHandling` 0.5.0 → `Keri.Files` 0.6.0 and `Keri.Mail` 0.6.0. `EpicorSvcs` (0.7.4), `RESTServices` (0.3.3), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## FileHandling 0.5.0 — 2026-09-15
 
 Splits the file half of this library from the email half, adds a save path so a file can be written somewhere and simply kept, and neutralizes spreadsheet formulas in CSV output. **Breaking:** `EMailMeta` is gone and `EmailReport` has a new signature and return type.

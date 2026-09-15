@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using ClosedXML.Excel;
 
-namespace FileHandling
+namespace Keri.Files
 {
     /// <summary>
     /// Writes in-memory data (<see cref="DataTable"/>) to Excel <c>.xlsx</c>
@@ -67,7 +67,7 @@ namespace FileHandling
         /// The <paramref name="HeaderMap"/> renames or removes columns before
         /// writing — keys are the source <see cref="DataTable"/> column
         /// names; values are the destination display names, or
-        /// <see cref="FileProcessing.RemoveColumnToken"/> to drop the column
+        /// <see cref="TabularRenderer.RemoveColumnToken"/> to drop the column
         /// entirely.
         /// </para>
         /// </remarks>
@@ -98,7 +98,7 @@ namespace FileHandling
                 {
                     if (dt.Columns[map.Key] != null)
                     {
-                        if (map.Value == FileProcessing.RemoveColumnToken)
+                        if (map.Value == TabularRenderer.RemoveColumnToken)
                             dt.Columns.Remove(map.Key);
                         else
                             dt.Columns[map.Key].ColumnName = map.Value;

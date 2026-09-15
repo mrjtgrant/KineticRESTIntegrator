@@ -2,11 +2,10 @@ using System;
 using System.Data;
 using System.IO;
 using System.Linq;
-using FileHandling.Dtos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace FileHandling
+namespace Keri.Files
 {
     /// <summary>
     /// Writes a <see cref="FileSpec"/> to disk. The half of this library that
@@ -143,7 +142,7 @@ namespace FileHandling
             {
                 if (format == "csv")
                 {
-                    string csv = FileProcessing.ConvertJArrayToCSV(
+                    string csv = TabularRenderer.ConvertJArrayToCSV(
                         spec.Data, spec.HeaderMap, spec.NeutralizeFormulas);
 
                     // UTF-8 with no byte-order mark, matching what the library

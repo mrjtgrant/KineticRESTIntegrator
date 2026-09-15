@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace FileHandling
+namespace Keri.Files
 {
     /// <summary>
     /// The outcome of a file operation: whether it worked, where the file

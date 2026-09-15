@@ -3,18 +3,18 @@ using System.Collections.Generic;
 using System.Globalization;
 using Newtonsoft.Json.Linq;
 
-namespace FileHandling.Dtos
+namespace Keri.Files
 {
     /// <summary>
     /// Describes one file to produce: the rows, how to render them, what to call
     /// it, and where to put it. Pass one to
-    /// <see cref="FileHandling.FileWriter.Save"/> to write it, or hang one off a
-    /// <see cref="MailSpec"/> to have it built and attached to a message.
+    /// <see cref="FileWriter.Save"/> to write it, or hang one off a
+    /// a mail specification to have it built and attached to a message.
     /// </summary>
     /// <remarks>
     /// Nothing here is about email. A caller that only wants a spreadsheet on
     /// disk never has to see a recipient, a subject, or a relay — the delivery
-    /// half lives on <see cref="MailSpec"/>, which carries one of these rather
+    /// half lives on a mail specification, which carries one of these rather
     /// than inheriting from it.
     /// </remarks>
     public class FileSpec
@@ -65,7 +65,7 @@ namespace FileHandling.Dtos
         /// <summary>
         /// Optional column rename / remove map. Keys are the source property
         /// names; values are the display names, or
-        /// <see cref="FileHandling.FileProcessing.RemoveColumnToken"/> to drop
+        /// <see cref="TabularRenderer.RemoveColumnToken"/> to drop
         /// the column. Honored identically by the CSV and Excel writers.
         /// </summary>
         public Dictionary<string, string> HeaderMap { get; set; }
@@ -89,7 +89,7 @@ namespace FileHandling.Dtos
         /// When true (the default), a value that would be read as a formula by a
         /// spreadsheet application is prefixed with an apostrophe so it stays
         /// text. Applies to CSV only. See
-        /// <see cref="FileHandling.FileProcessing.ConvertJArrayToCSV"/> for what
+        /// <see cref="TabularRenderer.ConvertJArrayToCSV"/> for what
         /// counts as a formula and why negative numbers are exempt.
         /// </summary>
         /// <remarks>
