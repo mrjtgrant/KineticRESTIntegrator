@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -314,19 +314,50 @@ namespace EpicorSvcDemo
                         Console.WriteLine($"  {row.PartNum,-20} {row.TypeCode,-6} {row.PartDescription}");
 
                     // =========================================================
-                    // PHASE 7 — optionally email the read-back rows as an attachment
+                    // PHASE 7 — write the read-back rows to a spreadsheet, then
+                    //           optionally email it
                     // =========================================================
+                    // The file is built first and unconditionally. Emailing is a
+                    // separate step that attaches the file already on disk — so a
+                    // run with no SMTP relay configured still produces something
+                    // you can open, which is the point of the phase.
                     Console.WriteLine();
+
+                    string reportFolder = Path.Combine(AppContext.BaseDirectory, "DemoOutput");
+
+                    var reportSpec = new FileSpec
+                    {
+                        Data            = JArray.FromObject(rows),
+                        BaseName        = "KERI_DEMO_PARTS",
+                        Format          = "xlsx",
+                        DateFormat      = "yyyy-MM-dd",
+                        SheetName       = "Demo Parts",
+                        HeaderMap       = AttachmentColHeaderMap,
+                        SavePath        = reportFolder,
+                        CreateDirectory = true
+                    };
+
+                    FileOperationResult written = FileWriter.Save(reportSpec);
+
+                    if (written.IsFailure)
+                    {
+                        Console.WriteLine($"Could not write the spreadsheet ({written.FailedAt}): {written.ErrorMessage}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Wrote the spreadsheet to {written.OutputPath}");
+                    }
+
                     SmtpSettings smtp = KeriConfig.BuildSmtpSettings();
                     if (!FileProcessing.IsEmailConfigured(smtp))
                     {
                         Console.WriteLine("Skipping the email step — no SMTP host is configured.");
                         Console.WriteLine("  With SMTP settings in App.config (SMTPHost and FromEmail), this step");
-                        Console.WriteLine("  would email the generated spreadsheet to a recipient of your choice.");
-                        Console.WriteLine("  The UD round-trip above is the heart of the demo; emailing is an");
-                        Console.WriteLine("  optional downstream step you can enable by filling in those settings.");
+                        Console.WriteLine("  would email the spreadsheet above to a recipient of your choice.");
+                        Console.WriteLine("  The UD round-trip is the heart of the demo; emailing is an optional");
+                        Console.WriteLine("  downstream step you can enable by filling in those settings.");
                     }
-                    else
+                    else if (written.IsSuccess)
                     {
                         Console.WriteLine("Who would you like to email this report to? (press Enter to skip)");
                         Console.Write("  To: ");
@@ -338,27 +369,23 @@ namespace EpicorSvcDemo
                         }
                         else
                         {
-                            // From and SMTPHost are intentionally left unset so they resolve
-                            // from the supplied SmtpSettings (smtp.from / smtp.host). Only the recipient —
-                            // which is per-run — is supplied here.
-                            var mailMeta = new EMailMeta
+                            // AttachmentPath attaches the file we just wrote rather
+                            // than building a second copy. From and SMTPHost are
+                            // intentionally left unset so they resolve from the
+                            // supplied SmtpSettings (smtp.from / smtp.host); only
+                            // the recipient, which is per-run, is supplied here.
+                            var mail = new MailSpec
                             {
-                                To                   = toAddress,
-                                RecipientName        = "Demo Recipient",
-                                ExcelSheetName       = "Demo Parts",
-                                AttachmentName       = "KERI_DEMO_PARTS",
-                                AttachmentType       = "xlsx",
-                                AttachmentDateFormat = "yyyy-MM-dd",
-                                AttachmentHeaderMap  = AttachmentColHeaderMap,
-                                AttachmentData       = JArray.FromObject(rows),
-                                Subject              = $"Keri demo — {rows.Count} part rows from {demoTable}",
-                                Body                 = $"<p>Attached are {rows.Count} demo part rows written to "
-                                                     + $"UD table {demoTable} (category \"{DemoCategory}\").</p>"
+                                AttachmentPath = written.OutputPath,
+                                To             = toAddress,
+                                RecipientName  = "Demo Recipient",
+                                Subject        = $"Keri demo — {rows.Count} part rows from {demoTable}",
+                                Body           = $"<p>Attached are {rows.Count} demo part rows written to "
+                                               + $"UD table {demoTable} (category \"{DemoCategory}\").</p>"
                             };
 
-                            Console.WriteLine($"Emailing the read-back rows to {toAddress}...");
-                            List<string> emailLog = FileProcessing.EmailReport(mailMeta, smtp);
-                            Console.WriteLine(string.Join(Environment.NewLine, emailLog));
+                            Console.WriteLine($"Emailing the spreadsheet to {toAddress}...");
+                            Console.WriteLine(FileProcessing.EmailReport(mail, smtp));
                         }
                     }
 
@@ -368,7 +395,8 @@ namespace EpicorSvcDemo
                     Console.WriteLine();
                     Console.WriteLine("---------------------------------------------------------------");
                     Console.WriteLine("Before deleting, verify the data landed as expected:");
-                    Console.WriteLine($"  1. Open the emailed attachment (KERI_DEMO_PARTS.xlsx), if the send succeeded.");
+                    Console.WriteLine($"  1. Open the spreadsheet the demo wrote"
+                                    + (written.IsSuccess ? $": {written.OutputPath}" : " (it could not be written)."));
                     Console.WriteLine($"  2. Inspect the rows in Epicor — any of:");
                     Console.WriteLine($"       - REST help: GetByID / GetRows on Ice.BO.{demoTable}Svc");
                     Console.WriteLine($"       - your own BAQ over {demoTable}");

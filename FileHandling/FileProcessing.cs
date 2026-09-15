@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using FileHandling.Dtos;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace FileHandling
 {
+    /// <summary>
+    /// Renders rows into file content, and composes the build-then-send flow for
+    /// a report email. Writing a file to disk is <see cref="FileWriter"/>'s job;
+    /// the conversions here are pure.
+    /// </summary>
     public static class FileProcessing
     {
         /// <summary>
@@ -23,13 +27,50 @@ namespace FileHandling
         // A CSV field containing any of these has to be quoted per RFC 4180.
         private static readonly char[] CsvQuoteTriggers = { ',', '"', '\r', '\n' };
 
-        public static List<string> EmailReport(EMailMeta mailMeta, SmtpSettings smtp)
+        // Leading characters a spreadsheet application reads as the start of a
+        // formula rather than as text. Tab and carriage return are on the list
+        // because they can be used to shift a payload past a naive check.
+        private static readonly char[] FormulaLeads = { '=', '+', '-', '@', '\t', '\r' };
+
+        // ---------------------------------------------------------------------
+        // Report email
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Builds a report email from <paramref name="mail"/> and sends it:
+        /// resolve the SMTP settings for this message, produce or locate the
+        /// attachment, assemble the message, hand it to the relay.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The attachment comes from one of three places, in order:
+        /// <see cref="MailSpec.Error"/> being set means the message carries the
+        /// error text and no file at all; otherwise
+        /// <see cref="MailSpec.AttachmentPath"/> attaches an existing file;
+        /// otherwise <see cref="MailSpec.Attachment"/> is built through
+        /// <see cref="FileWriter.Save"/>. A <see cref="MailSpec"/> with none of
+        /// the three sends a message with no attachment.
+        /// </para>
+        /// <para>
+        /// When a file is built, its path is on
+        /// <see cref="FileOperationResult.OutputPath"/> even if the send then
+        /// fails — the report exists; only the delivery did not happen.
+        /// </para>
+        /// </remarks>
+        /// <param name="mail">The message to send.</param>
+        /// <param name="smtp">The relay configuration. Never written to — the
+        /// per-message host override is applied to a private copy.</param>
+        /// <returns>The outcome, with the step-by-step breakdown on
+        /// <see cref="FileOperationResult.Steps"/>.</returns>
+        public static FileOperationResult EmailReport(MailSpec mail, SmtpSettings smtp)
         {
-            var steplist = new List<string> { "Emailer Start" };
+            var result = new FileOperationResult();
+
+            if (mail == null)
+                return result.Failed(FileStage.Build, "No mail specification was supplied.");
+
             try
             {
-                steplist.Add(1.ToString() + " EMAIL Setup");
-
                 // Email configuration is supplied by the caller (the composition
                 // root), not read from config here — FileHandling owns no config.
                 //
@@ -37,61 +78,86 @@ namespace FileHandling
                 // builds one SmtpSettings and reuses it across sends, so writing
                 // a per-message host override back into their instance would
                 // repoint every later call. Copy, then override the copy.
-                SmtpSettings effectiveSmtp = ResolveSmtp(smtp, mailMeta.SMTPHost);
+                SmtpSettings effectiveSmtp = ResolveSmtp(smtp, mail.SMTPHost);
+                result.Step("Setup: relay " + (effectiveSmtp.host ?? "(none configured)"));
 
-                var EmailSpecs = new EmailSpecs
+                var specs = new EmailSpecs
                 {
-                    EmailSubject = mailMeta.Subject,
-                    EmailBody = mailMeta.Body
+                    EmailSubject = mail.Subject,
+                    EmailBody = mail.Body,
+                    smtpspecs = effectiveSmtp,
+                    EmailRecipientDefault = new List<string> { effectiveSmtp.developerEmail },
+                    EmailFrom = effectiveSmtp.from
                 };
 
-                EmailSpecs.smtpspecs = effectiveSmtp;
-                EmailSpecs.EmailRecipientDefault = new List<string> { effectiveSmtp.developerEmail };
-                EmailSpecs.EmailFrom = effectiveSmtp.from;
-
-                steplist.Add(2.ToString() + " Create " + mailMeta.AttachmentType);
-                EmailSpecs.FileAddress = mailMeta.AttachmentType == "csv" ?
-                    WriteDataToCSVFile(mailMeta.AttachmentData, mailMeta.AttachmentName, mailMeta.AttachmentHeaderMap) :
-                    WriteDataToExcelFile(mailMeta.AttachmentData, mailMeta.AttachmentName, mailMeta.ExcelSheetName, mailMeta.AttachmentHeaderMap);
-
-                if(!String.IsNullOrEmpty(mailMeta.Error))
+                // ---- Attachment ---------------------------------------------
+                if (!String.IsNullOrEmpty(mail.Error))
                 {
-                    EmailSpecs.FileAddress = null;
-                    EmailSpecs.EmailError = mailMeta.Error;
-                    EmailSpecs.EmailBody = mailMeta.Error;
+                    // A run that could not produce data still has something to
+                    // say. The error travels as the body, with no attachment.
+                    specs.FileAddress = null;
+                    specs.EmailError = mail.Error;
+                    specs.EmailBody = mail.Error;
+                    result.Step("Build: skipped — reporting an error instead of an attachment");
+                }
+                else if (!String.IsNullOrEmpty(mail.AttachmentPath))
+                {
+                    if (!File.Exists(mail.AttachmentPath))
+                    {
+                        return result.Failed(FileStage.Build,
+                            "The file named by AttachmentPath does not exist: " + mail.AttachmentPath);
+                    }
+
+                    specs.FileAddress = mail.AttachmentPath;
+                    result.OutputPath = mail.AttachmentPath;
+                    result.Step("Build: attaching existing file " + mail.AttachmentPath);
+                }
+                else if (mail.Attachment != null
+                         && mail.Attachment.Data != null
+                         && mail.Attachment.Data.Count > 0)
+                {
+                    FileOperationResult saved = FileWriter.Save(mail.Attachment);
+
+                    foreach (string step in saved.Steps)
+                        result.Step(step);
+
+                    if (saved.IsFailure)
+                        return result.Failed(saved.FailedAt, saved.ErrorMessage);
+
+                    specs.FileAddress = saved.OutputPath;
+                    result.OutputPath = saved.OutputPath;
+                }
+                else
+                {
+                    result.Step("Build: no data to report — sending without an attachment");
                 }
 
-                if(string.IsNullOrEmpty(EmailSpecs.FileAddress))
-                {
-                    steplist.Add("3 No Data to Report");
-                }
+                // ---- Addressing ---------------------------------------------
+                if (!String.IsNullOrEmpty(mail.From))
+                    specs.EmailFrom = mail.From;
 
+                if (!String.IsNullOrEmpty(mail.To))
+                    specs.EmailRecipients = new List<string> { mail.To };
 
-                if (!string.IsNullOrEmpty(mailMeta.From))
-                    EmailSpecs.EmailFrom = mailMeta.From;
+                if (!String.IsNullOrEmpty(mail.CC))
+                    specs.EmailCCRecipients = new List<string> { mail.CC };
 
-                if (!String.IsNullOrEmpty(mailMeta.To))
-                    EmailSpecs.EmailRecipients = new List<string> { mailMeta.To };
+                if (!String.IsNullOrEmpty(mail.BCC))
+                    specs.EmailBCCRecipients = new List<string> { mail.BCC };
 
-                if (!String.IsNullOrEmpty(mailMeta.CC))
-                    EmailSpecs.EmailCCRecipients = new List<string> { mailMeta.CC };
+                // ---- Send ----------------------------------------------------
+                EmailSpecs sent = Emailer.Send(specs);
 
-                if (!String.IsNullOrEmpty(mailMeta.BCC))
-                    EmailSpecs.EmailBCCRecipients = new List<string> { mailMeta.BCC };
+                if (!String.IsNullOrEmpty(sent.EmailError))
+                    return result.Failed(FileStage.Send, sent.EmailError);
 
-
-                var emailresult = JObject.FromObject(Emailer.Send(EmailSpecs)).ToString();
-
-                steplist.Add(emailresult);
-
-
+                result.Step("Send: delivered to " + (mail.To ?? "the default recipient"));
+                return result.Succeeded(result.OutputPath);
             }
             catch (Exception ex)
             {
-                steplist.Add("ProcessFile ERROR: " + ex.Message);
+                return result.Failed(FileStage.Send, ex.Message);
             }
-
-            return steplist;
         }
 
         /// <summary>
@@ -144,27 +210,9 @@ namespace FileHandling
                 && !host.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
         }
 
-        public static string WriteDataToCSVFile(JArray data, string filename, Dictionary<string, string> ColumnMapping = null)
-        {
-            string tempFilePath = Path.Combine(Path.GetTempPath(), filename);
-            using (StreamWriter sw = new StreamWriter(tempFilePath))
-            {
-                sw.Write(ConvertJArrayToCSV(data, ColumnMapping));
-            }
-            return tempFilePath;
-        }
-
-        public static string WriteDataToExcelFile(JArray data, string filename, string SheetName = null, Dictionary<string,string> HeaderMap = null)
-        {
-            string tempFilePath = Path.Combine(Path.GetTempPath(), filename);
-
-            if (data == null)
-                return null;
-
-            DataTable dt = (DataTable)JsonConvert.DeserializeObject(data.ToString(Formatting.None), (typeof(DataTable)));
-
-            return ExcelWriter.CreateExcelFileFromDT(dt, tempFilePath, SheetName, HeaderMap);
-        }
+        // ---------------------------------------------------------------------
+        // Rendering
+        // ---------------------------------------------------------------------
 
         /**
          * Convert DataTable into HTML Table
@@ -208,12 +256,29 @@ namespace FileHandling
         /// </para>
         /// <para>
         /// Fields containing a comma, a double quote, or a line break are
-        /// quoted, and embedded quotes are doubled. Before 0.4.0 commas were
-        /// deleted from values instead — which kept the column count correct
-        /// but silently changed the data.
+        /// quoted, and embedded quotes are doubled.
+        /// </para>
+        /// <para>
+        /// <b>Formula neutralization.</b> With
+        /// <paramref name="neutralizeFormulas"/> left at its default, a value
+        /// beginning <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, tab or carriage
+        /// return is prefixed with an apostrophe so a spreadsheet application
+        /// treats it as text. Without that, a value that reached the ERP from a
+        /// vendor portal, an EDI feed, or a keyboard is executable the moment
+        /// somebody opens the report — the injection happens on a machine the
+        /// person who typed it never touched. Values that parse as numbers are
+        /// exempt, so <c>-5.00</c> stays <c>-5.00</c> while <c>-1+1</c> does not.
         /// </para>
         /// </remarks>
-        public static string ConvertJArrayToCSV(JArray data, Dictionary<string, string> HeaderMap = null)
+        /// <param name="data">The rows to render.</param>
+        /// <param name="HeaderMap">Optional column rename / remove map.</param>
+        /// <param name="neutralizeFormulas">False to emit values exactly as they
+        /// came out of the source. Appropriate when the file is parsed by a
+        /// machine rather than opened by a person.</param>
+        public static string ConvertJArrayToCSV(
+            JArray data,
+            Dictionary<string, string> HeaderMap = null,
+            bool neutralizeFormulas = true)
         {
             if (data == null || data.Count == 0) return string.Empty;
 
@@ -239,7 +304,10 @@ namespace FileHandling
             if (sourceKeys.Count == 0) return string.Empty;
 
             var csv = new StringBuilder();
-            csv.AppendLine(String.Join(",", headers.Select(EscapeCsvField).ToArray()));
+
+            // Headers are the caller's own text, not source data — quoted if the
+            // structure needs it, never formula-prefixed.
+            csv.AppendLine(String.Join(",", headers.Select(h => EscapeCsvField(h, false)).ToArray()));
 
             foreach (JObject line in data)
             {
@@ -247,8 +315,11 @@ namespace FileHandling
                 foreach (string key in sourceKeys)
                 {
                     JToken cell = line[key];
-                    cells.Add(EscapeCsvField(
-                        cell == null || cell.Type == JTokenType.Null ? string.Empty : cell.ToString()));
+                    string raw = cell == null || cell.Type == JTokenType.Null
+                        ? string.Empty
+                        : cell.ToString();
+
+                    cells.Add(EscapeCsvField(raw, neutralizeFormulas));
                 }
 
                 csv.AppendLine(String.Join(",", cells.ToArray()));
@@ -258,13 +329,43 @@ namespace FileHandling
         }
 
         // RFC 4180: quote a field that contains a delimiter, a quote, or a line
-        // break, and double any quote inside it.
-        private static string EscapeCsvField(string value)
+        // break, and double any quote inside it. Optionally neutralize a leading
+        // character that a spreadsheet would read as the start of a formula.
+        private static string EscapeCsvField(string value, bool neutralizeFormulas)
         {
             if (String.IsNullOrEmpty(value)) return string.Empty;
+
+            if (neutralizeFormulas && LooksLikeFormula(value))
+                value = "'" + value;
+
             if (value.IndexOfAny(CsvQuoteTriggers) < 0) return value;
 
             return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        /// <summary>
+        /// True when a spreadsheet application would evaluate
+        /// <paramref name="value"/> rather than display it.
+        /// </summary>
+        /// <remarks>
+        /// A number is exempt even though it can start with a sign. Negative
+        /// amounts are ordinary ERP data and prefixing them would corrupt every
+        /// credit, variance, and adjustment in the file — a mitigation that
+        /// breaks the common case to catch the rare one is not a mitigation.
+        /// </remarks>
+        private static bool LooksLikeFormula(string value)
+        {
+            if (String.IsNullOrEmpty(value)) return false;
+            if (Array.IndexOf(FormulaLeads, value[0]) < 0) return false;
+
+            double ignored;
+            bool isNumber = Double.TryParse(
+                value,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out ignored);
+
+            return !isNumber;
         }
 
         public static List<string> GetPropertyNames(JObject line, Dictionary<string,string> HeaderMap = null)

@@ -10,13 +10,13 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>FileHandling</Product>
     <AssemblyTitle>FileHandling</AssemblyTitle>
-    <Description>Excel generation (ClosedXML), CSV writer, and SMTP email helpers for the Kinetic REST Integrator.</Description>
+    <Description>File output for the Kinetic REST Integrator: write query results to Excel or CSV on disk, and optionally deliver them by SMTP.</Description>
     <Company>Justin Grant</Company>
     <Authors>Justin Grant</Authors>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
-    <Version>0.4.0</Version>
-    <AssemblyVersion>0.4.0.0</AssemblyVersion>
-    <FileVersion>0.4.0.0</FileVersion>
+    <Version>0.5.0</Version>
+    <AssemblyVersion>0.5.0.0</AssemblyVersion>
+    <FileVersion>0.5.0.0</FileVersion>
 
     <!-- NuGet package metadata. Without PackageLicenseExpression a packed
          artifact carries no license at all, whatever LICENSE says. -->

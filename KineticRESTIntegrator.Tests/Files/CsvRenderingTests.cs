@@ -166,6 +166,80 @@ namespace KineticRESTIntegrator.Tests.Files
         }
 
         // -----------------------------------------------------------------
+        // Formula neutralization (CWE-1236)
+        // -----------------------------------------------------------------
+
+        [Theory]
+        [InlineData("=1+1")]
+        [InlineData("=HYPERLINK(\"http://attacker.example\",\"Click\")")]
+        [InlineData("@SUM(A1:A9)")]
+        [InlineData("+1+1")]
+        [InlineData("-1+1")]
+        public void AValueThatWouldEvaluateIsPrefixed(string payload)
+        {
+            // A value can reach Epicor from a vendor portal, an EDI feed, or a
+            // keyboard, sit inert in the ERP, and then execute when somebody
+            // opens the report Keri built. The person who typed it never
+            // touched the machine that runs it.
+            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Desc = payload }));
+
+            Assert.StartsWith("'", Lines(csv)[1].TrimStart('"'));
+        }
+
+        [Theory]
+        [InlineData("-5")]
+        [InlineData("-5.00")]
+        [InlineData("-1234.56")]
+        [InlineData("+7")]
+        [InlineData("-0")]
+        public void ANegativeOrSignedNumberIsLeftAlone(string number)
+        {
+            // Negative amounts are ordinary ERP data. A mitigation that
+            // corrupts every credit, variance and adjustment in the file to
+            // catch the rare payload is not a mitigation.
+            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Amount = number }));
+
+            Assert.Equal(number, Lines(csv)[1]);
+        }
+
+        [Fact]
+        public void APlainValueIsNeverPrefixed()
+        {
+            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { PartNum = "WIDGET-01" }));
+
+            Assert.Equal("WIDGET-01", Lines(csv)[1]);
+        }
+
+        [Fact]
+        public void NeutralizationCanBeTurnedOff()
+        {
+            // For a file a machine parses rather than a person opens.
+            string csv = FileProcessing.ConvertJArrayToCSV(
+                Rows(new { Desc = "=1+1" }), null, false);
+
+            Assert.Equal("=1+1", Lines(csv)[1]);
+        }
+
+        [Fact]
+        public void HeadersAreNeverPrefixed()
+        {
+            // A header is the caller's own text, not source data.
+            var map = new Dictionary<string, string> { { "Amount", "-Amount" } };
+
+            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Amount = "1" }), map);
+
+            Assert.Equal("-Amount", Lines(csv)[0]);
+        }
+
+        [Fact]
+        public void APrefixedValueIsStillQuotedWhenItNeedsToBe()
+        {
+            string csv = FileProcessing.ConvertJArrayToCSV(Rows(new { Desc = "=A1,B1" }));
+
+            Assert.Equal("\"'=A1,B1\"", Lines(csv)[1]);
+        }
+
+        // -----------------------------------------------------------------
         // Empty input
         // -----------------------------------------------------------------
 

