@@ -16,6 +16,49 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## Security policy added — 2026-09-16
+
+`SECURITY.md` was written during the Apache-2.0 relicensing work and never made it into the repository — `CLAUDE.md` has been linking to a file that does not exist. This adds it, rewritten for the four-package layout.
+
+### Added
+
+- **`SECURITY.md`.** Vulnerability reporting through GitHub's private advisory flow rather than an email address; an explicit statement that this is an unfunded pre-1.0 project with no response-time commitment and no bounty; scope boundaries; and warranty deferred to Apache 2.0 §7 and §8 rather than restated.
+
+  The substance is the rest of it: what the library does with credentials (holds them in memory, writes nothing, phones nowhere), how to configure each environment, and — at greater length — what it deliberately does *not* do for you. Transport security is determined by the URL you supply; `filters` and service paths are pass-throughs; result objects carry business data you may not want in your logs; destructive operations are gated but not prevented.
+
+  It also names two things the library *does* defend, so a reader knows where the line is: CSV formula neutralization, and `FileWriter.Save` validating `BaseName` as a name rather than a path.
+
+### Notes
+
+Two places where the document declines to overclaim, deliberately:
+
+- **Formula neutralization covers CSV only.** Whether ClosedXML treats a leading `=` in a `DataTable` cell as a formula or as text has not been verified against the pinned 0.105.0, so the document says so instead of guessing. A caller who needs certainty for `.xlsx` is told to neutralize before handing data over.
+- **Temp files are never cleaned up.** Attachments written to the system temp folder stay there. That is documented as a retention decision for the operator rather than quietly omitted.
+
+The dependency section now reflects the split: a `Keri.Files` consumer inherits ClosedXML and nothing else, while MailKit, MimeKit and BouncyCastle arrive only with `Keri.Mail`, and only on `net8.0`. That was the argument for splitting `FileHandling`; it is now a property a reader can verify from the table.
+
+### Version
+
+- No version changes. Documentation only.
+
+## Samples renamed — 2026-09-16
+
+Housekeeping after the `Keri.*` rename: the two sample projects were still named after an assembly that no longer exists, and nothing stopped `dotnet pack` from producing packages for the three executables. No library changed; no version moved.
+
+### Changed
+
+- **`EpicorSvcDemo` → `KeriDemo`, `EpicorSvcPOCs` → `KeriPocs`.** Folder, assembly, root namespace and the `.sln` entries. Both were named for `EpicorSvcs`, which became `Keri.Epicor` in the previous release — so they pointed at something that had stopped existing.
+
+- **`KeriConfigurator` deliberately keeps its undotted name.** The dot in `Keri.Epicor`, `Keri.RestTransport`, `Keri.Files` and `Keri.Mail` marks the four projects that go on NuGet, where `namespace == AssemblyName == PackageId`. The configurator, the demo and the POCs ship nothing; giving them package-shaped names would invite the question of where to install them from. This is also how .NET generally names tooling — nobody calls the EF command-line tool `Microsoft.EntityFrameworkCore.Tool`.
+
+### Added
+
+- **`IsPackable=false` on `KeriConfigurator`, `KeriDemo` and `KeriPocs`.** Flagged back at 0.7.4 and not acted on until now: without it, a solution-wide `dotnet pack` emits packages for all three regardless of their lack of package metadata. With it, "dotted means published" stops being a convention someone has to notice and becomes something the build enforces.
+
+### Version
+
+- No version changes. `Keri.Epicor` (0.8.0), `Keri.RestTransport` (0.4.0), `Keri.Files` (0.6.0), `Keri.Mail` (0.6.0) and `KeriConfigurator` (0.5.0) are all unchanged — the renamed projects carry no version of their own, and nothing shipped behaves differently.
+
 ## Keri.Epicor 0.8.0 / Keri.RestTransport 0.4.0 — 2026-09-16
 
 The last two library projects move onto the `Keri.*` scheme, and the `REST` acronym takes the casing the .NET design guidelines call for. **Breaking:** assembly names, namespaces, package identifiers, and four public type names all change. No behavior changes — this release renames things and nothing else.
