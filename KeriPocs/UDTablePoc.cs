@@ -6,7 +6,7 @@ using Keri.Epicor.Dtos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// <b>Read side is always-safe; write side is GATED by

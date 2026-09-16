@@ -1,6 +1,6 @@
 using System;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// Tiny console-formatting helper. Keeps the POCs themselves uncluttered.

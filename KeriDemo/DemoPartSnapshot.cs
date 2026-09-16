@@ -1,7 +1,7 @@
 using System;
 using Keri.Epicor;
 
-namespace EpicorSvcDemo
+namespace KeriDemo
 {
     /// <summary>
     /// A part snapshot written to (and read back from) a UD table by the demo.

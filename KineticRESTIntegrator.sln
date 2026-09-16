@@ -11,11 +11,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keri.Mail", "Keri.Mail\Keri
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keri.Epicor", "Keri.Epicor\Keri.Epicor.csproj", "{B3F0BB2A-2325-4177-A8E0-462A86FBBB66}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicorSvcDemo", "EpicorSvcDemo\EpicorSvcDemo.csproj", "{1E3836B0-940C-4E6F-813D-9F447FB47C0D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeriDemo", "KeriDemo\KeriDemo.csproj", "{1E3836B0-940C-4E6F-813D-9F447FB47C0D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KineticRESTIntegrator.Tests", "KineticRESTIntegrator.Tests\KineticRESTIntegrator.Tests.csproj", "{D551556D-5772-4C7D-9C9C-05279CBC3E3C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicorSvcPOCs", "EpicorSvcPOCs\EpicorSvcPOCs.csproj", "{437B1801-59B8-4B87-9725-035053D3724E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeriPocs", "KeriPocs\KeriPocs.csproj", "{437B1801-59B8-4B87-9725-035053D3724E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeriConfigurator", "KeriConfigurator\KeriConfigurator.csproj", "{3AD2BFD9-D816-4648-9F91-F0B31CD8D172}"
 EndProject

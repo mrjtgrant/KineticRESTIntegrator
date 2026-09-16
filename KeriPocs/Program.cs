@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Keri.Epicor;
 using KeriConfigurator;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// Console entry point for the Keri proof-of-concept programs. Runs each

@@ -3,19 +3,24 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <OutputType>Exe</OutputType>
-    <RootNamespace>EpicorSvcPOCs</RootNamespace>
-    <AssemblyName>EpicorSvcPOCs</AssemblyName>
+    <RootNamespace>KeriPocs</RootNamespace>
+    <AssemblyName>KeriPocs</AssemblyName>
+
+    <!-- Not a package. The dotted Keri.* names are the four libraries that go
+         on NuGet; this is in-solution tooling. Without this a solution-wide
+         dotnet pack would emit a package for it anyway. -->
+    <IsPackable>false</IsPackable>
 
     <!-- Consume the solution's single configuration, owned by KeriConfigurator.
-         This stamps EpicorSvcPOCs.exe.config from KeriConfigurator's App.config
+         This stamps KeriPocs.exe.config from KeriConfigurator's App.config
          at build time, so the POCs get connection settings without owning any
          config of their own. (KeriConfigurator must be built/configured first;
          its App.config is gitignored and materialized locally.) -->
     <AppConfig>..\KeriConfigurator\App.config</AppConfig>
 
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Product>EpicorSvcPOCs</Product>
-    <AssemblyTitle>EpicorSvcPOCs</AssemblyTitle>
+    <Product>KeriPocs</Product>
+    <AssemblyTitle>KeriPocs</AssemblyTitle>
     <Description>Runnable examples of the Kinetic REST Integrator — one per major service area. Read operations are always safe; write operations are gated by the KERI_POC_ALLOW_WRITES environment variable.</Description>
     <Copyright></Copyright>
     <Version>0.1.0.0</Version>

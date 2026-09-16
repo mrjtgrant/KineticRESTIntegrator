@@ -6,6 +6,11 @@
     <RootNamespace>KeriConfigurator</RootNamespace>
     <AssemblyName>KeriConfigurator</AssemblyName>
 
+    <!-- Not a package. The dotted Keri.* names are the four libraries that go
+         on NuGet; this is in-solution tooling. Without this a solution-wide
+         dotnet pack would emit a package for it anyway. -->
+    <IsPackable>false</IsPackable>
+
     <!-- Assembly metadata (replaces AssemblyInfo.cs) -->
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>KeriConfigurator</Product>

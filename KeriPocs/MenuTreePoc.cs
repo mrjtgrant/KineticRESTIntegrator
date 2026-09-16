@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Keri.Epicor;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// <b>Read-only.</b> Demonstrates the typed-projection pattern using

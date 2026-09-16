@@ -5,7 +5,7 @@ using Keri.Epicor;
 using Keri.Epicor.Dtos;
 using Newtonsoft.Json.Linq;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// <b>Read-only.</b> Lists open jobs, walks the wide multi-table dataset

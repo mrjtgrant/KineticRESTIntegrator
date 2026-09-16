@@ -3,11 +3,16 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <OutputType>Exe</OutputType>
-    <RootNamespace>EpicorSvcDemo</RootNamespace>
-    <AssemblyName>EpicorSvcDemo</AssemblyName>
+    <RootNamespace>KeriDemo</RootNamespace>
+    <AssemblyName>KeriDemo</AssemblyName>
+
+    <!-- Not a package. The dotted Keri.* names are the four libraries that go
+         on NuGet; this is in-solution tooling. Without this a solution-wide
+         dotnet pack would emit a package for it anyway. -->
+    <IsPackable>false</IsPackable>
 
     <!-- Consume the solution's single configuration, owned by KeriConfigurator.
-         This stamps EpicorSvcDemo.exe.config from KeriConfigurator's App.config
+         This stamps KeriDemo.exe.config from KeriConfigurator's App.config
          at build time. The demo no longer owns any config of its own.
          (KeriConfigurator must be built/configured first; its App.config is
          gitignored and materialized locally.) -->
@@ -15,8 +20,8 @@
 
     <!-- Assembly metadata (replaces AssemblyInfo.cs) -->
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Product>EpicorSvcDemo</Product>
-    <AssemblyTitle>EpicorSvcDemo</AssemblyTitle>
+    <Product>KeriDemo</Product>
+    <AssemblyTitle>KeriDemo</AssemblyTitle>
     <Description>End-to-end example of the Kinetic REST Integrator: runs a BAQ, builds an Excel report, and emails it.</Description>
     <Company></Company>
     <Copyright></Copyright>

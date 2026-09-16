@@ -56,7 +56,7 @@ The library multi-targets **.NET Framework 4.8** (`net48`) and **.NET 8.0** (`ne
 
 The three library projects (`Keri.RestTransport`, `Keri.Epicor`, `FileHandling`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
 
-The consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`) and the test project are single-target `net48`. `KeriConfigurator` — the setup tool and composition root — multi-targets `net48;net8.0` so the net48 executables can consume it while it stays runnable on net8. Each consumes the matching build of the libraries.
+The consumer projects (`KeriDemo`, `KeriPocs`) and the test project are single-target `net48`. `KeriConfigurator` — the setup tool and composition root — multi-targets `net48;net8.0` so the net48 executables can consume it while it stays runnable on net8. Each consumes the matching build of the libraries.
 
 The one place where target framework matters internally is `FileHandling.Emailer.Send`: on `net48` it uses `System.Net.Mail.SmtpClient` (BCL, no NuGet dependency), and on `net8.0` it uses `MailKit.Net.Smtp.SmtpClient` 4.16.0+ (a patched, modern SMTP client). The `#if NET48` switch is purely an implementation detail; the same `App.config` settings produce the same behavior on both targets.
 
@@ -70,8 +70,8 @@ The one place where target framework matters internally is `FileHandling.Emailer
 | `Keri.Epicor` | `Keri.Epicor.dll` | Async wrappers for the Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
 | `Keri.Files` | `Keri.Files.dll` | Excel and CSV rendering (ClosedXML), and writing them to disk. |
 | `Keri.Mail` | `Keri.Mail.dll` | SMTP delivery of a built report, or of any existing file. |
-| `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
-| `EpicorSvcPOCs` | `EpicorSvcPOCs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
+| `KeriDemo` | `KeriDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
+| `KeriPocs` | `KeriPocs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
 | `KeriConfigurator` | `KeriConfigurator.exe` | Composition root + interactive setup: owns the unified config, builds clients/sessions, and onboards and live-tests the connection and SMTP. |
 | `KineticRESTIntegrator.Tests` | xUnit test project | Offline unit tests covering the framework's deterministic surface. |
 
@@ -113,7 +113,7 @@ The one place where target framework matters internally is `FileHandling.Emailer
 5. **Rebuild and run the demo** to verify end-to-end — it runs a BAQ, builds an Excel attachment, and (if email is configured) emails it:
    ```
    dotnet build KineticRESTIntegrator.sln
-   dotnet run --project EpicorSvcDemo
+   dotnet run --project KeriDemo
    ```
 
 > **`App.config` is gitignored.** Your credentials stay on your machine. Don't remove the gitignore rule, and never commit `App.config` directly.
@@ -288,23 +288,23 @@ For the full conventions — when to use which column family, the 2^5 key grain 
 
 ### Practical Examples
 
-The fastest way to see Keri working is `EpicorSvcDemo` — an end-to-end sample where a single run exercises the whole library: it executes a BAQ, turns the result into a formatted Excel workbook (using a column header map to control which fields appear and how they're labeled), and emails it as an attachment. Run this first to confirm your configuration works and to see how the pieces fit together:
+The fastest way to see Keri working is `KeriDemo` — an end-to-end sample where a single run exercises the whole library: it executes a BAQ, turns the result into a formatted Excel workbook (using a column header map to control which fields appear and how they're labeled), and emails it as an attachment. Run this first to confirm your configuration works and to see how the pieces fit together:
 
 ```
-dotnet run --project EpicorSvcDemo
+dotnet run --project KeriDemo
 ```
 
-For per-service detail, the `EpicorSvcPOCs` project has five labeled scenarios (UserCodes, Part, UDTable, SalesOrder, MenuTree):
+For per-service detail, the `KeriPocs` project has five labeled scenarios (UserCodes, Part, UDTable, SalesOrder, MenuTree):
 
 ```
-dotnet run --project EpicorSvcPOCs
+dotnet run --project KeriPocs
 ```
 
 Reads run safely against your configured environment. Write operations (UDTable upsert, SalesOrder create) are **gated** — they dry-run by default, printing the exact payload they *would* send. To arm writes for a session:
 
 ```
 set KERI_POC_ALLOW_WRITES=true
-dotnet run --project EpicorSvcPOCs
+dotnet run --project KeriPocs
 ```
 
 For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md) — calling un-wrapped Epicor endpoints directly, writing UD-table rows, and the UD-row conventions. To use Keri's transport layer against a non-Epicor REST API, see [EXAMPLES_RESTAPI.md](EXAMPLES_RESTAPI.md).
@@ -414,16 +414,16 @@ KineticRESTIntegrator/
 │   ├── Properties/                  unified Settings schema
 │   └── KeriConfigurator.csproj
 │
-├── EpicorSvcDemo/                   End-to-end sample app
+├── KeriDemo/                   End-to-end sample app
 │   ├── Program.cs
-│   └── EpicorSvcDemo.csproj
+│   └── KeriDemo.csproj
 │
-├── EpicorSvcPOCs/                   Per-service runnable examples
+├── KeriPocs/                   Per-service runnable examples
 │   ├── Program.cs
 │   ├── PocConfig.cs                 (the write-gate)
 │   ├── PocBanner.cs
 │   ├── UserCodesPoc.cs, PartPoc.cs, UDTablePoc.cs, SalesOrderPoc.cs, MenuTreePoc.cs
-│   └── EpicorSvcPOCs.csproj
+│   └── KeriPocs.csproj
 │
 └── KineticRESTIntegrator.Tests/     xUnit unit tests (offline, deterministic)
     ├── ColumnLegendTests.cs, OperationResultTests.cs,

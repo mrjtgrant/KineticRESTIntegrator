@@ -1,6 +1,6 @@
 using System;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// Central configuration for the POC programs. Currently a single flag —
@@ -27,7 +27,7 @@ namespace EpicorSvcPOCs
     /// PowerShell example, just for this session:
     /// <code>
     /// $env:KERI_POC_ALLOW_WRITES = "true"
-    /// dotnet run --project EpicorSvcPOCs
+    /// dotnet run --project KeriPocs
     /// </code>
     /// </para>
     /// </remarks>

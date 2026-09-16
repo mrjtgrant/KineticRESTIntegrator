@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Keri.Epicor;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// <b>Read-only.</b> Demonstrates two flavors of UserCodes access:

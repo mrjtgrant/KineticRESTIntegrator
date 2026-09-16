@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Keri.Epicor;
 using Keri.Epicor.Dtos;
 
-namespace EpicorSvcPOCs
+namespace KeriPocs
 {
     /// <summary>
     /// <b>Read-only.</b> Pulls a small page of parts and shows how to

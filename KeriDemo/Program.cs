@@ -9,7 +9,7 @@ using Keri.Mail;
 using KeriConfigurator;
 using Newtonsoft.Json.Linq;
 
-namespace EpicorSvcDemo
+namespace KeriDemo
 {
     /// <summary>
     /// End-to-end demo of the typed UD-table surface: pull 10 parts from a BAQ,
@@ -55,7 +55,7 @@ namespace EpicorSvcDemo
             // any console code page.
             try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
 
-            Console.WriteLine("=== EpicorSvcDemo — typed UD-table round-trip ===");
+            Console.WriteLine("=== KeriDemo — typed UD-table round-trip ===");
             Console.WriteLine();
 
             // Resolve the candidate list (env override or the built-in default).
