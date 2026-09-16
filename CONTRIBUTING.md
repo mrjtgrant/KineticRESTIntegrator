@@ -12,7 +12,7 @@ dotnet test KineticRESTIntegrator.Tests
 
 Expected: <!--TESTS-->275<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
 
-The library multi-targets `net48` and `net8.0`. `dotnet build` produces both target framework outputs from each library project; if you change library code, make sure both targets still compile. Consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`, the test project) remain single-target `net48`.
+The library multi-targets `net48` and `net8.0`. `dotnet build` produces both target framework outputs from each library project; if you change library code, make sure both targets still compile. Consumer projects (`KeriDemo`, `KeriPocs`, the test project) remain single-target `net48`.
 
 ---
 
@@ -22,7 +22,7 @@ The single most important rule:
 
 > **`App.config` is gitignored. Don't remove the gitignore rule. Don't commit `App.config` directly. Add any new settings to the single template, `KeriConfigurator/App.config.template`.**
 
-`App.config` holds credentials, internal URLs, and SMTP host details. A committed `App.config` exposes all three. The repo's `.gitignore` excludes every `App.config` (via `**/App.config`) while keeping every `*.template`. Configuration is owned by **KeriConfigurator**, the composition root: `KeriConfigurator/App.config` is the one config file, holding both the Epicor connection and the email/SMTP sections, and the solution's executables (`EpicorSvcDemo`, `EpicorSvcPOCs`) share it through an MSBuild `<AppConfig>` link rather than carrying their own. There is a single template, `KeriConfigurator/App.config.template`; add any new setting there. See [CONFIGURATION.md](CONFIGURATION.md) for the full picture. If you add another consumer project that needs its own config, the glob already ignores its `App.config` too.
+`App.config` holds credentials, internal URLs, and SMTP host details. A committed `App.config` exposes all three. The repo's `.gitignore` excludes every `App.config` (via `**/App.config`) while keeping every `*.template`. Configuration is owned by **KeriConfigurator**, the composition root: `KeriConfigurator/App.config` is the one config file, holding both the Epicor connection and the email/SMTP sections, and the solution's executables (`KeriDemo`, `KeriPocs`) share it through an MSBuild `<AppConfig>` link rather than carrying their own. There is a single template, `KeriConfigurator/App.config.template`; add any new setting there. See [CONFIGURATION.md](CONFIGURATION.md) for the full picture. If you add another consumer project that needs its own config, the glob already ignores its `App.config` too.
 
 The same logic extends:
 
@@ -176,7 +176,7 @@ An orchestrator takes that returned dataset, populates the new row, threads it t
 
 ### DTOs
 
-Typed DTOs live in `Keri.Epicor/Dtos/` (Epicor business-object models) and `FileHandling/Dtos/` (the email DTOs — `EmailSpecs`, `EMailMeta`). The Epicor DTOs model the **practical core** of each BO — the columns every Epicor install has, not install-specific custom columns.
+Typed DTOs live in `Keri.Epicor/Dtos/` (Epicor business-object models), `Keri.Files/` (`FileSpec` — what file to produce and where), and `Keri.Mail/` (`MailSpec`, `EmailSpecs`, `SmtpSettings`). The Epicor DTOs model the **practical core** of each BO — the columns every Epicor install has, not install-specific custom columns.
 
 - **The DTO’s name says what it is.** A class named after an Epicor table (`Customer`, `Part`, `OrderHed`) mirrors that real table. A `Dataset`-suffixed class (`InvTransferDataset`, `GroupUnLockDataset`) mirrors an Epicor transaction-input shape that spans several tables. An `Input`-suffixed class (`QuoteInput`, `MiscShipLineInput`, `ECOMtlInput`) is a caller-facing convenience shape — a reshaped subset that feeds one orchestrator. Match this when you add a DTO: the table name for a table model, `Dataset` for a transaction shape, `Input` for a convenience shape.
 - **No `_c` columns.** Install-specific custom columns (Epicor's `_c` suffix) belong to the installation, not the library. They remain accessible to callers via `OperationResult.RawResponse`.
@@ -230,13 +230,13 @@ What does *not* belong in the test project:
 - Tests that depend on a specific Epicor configuration (a specific BAQ existing, a specific UD table, etc.).
 - Anything timing-sensitive enough to be flaky.
 
-If you need to test something that *requires* a live server, write it as a POC in `EpicorSvcPOCs` instead — that's the project's purpose.
+If you need to test something that *requires* a live server, write it as a POC in `KeriPocs` instead — that's the project's purpose.
 
 ---
 
 ## POCs
 
-`EpicorSvcPOCs` holds runnable examples that hit a live Epicor server. Read operations are always safe; **write operations are gated** by the `KERI_POC_ALLOW_WRITES` environment variable and run as dry-runs by default.
+`KeriPocs` holds runnable examples that hit a live Epicor server. Read operations are always safe; **write operations are gated** by the `KERI_POC_ALLOW_WRITES` environment variable and run as dry-runs by default.
 
 If you add a new POC that performs writes:
 

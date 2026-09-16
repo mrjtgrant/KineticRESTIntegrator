@@ -16,6 +16,30 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## Documentation caught up — 2026-09-16
+
+The renames left the *names* correct everywhere and the *prose* describing a library that no longer exists. This fixes the documents a newcomer actually reads first.
+
+### Changed
+
+- **`README.md`.** Three library projects became four. `FileHandling.Emailer.Send` became `Keri.Mail`'s. The consumption section no longer says "the three DLLs needed" — which DLLs you need now depends on what you use, and the `.csproj` example says so with comments rather than listing all four unconditionally. The dependency table attributes each package to the project that actually pulls it, with a line making the consequence explicit: a consumer who writes spreadsheets and never sends mail takes ClosedXML and nothing else. The project tree describes `Keri.Files` and `Keri.Mail` as they exist rather than a merged `FileHandling`.
+
+- **`CONFIGURATION.md`.** The email example was code that would not compile — `FileProcessing.EmailReport(mailMeta, smtp)` against types that were deleted two releases ago. Rewritten around `MailSpec`, `FileSpec` and `Emailer.SendReport`, including what `FileOperationResult` gives back and why `OutputPath` is still populated when a send fails.
+
+  It also gains a section that had nowhere to live before: **writing a file without sending it.** That is the whole point of splitting `Keri.Files` out, and until now the configuration guide could only show you how to email one.
+
+- **`CONTRIBUTING.md`.** DTO locations, the sample project names, and the POC guidance.
+
+- **Sample project names** throughout: `EpicorSvcDemo` → `KeriDemo`, `EpicorSvcPOCs` → `KeriPocs`.
+
+### Notes
+
+The check that mattered here was not "does it mention the old name" but "would this compile" — several passages named types that no longer exist, which is worse than stale prose because a reader trusts a code block. `EXAMPLES_EPICOR.md` and `EXAMPLES_RESTAPI.md` were checked and needed nothing: they cover the Epicor service surface, which the file/mail split never touched.
+
+### Version
+
+- No version changes. Documentation only.
+
 ## Security policy added — 2026-09-16
 
 `SECURITY.md` was written during the Apache-2.0 relicensing work and never made it into the repository — `CLAUDE.md` has been linking to a file that does not exist. This adds it, rewritten for the four-package layout.

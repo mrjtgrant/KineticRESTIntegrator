@@ -54,11 +54,11 @@ All the Epicor service wrappers are converted, and the libraries are configurati
 
 The library multi-targets **.NET Framework 4.8** (`net48`) and **.NET 8.0** (`net8.0`).
 
-The three library projects (`Keri.RestTransport`, `Keri.Epicor`, `FileHandling`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
+The four library projects (`Keri.RestTransport`, `Keri.Epicor`, `Keri.Files`, `Keri.Mail`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
 
 The consumer projects (`KeriDemo`, `KeriPocs`) and the test project are single-target `net48`. `KeriConfigurator` — the setup tool and composition root — multi-targets `net48;net8.0` so the net48 executables can consume it while it stays runnable on net8. Each consumes the matching build of the libraries.
 
-The one place where target framework matters internally is `FileHandling.Emailer.Send`: on `net48` it uses `System.Net.Mail.SmtpClient` (BCL, no NuGet dependency), and on `net8.0` it uses `MailKit.Net.Smtp.SmtpClient` 4.16.0+ (a patched, modern SMTP client). The `#if NET48` switch is purely an implementation detail; the same `App.config` settings produce the same behavior on both targets.
+The one place where target framework matters internally is `Keri.Mail`'s `Emailer.Send`: on `net48` it uses `System.Net.Mail.SmtpClient` (BCL, no NuGet dependency), and on `net8.0` it uses `MailKit.Net.Smtp.SmtpClient` 4.16.0+ (a patched, modern SMTP client). The `#if NET48` switch is purely an implementation detail; the same `App.config` settings produce the same behavior on both targets.
 
 ---
 
@@ -153,7 +153,7 @@ Any setting can hold an environment-variable reference instead of a literal, wri
 
 ### From your own application
 
-The libraries are configuration-free, so a consumer outside this solution supplies its own connection by building an `EpicorRestSessionKey` in code and passing it to `new EpicorClient(session)` — ideal for a web portal, a vault, or Credential Manager, where the secret never touches a file. Email works the same way: build an `SmtpSettings` and pass it to `FileProcessing.EmailReport`.
+The libraries are configuration-free, so a consumer outside this solution supplies its own connection by building an `EpicorRestSessionKey` in code and passing it to `new EpicorClient(session)` — ideal for a web portal, a vault, or Credential Manager, where the secret never touches a file. Email works the same way: build an `SmtpSettings` and pass it to `Emailer.SendReport`. To produce a file without sending it, `Keri.Files` alone is enough — `FileWriter.Save` writes wherever you point it, and `Keri.Mail` is only needed when something leaves the machine.
 
 See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding flow, hand-editing, the programmatic / portal / vault patterns, multiple environments, and migration from the pre-0.3.0 model (per-library config, removed; and the old `EPICOR_*` auto-reader, replaced by the `{ENV:NAME}` references above).
 
@@ -313,7 +313,7 @@ For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EP
 
 ## Integrating Keri into a consumer project
 
-Keri does not publish to NuGet. Consumers reference Keri's DLLs directly from a local `lib/` folder. The three DLLs needed are `Keri.Epicor.dll`, `FileHandling.dll`, and `Keri.RestTransport.dll` — plus Keri's transitive dependencies, which Keri's build output ships alongside its own DLLs.
+Keri does not publish to NuGet. Consumers reference Keri's DLLs directly from a local `lib/` folder. Which DLLs you need depends on what you use: `Keri.Epicor.dll` and `Keri.RestTransport.dll` for the ERP surface, `Keri.Files.dll` if you produce spreadsheets or CSVs, and `Keri.Mail.dll` only if you send them — plus Keri's transitive dependencies, which Keri's build output ships alongside its own DLLs.
 
 In your consumer project's `.csproj`:
 
@@ -325,8 +325,13 @@ In your consumer project's `.csproj`:
   <Reference Include="Keri.RestTransport">
     <HintPath>lib\Keri.RestTransport.dll</HintPath>
   </Reference>
-  <Reference Include="FileHandling">
-    <HintPath>lib\FileHandling.dll</HintPath>
+  <!-- only if you produce files -->
+  <Reference Include="Keri.Files">
+    <HintPath>lib\Keri.Files.dll</HintPath>
+  </Reference>
+  <!-- only if you email them -->
+  <Reference Include="Keri.Mail">
+    <HintPath>lib\Keri.Mail.dll</HintPath>
   </Reference>
 </ItemGroup>
 ```
@@ -343,16 +348,18 @@ When you build the consumer, MSBuild copies the referenced DLLs into the consume
 
 Keri ships its full dependency tree alongside its own DLLs. The consumer references Keri; Keri brings in `Newtonsoft.Json`, `ClosedXML`, `MailKit`, and everything else those packages need. The consumer does not need to know what's in the tree.
 
-This makes consumer setup trivial — reference three DLLs, done — at the cost of locking the consumer to whatever versions Keri ships. If the consumer adds its own NuGet reference to a package Keri also uses, the two versions compete at build time. The NuGet-resolved version usually wins for the consumer's bin folder, and Keri's calls into that package then fail at runtime with a `MissingMethodException`, `FileLoadException`, or `TypeLoadException` referencing the package.
+This makes consumer setup trivial — reference the DLLs you use, done — at the cost of locking the consumer to whatever versions Keri ships. If the consumer adds its own NuGet reference to a package Keri also uses, the two versions compete at build time. The NuGet-resolved version usually wins for the consumer's bin folder, and Keri's calls into that package then fail at runtime with a `MissingMethodException`, `FileLoadException`, or `TypeLoadException` referencing the package.
 
 The pinned versions (net8.0 build) are:
 
 | Package | Pinned version | Used by |
 |---|---|---|
-| `Newtonsoft.Json` | 13.0.4 | `Keri.Epicor`, `Keri.RestTransport`, `FileHandling` (JSON parsing throughout) |
-| `ClosedXML` | 0.105.0 | `FileHandling` (Excel read / write) |
-| `MailKit` / `MimeKit` | 4.16.0 | `FileHandling` (SMTP on net8.0) |
-| `System.Configuration.ConfigurationManager` | 8.0.0 | `Keri.Epicor`, `FileHandling` (`App.config` loading on net8.0) |
+| `Newtonsoft.Json` | 13.0.4 | all four libraries (JSON parsing throughout) |
+| `ClosedXML` | 0.105.0 | `Keri.Files` (Excel read / write) |
+| `MailKit` / `MimeKit` | 4.16.0 | `Keri.Mail` (SMTP on net8.0) |
+| `System.Configuration.ConfigurationManager` | 8.0.0 | `Keri.Epicor` (`App.config` loading on net8.0) |
+
+A consumer that writes spreadsheets but never sends mail takes on ClosedXML and nothing else — MailKit, MimeKit and BouncyCastle arrive only with `Keri.Mail`. That is what the split between the two is for.
 
 If your consumer hits a runtime error referencing one of these packages, check for a competing `<PackageReference>` in the consumer's `.csproj` and remove it — Keri's bundled copy will take over.
 
@@ -398,13 +405,22 @@ KineticRESTIntegrator/
 │       Services with multi-step operations have a companion
 │       *.Workflows.cs partial-class file holding the orchestrators.
 │
-├── FileHandling/                    Excel, CSV, email
-│   ├── Dtos/                        EmailSpecs, EMailMeta, SmtpSettings (SmtpSettings public)
+├── Keri.Files/                      rendering rows to files, and writing them
+│   ├── TabularRenderer.cs           rows → CSV (RFC 4180, formula-safe) / HTML
 │   ├── ExcelReader.cs               worksheet → DataTable / JArray
 │   ├── ExcelWriter.cs               DataTable → .xlsx
-│   ├── Emailer.cs                   dual-path SMTP (System.Net.Mail / MailKit)
-│   ├── FileProcessing.cs
-│   └── FileHandling.csproj
+│   ├── FileWriter.cs                FileSpec → a file on disk
+│   ├── FileSpec.cs                  what to produce, and where to put it
+│   ├── FileOperationResult.cs       outcome, output path, step breakdown
+│   ├── FileStage.cs                 Build / Write / Send
+│   └── Keri.Files.csproj
+│
+├── Keri.Mail/                       SMTP delivery
+│   ├── Emailer.cs                   dual-path SMTP, plus SendReport
+│   ├── MailSpec.cs                  recipients, subject, body, attachment
+│   ├── EmailSpecs.cs                the single-message contract
+│   ├── SmtpSettings.cs              relay configuration (public)
+│   └── Keri.Mail.csproj
 │
 ├── KeriConfigurator/                Composition root + setup console
 │   ├── App.config.template          seeds the shared App.config on first build
@@ -442,7 +458,7 @@ KineticRESTIntegrator/
 | `result.IsFailure` with HTTP 404 | Wrong BO name, wrong company segment in the URL, or a record/BAQ was renamed/deleted. |
 | `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 or later — the type is `DateTime?` and accommodates this. |
 | `pcNeqQtyAction = "Stop"` on inventory transfer | The move would create negative on-hand. Check source bin quantity. |
-| Email arrives with no attachment, only the error message in the body | `AttachmentData` was null or `Error` was set on the `EMailMeta`. The framework treats either as a no-data case and emails the error message instead of an attachment. |
+| Email arrives with no attachment, only the error message in the body | `MailSpec.Error` was set, or the attached `FileSpec` had no rows. Either is treated as a no-data case: the message carries the error text instead of a file. |
 | Email never arrives | SMTP host unreachable, port blocked, or auth failed. By default the library connects anonymously on port 25 with no TLS; for relays that require auth or TLS, set `SMTPPort=587`, `SMTPEnableSsl=true`, `SMTPUsername`, and `SMTPPassword` in `App.config`. Port 25 + TLS and port 465 (implicit TLS) are rejected as misconfigurations — use port 587 with STARTTLS instead. Check `EmailError` in the returned `EmailSpecs` for the underlying exception message. |
 | `KineticRESTIntegrator.Tests` fails on first run | First run pulls xUnit/test-SDK packages from NuGet — slow, ~30s, network required. Subsequent runs are fast and offline. |
 

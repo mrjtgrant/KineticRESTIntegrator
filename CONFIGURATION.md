@@ -6,9 +6,9 @@ How Keri connects to Epicor — from a fresh checkout, to a working run, to your
 
 Keri's configuration lives in a **single shared `App.config`**, owned by **KeriConfigurator** — the composition root. KeriConfigurator holds the unified settings schema (Epicor connection *and* email/SMTP), reads it, and builds the sessions and clients the rest of the solution uses.
 
-The three libraries — `Keri.RestTransport`, `Keri.Epicor`, `FileHandling` — read **no configuration of their own**. They're handed what they need: an `EpicorRestSessionKey` (built by `KeriConfig.BuildEpicorClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
+The four libraries — `Keri.RestTransport`, `Keri.Epicor`, `Keri.Files`, `Keri.Mail` — read **no configuration of their own**. They're handed what they need: an `EpicorRestSessionKey` (built by `KeriConfig.BuildEpicorClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
 
-The solution's executables (`EpicorSvcDemo`, `EpicorSvcPOCs`) share KeriConfigurator's single `App.config` through an MSBuild `<AppConfig>` link, so there is exactly one file to fill in for the whole solution.
+The solution's executables (`KeriDemo`, `KeriPocs`) share KeriConfigurator's single `App.config` through an MSBuild `<AppConfig>` link, so there is exactly one file to fill in for the whole solution.
 
 ```
 KeriConfigurator/App.config   ← the one config file
@@ -17,8 +17,8 @@ KeriConfigurator/App.config   ← the one config file
         └─ KeriConfig.BuildSmtpSettings() → SmtpSettings    (email)
         │
    shared via <AppConfig> by
-        ├─ EpicorSvcDemo
-        └─ EpicorSvcPOCs
+        ├─ KeriDemo
+        └─ KeriPocs
 ```
 
 ---
@@ -35,7 +35,7 @@ KeriConfigurator/App.config   ← the one config file
 
 3. **Run the demo** to confirm end-to-end:
    ```
-   dotnet run --project EpicorSvcDemo
+   dotnet run --project KeriDemo
    ```
    It reads the same shared `App.config`, pulls parts from a BAQ, round-trips them through a UD table, and (if email is configured) emails them.
 
@@ -265,11 +265,11 @@ To work against more than one environment, build a full `EpicorRestSessionKey` p
 
 ## Email from your own code
 
-`FileHandling` is config-free too. Build an `SmtpSettings` and pass it to the email entry point:
+`Keri.Files` and `Keri.Mail` are config-free too. Build an `SmtpSettings` and pass it to the send entry point:
 
 ```csharp
-using FileHandling;
-using FileHandling.Dtos;
+using Keri.Files;
+using Keri.Mail;
 
 var smtp = new SmtpSettings
 {
@@ -285,10 +285,51 @@ var smtp = new SmtpSettings
 // optional: probe the relay first (connect + greeting, no send)
 string err = Emailer.TestConnection(smtp);
 
-FileProcessing.EmailReport(mailMeta, smtp);
+var mail = new MailSpec
+{
+    To      = "sales@example.com",
+    Subject = "Open orders",
+    Body    = "<p>Attached.</p>",
+    Attachment = new FileSpec
+    {
+        Data       = rows,            // a JArray - a BAQ result, a typed list, anything
+        BaseName   = "OpenOrders",
+        Format     = "xlsx",
+        DateFormat = "yyyy-MM-dd",
+        SheetName  = "Open Orders"
+    }
+};
+
+FileOperationResult result = Emailer.SendReport(mail, smtp);
+
+if (result.IsFailure)
+    Console.WriteLine($"{result.FailedAt}: {result.ErrorMessage}");
 ```
 
-Within this solution, `KeriConfig.BuildSmtpSettings()` produces that `SmtpSettings` from the shared `App.config`, and the demo passes it straight to `EmailReport`.
+`result.Steps` carries the step-by-step breakdown — render, write, send — and `result.OutputPath` names the file that was produced, even when the send itself failed.
+
+Within this solution, `KeriConfig.BuildSmtpSettings()` produces that `SmtpSettings` from the shared `App.config`, and the demo passes it straight to `SendReport`.
+
+### Writing a file without sending it
+
+No SMTP configuration is involved, and `Keri.Mail` is not needed at all:
+
+```csharp
+using Keri.Files;
+
+var result = FileWriter.Save(new FileSpec
+{
+    Data            = rows,
+    BaseName        = "OpenOrders",
+    Format          = "csv",
+    SavePath        = @"C:\Reports",
+    CreateDirectory = true
+});
+
+Console.WriteLine(result.IsSuccess ? result.OutputPath : result.ErrorMessage);
+```
+
+An existing file is never overwritten — the name is uniquified the way a browser names a repeated download, and `OutputPath` tells you which name won. To mail a file you have already written, set `MailSpec.AttachmentPath` instead of `Attachment`, and nothing is built a second time.
 
 ---
 
@@ -296,9 +337,9 @@ Within this solution, `KeriConfig.BuildSmtpSettings()` produces that `SmtpSettin
 
 If you used Keri before 0.3.0, the configuration model changed substantially:
 
-- **Per-library `App.config` files are gone.** `Keri.Epicor` and `FileHandling` no longer read configuration or have their own settings. There's one shared `App.config`, owned by KeriConfigurator.
+- **Per-library `App.config` files are gone.** `Keri.Epicor`, `Keri.Files` and `Keri.Mail` no longer read configuration or have their own settings. There's one shared `App.config`, owned by KeriConfigurator.
 - **`EpicorClient.FromConfiguration()` and `EpicorConfiguration` were removed.** Build a client with `KeriConfig.BuildEpicorClient()` (inside this solution) or `new EpicorClient(session)` (from your own code).
-- **`SmtpSettings` is now public and config-free**, and `FileProcessing.EmailReport` takes an `SmtpSettings` parameter.
+- **`SmtpSettings` is now public and config-free**, and `Emailer.SendReport` takes an `SmtpSettings` parameter.
 - **Environment-variable *auto-reading* (`EPICOR_*`) was removed in 0.3.0 — then reintroduced in a clearer form.** 0.3.0 dropped the old behavior in which settings were silently overridden by `EPICOR_*` variables. Environment variables are supported again, now as explicit **`{ENV:NAME}` references** written into `App.config` (see [Environment-variable references](#environment-variable-references-envname) above): a value reads from the environment only when you write it as a token, so there is no hidden override to reason about. The programmatic `EpicorRestSessionKey` path remains for keeping secrets out of any file entirely.
 
 The migration in one line: wherever you called `EpicorClient.FromConfiguration()`, call `KeriConfig.BuildEpicorClient()` (in-solution) or construct an `EpicorRestSessionKey` and pass it to `new EpicorClient(...)` (external).
