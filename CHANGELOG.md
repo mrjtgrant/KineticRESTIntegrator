@@ -16,6 +16,45 @@ The project stays on `0.x` until its API is deliberately committed to as stable.
 
 ---
 
+## Keri.Epicor 0.8.0 / Keri.RestTransport 0.4.0 — 2026-09-16
+
+The last two library projects move onto the `Keri.*` scheme, and the `REST` acronym takes the casing the .NET design guidelines call for. **Breaking:** assembly names, namespaces, package identifiers, and four public type names all change. No behavior changes — this release renames things and nothing else.
+
+### Changed
+
+- **`EpicorSvcs` → `Keri.Epicor`, `RESTServices` → `Keri.RestTransport`.** Folder, assembly, root namespace, and package identifier, for both. Applied with `git mv` so `git log --follow` and `git blame` carry through the rename rather than stopping at it.
+
+  With `Keri.Files` and `Keri.Mail` already renamed, all four libraries now have `namespace == AssemblyName == PackageId`. Somebody who runs `dotnet add package Keri.Epicor` types `using Keri.Epicor;` and it works — which was not true of any of them a release ago.
+
+- **`RESTServices` becomes `RestTransport`, not `RestServices`.** The project contains a transport — one class that executes HTTP requests — not a collection of services. The repository's own folder layout said so (`RESTServices/Transport/`) and every document called it "the transport"; only the assembly name disagreed.
+
+- **`REST` → `Rest` in type names.** The .NET Framework design guidelines capitalize two-letter acronyms (`IO`, `ID`) and PascalCase anything longer (`Xml`, `Html`, `Uri`). The renames:
+
+  | Was | Now |
+  | --- | --- |
+  | `RESTConnect` | `RestConnect` |
+  | `RESTSessionKey` | `RestSessionKey` |
+  | `RESTAuthenticationObject` | `RestAuthenticationObject` |
+  | `EpicorRESTSessionKey` | `EpicorRestSessionKey` |
+  | `RESTCallAsync` | `RestCallAsync` |
+  | `RESTTransactionAsync` | `RestTransactionAsync` |
+
+  `KineticRESTIntegrator` is deliberately untouched — the repository, the solution, and the test project keep their name. So does `EpicorSvc`, the base class: it is singular, it mirrors Epicor's own `BusinessObjectSvc` convention, and the near-collision that made it awkward is gone now that the assembly around it is called `Keri.Epicor`.
+
+- **`Keri.RestServices` → `Keri.RestTransport` as the package identifier.** It had been declared in metadata but never pushed to a feed, so no identifier is being abandoned or squatted.
+
+- **Documentation swept mechanically.** `README.md`, `CONTRIBUTING.md`, `CONFIGURATION.md`, `EXAMPLES_EPICOR.md`, `EXAMPLES_RESTAPI.md` and `CLEANUP_RECOMMENDATIONS.md` now name the projects correctly, as do the solution file, the pre-commit hook's project map, and the README's version and assembly tables. `CHANGELOG.md` was excluded: it is a historical record, and rewriting old entries to name assemblies that did not exist when those entries were written would falsify it.
+
+### Notes
+
+The migration for a consumer is mechanical — change the `using` lines, change the type names in the table above — but it is a full break: every assembly name and namespace in the library changed across 0.5.0 → 0.8.0. There are no external consumers, which is the only reason this is a reasonable thing to do at all. It gets substantially more expensive the day after a package is published, which is why it happened now.
+
+Prose still describing the old architecture — the README's narrative sections, `CONTRIBUTING.md`'s design discussion, `SECURITY.md` — needs an editorial pass rather than a find-and-replace. That is the remaining work before publication.
+
+### Version
+
+- `EpicorSvcs` 0.7.4 → `Keri.Epicor` 0.8.0. `RESTServices` 0.3.3 → `Keri.RestTransport` 0.4.0. `Keri.Files` (0.6.0), `Keri.Mail` (0.6.0), and `KeriConfigurator` (0.5.0) are unchanged.
+
 ## Keri.Files 0.6.0 / Keri.Mail 0.6.0 — 2026-09-15
 
 `FileHandling` becomes two assemblies. **Breaking:** the namespaces, the assembly names, and the package identifiers all change; `FileProcessing` no longer exists. No behavior changes — every line of logic here shipped in `FileHandling 0.5.0`.

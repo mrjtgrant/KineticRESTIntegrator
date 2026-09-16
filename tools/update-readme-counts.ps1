@@ -48,10 +48,10 @@ $targets = @(
 if ($targets.Count -eq 0) { throw "No target documents found (README.md, CONTRIBUTING.md)." }
 
 # Projects whose <Version> may appear in the docs, keyed by the name used in
-# the marker: <!--VER:EpicorSvcs-->
+# the marker: <!--VER:Keri.Epicor-->
 $projects = [ordered]@{
-    'EpicorSvcs'       = 'EpicorSvcs/EpicorSvcs.csproj'
-    'RESTServices'     = 'RESTServices/RESTServices.csproj'
+    'Keri.Epicor'       = 'Keri.Epicor/Keri.Epicor.csproj'
+    'Keri.RestTransport'     = 'Keri.RestTransport/Keri.RestTransport.csproj'
     'Keri.Files'       = 'Keri.Files/Keri.Files.csproj'
     'Keri.Mail'        = 'Keri.Mail/Keri.Mail.csproj'
     'KeriConfigurator' = 'KeriConfigurator/KeriConfigurator.csproj'

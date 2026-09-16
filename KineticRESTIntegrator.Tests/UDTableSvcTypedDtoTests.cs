@@ -1,6 +1,6 @@
 using System;
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests

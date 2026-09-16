@@ -3,13 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RESTServices", "RESTServices\RESTServices.csproj", "{FDE58B4C-D608-4412-AB9B-07E91748C174}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keri.RestTransport", "Keri.RestTransport\Keri.RestTransport.csproj", "{FDE58B4C-D608-4412-AB9B-07E91748C174}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keri.Files", "Keri.Files\Keri.Files.csproj", "{FB7502DF-C1CE-4F76-8B28-B68035F8A7FE}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keri.Mail", "Keri.Mail\Keri.Mail.csproj", "{57D39385-1A40-435D-847D-DFAEED0FAA7E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicorSvcs", "EpicorSvcs\EpicorSvcs.csproj", "{B3F0BB2A-2325-4177-A8E0-462A86FBBB66}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keri.Epicor", "Keri.Epicor\Keri.Epicor.csproj", "{B3F0BB2A-2325-4177-A8E0-462A86FBBB66}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpicorSvcDemo", "EpicorSvcDemo\EpicorSvcDemo.csproj", "{1E3836B0-940C-4E6F-813D-9F447FB47C0D}"
 EndProject

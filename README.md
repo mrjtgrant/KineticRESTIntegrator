@@ -40,8 +40,8 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 | Project | Version |
 |---|---|
-| `EpicorSvcs` | <!--VER:EpicorSvcs-->0.7.4<!--/VER--> |
-| `RESTServices` | <!--VER:RESTServices-->0.3.3<!--/VER--> |
+| `Keri.Epicor` | <!--VER:Keri.Epicor-->0.8.0<!--/VER--> |
+| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->0.4.0<!--/VER--> |
 | `Keri.Files` | <!--VER:Keri.Files-->0.6.0<!--/VER--> |
 | `Keri.Mail` | <!--VER:Keri.Mail-->0.6.0<!--/VER--> |
 | `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
@@ -54,7 +54,7 @@ All the Epicor service wrappers are converted, and the libraries are configurati
 
 The library multi-targets **.NET Framework 4.8** (`net48`) and **.NET 8.0** (`net8.0`).
 
-The three library projects (`RESTServices`, `EpicorSvcs`, `FileHandling`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
+The three library projects (`Keri.RestTransport`, `Keri.Epicor`, `FileHandling`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
 
 The consumer projects (`EpicorSvcDemo`, `EpicorSvcPOCs`) and the test project are single-target `net48`. `KeriConfigurator` — the setup tool and composition root — multi-targets `net48;net8.0` so the net48 executables can consume it while it stays runnable on net8. Each consumes the matching build of the libraries.
 
@@ -66,8 +66,8 @@ The one place where target framework matters internally is `FileHandling.Emailer
 
 | Project | Output | Purpose |
 |---|---|---|
-| `RESTServices` | `RESTServices.dll` | Low-level REST client. Owns auth, session, URL building, and JSON error handling. |
-| `EpicorSvcs` | `EpicorSvcs.dll` | Async wrappers for the Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
+| `Keri.RestTransport` | `Keri.RestTransport.dll` | Low-level REST client. Owns auth, session, URL building, and JSON error handling. |
+| `Keri.Epicor` | `Keri.Epicor.dll` | Async wrappers for the Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
 | `Keri.Files` | `Keri.Files.dll` | Excel and CSV rendering (ClosedXML), and writing them to disk. |
 | `Keri.Mail` | `Keri.Mail.dll` | SMTP delivery of a built report, or of any existing file. |
 | `EpicorSvcDemo` | `EpicorSvcDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
@@ -153,7 +153,7 @@ Any setting can hold an environment-variable reference instead of a literal, wri
 
 ### From your own application
 
-The libraries are configuration-free, so a consumer outside this solution supplies its own connection by building an `EpicorRESTSessionKey` in code and passing it to `new EpicorClient(session)` — ideal for a web portal, a vault, or Credential Manager, where the secret never touches a file. Email works the same way: build an `SmtpSettings` and pass it to `FileProcessing.EmailReport`.
+The libraries are configuration-free, so a consumer outside this solution supplies its own connection by building an `EpicorRestSessionKey` in code and passing it to `new EpicorClient(session)` — ideal for a web portal, a vault, or Credential Manager, where the secret never touches a file. Email works the same way: build an `SmtpSettings` and pass it to `FileProcessing.EmailReport`.
 
 See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding flow, hand-editing, the programmatic / portal / vault patterns, multiple environments, and migration from the pre-0.3.0 model (per-library config, removed; and the old `EPICOR_*` auto-reader, replaced by the `{ENV:NAME}` references above).
 
@@ -180,18 +180,18 @@ Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDTab
 
 Direct service construction (`new BAQSvc(...)`, etc.) is the underlying pattern — `EpicorClient` is a convenience wrapper over it, not a replacement. Each service is its own complete, disposable unit: open a `using` block and call as many methods on it as the workflow needs, or stack `using` blocks across several services when you want explicit control over scope. Reach for `EpicorClient` when an orchestrator touches several services together and the stack-of-`using`-blocks shape is getting repetitive; reach for direct construction otherwise. See [EXAMPLES_EPICOR.md — Using a single service directly](EXAMPLES_EPICOR.md#2-using-a-single-service-directly) for the patterns.
 
-`EpicorClient` is `sealed`. To extend it — narrow the surface to a subset of services, add a project-specific service, layer logging or telemetry around access — use composition: wrap an `EpicorClient` in your own class, expose only what you need, and dispose the inner client in your `Dispose`. This is the .NET-idiomatic pattern for client-style classes, and it works with the existing public API (the `Session` getter on `EpicorClient` exposes the configured `EpicorRESTSessionKey` for constructing your own services).
+`EpicorClient` is `sealed`. To extend it — narrow the surface to a subset of services, add a project-specific service, layer logging or telemetry around access — use composition: wrap an `EpicorClient` in your own class, expose only what you need, and dispose the inner client in your `Dispose`. This is the .NET-idiomatic pattern for client-style classes, and it works with the existing public API (the `Session` getter on `EpicorClient` exposes the configured `EpicorRestSessionKey` for constructing your own services).
 
 For advanced scenarios (multi-tenant servers, sessions from a vault, programmatic credentials) construct a session yourself and hand it to the client:
 
 ```csharp
-using EpicorSvcs.Dtos;
+using Keri.Epicor.Dtos;
 
-var session = new EpicorRESTSessionKey
+var session = new EpicorRestSessionKey
 {
     Company = "EPIC01",
     BaseUrl = "https://company-pilot.example.com/server",
-    AuthObject = new RESTAuthenticationObject { Username = "...", Userkey = "..." }
+    AuthObject = new RestAuthenticationObject { Username = "...", Userkey = "..." }
 };
 
 using (var epicorClient = new EpicorClient(session)) { /* ... */ }
@@ -313,17 +313,17 @@ For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EP
 
 ## Integrating Keri into a consumer project
 
-Keri does not publish to NuGet. Consumers reference Keri's DLLs directly from a local `lib/` folder. The three DLLs needed are `EpicorSvcs.dll`, `FileHandling.dll`, and `RESTServices.dll` — plus Keri's transitive dependencies, which Keri's build output ships alongside its own DLLs.
+Keri does not publish to NuGet. Consumers reference Keri's DLLs directly from a local `lib/` folder. The three DLLs needed are `Keri.Epicor.dll`, `FileHandling.dll`, and `Keri.RestTransport.dll` — plus Keri's transitive dependencies, which Keri's build output ships alongside its own DLLs.
 
 In your consumer project's `.csproj`:
 
 ```xml
 <ItemGroup>
-  <Reference Include="EpicorSvcs">
-    <HintPath>lib\EpicorSvcs.dll</HintPath>
+  <Reference Include="Keri.Epicor">
+    <HintPath>lib\Keri.Epicor.dll</HintPath>
   </Reference>
-  <Reference Include="RESTServices">
-    <HintPath>lib\RESTServices.dll</HintPath>
+  <Reference Include="Keri.RestTransport">
+    <HintPath>lib\Keri.RestTransport.dll</HintPath>
   </Reference>
   <Reference Include="FileHandling">
     <HintPath>lib\FileHandling.dll</HintPath>
@@ -335,7 +335,7 @@ When you build the consumer, MSBuild copies the referenced DLLs into the consume
 
 **Do not add NuGet PackageReferences to the libraries Keri already brings in** — `Newtonsoft.Json`, `ClosedXML`, `MailKit`, `MimeKit`, or any of their transitives. See the next section for why.
 
-**Supplying configuration.** The libraries read no config of their own, so your application owns it: build an `EpicorRESTSessionKey` and pass it to `new EpicorClient(session)` (see [CONFIGURATION.md](CONFIGURATION.md)). The `KeriConfig` / `App.config` onboarding is for *this* solution's executables; an external consumer supplies a session in code.
+**Supplying configuration.** The libraries read no config of their own, so your application owns it: build an `EpicorRestSessionKey` and pass it to `new EpicorClient(session)` (see [CONFIGURATION.md](CONFIGURATION.md)). The `KeriConfig` / `App.config` onboarding is for *this* solution's executables; an external consumer supplies a session in code.
 
 ---
 
@@ -349,10 +349,10 @@ The pinned versions (net8.0 build) are:
 
 | Package | Pinned version | Used by |
 |---|---|---|
-| `Newtonsoft.Json` | 13.0.4 | `EpicorSvcs`, `RESTServices`, `FileHandling` (JSON parsing throughout) |
+| `Newtonsoft.Json` | 13.0.4 | `Keri.Epicor`, `Keri.RestTransport`, `FileHandling` (JSON parsing throughout) |
 | `ClosedXML` | 0.105.0 | `FileHandling` (Excel read / write) |
 | `MailKit` / `MimeKit` | 4.16.0 | `FileHandling` (SMTP on net8.0) |
-| `System.Configuration.ConfigurationManager` | 8.0.0 | `EpicorSvcs`, `FileHandling` (`App.config` loading on net8.0) |
+| `System.Configuration.ConfigurationManager` | 8.0.0 | `Keri.Epicor`, `FileHandling` (`App.config` loading on net8.0) |
 
 If your consumer hits a runtime error referencing one of these packages, check for a competing `<PackageReference>` in the consumer's `.csproj` and remove it — Keri's bundled copy will take over.
 
@@ -375,16 +375,16 @@ KineticRESTIntegrator/
 ├── CLEANUP_RECOMMENDATIONS.md
 ├── .gitignore
 │
-├── RESTServices/                    Low-level REST transport
-│   ├── Authentication/              RESTSessionKey, RESTAuthenticationObject
-│   ├── Transport/                   RESTConnect
-│   └── RESTServices.csproj
+├── Keri.RestTransport/                    Low-level REST transport
+│   ├── Authentication/              RestSessionKey, RestAuthenticationObject
+│   ├── Transport/                   RestConnect
+│   └── Keri.RestTransport.csproj
 │
-├── EpicorSvcs/                      Business Object wrappers
+├── Keri.Epicor/                      Business Object wrappers
 │   ├── EpicorSvc.cs                 (base class — credential validation)
 │   ├── EpicorClient.cs              (the disposable facade)
 │   ├── OperationResult.cs           (the standard return type)
-│   ├── EpicorRESTSessionKey.cs      (in Dtos/ — programmatic-session DTO)
+│   ├── EpicorRestSessionKey.cs      (in Dtos/ — programmatic-session DTO)
 │   ├── Dtos/                        typed DTOs
 │   ├── Sales/                       QuoteSvc, SalesOrderSvc
 │   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
@@ -394,7 +394,7 @@ KineticRESTIntegrator/
 │   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
 │   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDTableSvc, UserCodesSvc
 │   ├── AR/                          PayMethodSvc, PaymentEntrySvc
-│   └── EpicorSvcs.csproj
+│   └── Keri.Epicor.csproj
 │       Services with multi-step operations have a companion
 │       *.Workflows.cs partial-class file holding the orchestrators.
 │
@@ -437,7 +437,7 @@ KineticRESTIntegrator/
 
 | Symptom | Likely cause |
 |---|---|
-| `InvalidOperationException: EpicorSvcs is not configured...` | The shared `App.config` isn't filled in — run KeriConfigurator (or set values in `KeriConfigurator/App.config`) and clear any `YOUR_*` placeholders. The exception lists what's missing. |
+| `InvalidOperationException: Keri.Epicor is not configured...` | The shared `App.config` isn't filled in — run KeriConfigurator (or set values in `KeriConfigurator/App.config`) and clear any `YOUR_*` placeholders. The exception lists what's missing. |
 | `result.IsFailure` with HTTP 401 | Bad username/passkey, account disabled, or wrong environment URL. |
 | `result.IsFailure` with HTTP 404 | Wrong BO name, wrong company segment in the URL, or a record/BAQ was renamed/deleted. |
 | `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 or later — the type is `DateTime?` and accommodates this. |

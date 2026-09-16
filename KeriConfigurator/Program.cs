@@ -3,9 +3,9 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using RESTServices;
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
+using Keri.RestTransport;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
 using Keri.Mail;
 
 namespace KeriConfigurator
@@ -111,7 +111,7 @@ namespace KeriConfigurator
 
         private static async Task<int> TestSavedAsync()
         {
-            EpicorRESTSessionKey session;
+            EpicorRestSessionKey session;
             try
             {
                 session = KeriConfig.BuildSession();
@@ -301,12 +301,12 @@ namespace KeriConfigurator
         // Resolves the gathered values the same way the runtime will (literals
         // pass through; {ENV:NAME} tokens read the environment), so the live test
         // exercises exactly what will be saved.
-        private static EpicorRESTSessionKey BuildSession(ConnVals c)
+        private static EpicorRestSessionKey BuildSession(ConnVals c)
         {
-            return new EpicorRESTSessionKey
+            return new EpicorRestSessionKey
             {
                 Company = KeriConfig.Resolve(c.Company),
-                AuthObject = new RESTAuthenticationObject
+                AuthObject = new RestAuthenticationObject
                 {
                     Username = KeriConfig.Resolve(c.User),
                     Userkey = KeriConfig.Resolve(c.Pass),
@@ -333,7 +333,7 @@ namespace KeriConfigurator
 
         // ----- tests --------------------------------------------------------
 
-        private static async Task<bool> RunConnectionTestAsync(EpicorRESTSessionKey session)
+        private static async Task<bool> RunConnectionTestAsync(EpicorRestSessionKey session)
         {
             Console.WriteLine("Testing connection (reading one Part record)...");
             using (var client = new EpicorClient(session))

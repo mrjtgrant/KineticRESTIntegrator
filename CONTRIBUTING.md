@@ -49,7 +49,7 @@ When adding a new service or method, the names follow Epicor's. A reader who kno
 - **Always confirm the actual entity-set name against Epicor's REST help.** Epicor uses awkward plurals the convention still requires us to match — `JobEntries` for `JobHead` rows, `POes` for `POHeader` rows. Inferring the name from the pattern rather than checking produces an inconsistency that ships as part of the public API.
 - **Orchestrators are named for what they accomplish.** A method in `*Svc.Workflows.cs` composes multiple BO calls and has no single Epicor counterpart, so there is no name to mirror. Use a verb-phrase name that reads as the intent: `ChangePartUnitPriceAsync`, `GetNewPartRevAsync`, `AddMtlsAsync`. A reader should know roughly what the method does without opening it.
 
-The single documented architectural exception is `UDTableSvc`, which parameterizes over Epicor's per-table UD services (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`, etc.) rather than wrapping each as its own class. Don't generalize like this for any new service without discussion — `UDTableSvc` exists because the UD-table interface is uniform across 30+ services, which is a special case. See [EXAMPLES_EPICOR.md — Finding your way around `EpicorSvcs`](EXAMPLES_EPICOR.md#1-finding-your-way-around-epicorsvcs) for the user-facing version of these rules, including the worked mapping tables.
+The single documented architectural exception is `UDTableSvc`, which parameterizes over Epicor's per-table UD services (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`, etc.) rather than wrapping each as its own class. Don't generalize like this for any new service without discussion — `UDTableSvc` exists because the UD-table interface is uniform across 30+ services, which is a special case. See [EXAMPLES_EPICOR.md — Finding your way around `Keri.Epicor`](EXAMPLES_EPICOR.md#1-finding-your-way-around-epicorsvcs) for the user-facing version of these rules, including the worked mapping tables.
 
 ### Async + `OperationResult<T>`
 
@@ -94,8 +94,8 @@ Whether a new method belongs in `*Svc.cs` or `*Svc.Workflows.cs` follows from it
 Where those files sit:
 
 - **Service files are grouped into subfolders by domain** — `Sales/`, `Engineering/`, `Production/`, `Purchasing/`, `Inventory/`, `MasterData/`, `Platform/`, `AR/`. A new service goes into whichever fits; if none do, a new single-service folder is acceptable (`Production/` began as just `JobEntrySvc`, `Purchasing/` as just `POSvc`).
-- **DTOs are flat in `EpicorSvcs/Dtos/`.** Every typed DTO lives in that one folder regardless of which service consumes it. No subfolders.
-- **Top-level concept files** — `EpicorSvc.cs`, `EpicorClient.cs`, `OperationResult.cs`, `ODataFilter.cs`, `FailureStage.cs` — sit at the root of `EpicorSvcs/`. The one exception is `EpicorRESTSessionKey.cs`, which lives under `Dtos/` but is conceptually top-level; the README's layout tree lists it at the top level with a note about where it actually is.
+- **DTOs are flat in `Keri.Epicor/Dtos/`.** Every typed DTO lives in that one folder regardless of which service consumes it. No subfolders.
+- **Top-level concept files** — `EpicorSvc.cs`, `EpicorClient.cs`, `OperationResult.cs`, `ODataFilter.cs`, `FailureStage.cs` — sit at the root of `Keri.Epicor/`. The one exception is `EpicorRestSessionKey.cs`, which lives under `Dtos/` but is conceptually top-level; the README's layout tree lists it at the top level with a note about where it actually is.
 
 ### Public methods vs internal helpers
 
@@ -112,9 +112,9 @@ This split keeps the public surface small and consistent: every public method ei
 
 These were decided deliberately. A change proposal that reverses one needs to argue against the reasoning, not just prefer something else.
 
-**Session types.** `RESTSessionKey` lives in the transport and is vendor-neutral. `EpicorRESTSessionKey` (in `EpicorSvcs.Dtos`) is the Epicor subclass and the one that carries `Company`. Programmatic constructors throughout `EpicorSvcs` take `EpicorRESTSessionKey`; a non-Epicor REST API uses the bare `RESTSessionKey`.
+**Session types.** `RestSessionKey` lives in the transport and is vendor-neutral. `EpicorRestSessionKey` (in `Keri.Epicor.Dtos`) is the Epicor subclass and the one that carries `Company`. Programmatic constructors throughout `Keri.Epicor` take `EpicorRestSessionKey`; a non-Epicor REST API uses the bare `RestSessionKey`.
 
-**Authentication — read this carefully, it gets misdescribed.** The transport is permissive: it sends whatever credentials the `RESTAuthenticationObject` carries. `Username`/`Userkey` produce a Basic `Authorization` header; `ApiKey` produces a separate header (default `X-API-Key`); `BearerToken` takes the `Authorization` header instead of Basic. They are independent knobs.
+**Authentication — read this carefully, it gets misdescribed.** The transport is permissive: it sends whatever credentials the `RestAuthenticationObject` carries. `Username`/`Userkey` produce a Basic `Authorization` header; `ApiKey` produces a separate header (default `X-API-Key`); `BearerToken` takes the `Authorization` header instead of Basic. They are independent knobs.
 
 **Epicor specifically** requires `Username` and `Userkey` *always*. Its v1 endpoints (URL shape `/api/v1/`) take Basic only; its v2 OData endpoints (`/api/v2/odata/{Company}/`) take Basic **plus** the API key — both, not either. Setting `ApiKey` is what selects the v2 URL shape; it does not "switch from Basic to API-key auth." Don't reason about this from analogy to other REST APIs.
 
@@ -152,7 +152,7 @@ return await MasterUpdateAsync(ds, ct);         // persist — Epicor echoes the
 
 **Thread it by reassignment.** The convention is to reassign `ds` from each step's result — `ds = result.Value` — rather than assume a call mutated the object in place. Keri standardizes on steps that **return** the evolved dataset (as `OperationResult<JObject>`); when you add a step, follow that shape so it composes with the `ds = (await Step()).Value` pattern. (Epicor's own API sometimes threads datasets via `ref`/`out` parameters; Keri uses the return form throughout for consistency with `OperationResult`.)
 
-**Input is consistent; responses are not.** The envelope you *send* is reliably `{"ds":{...}}`. What Epicor *returns* is not — some methods wrap the payload under `returnObj`, some under `parameters`, some return it bare. The base class's `HandleResponse` collapses all three back into a consistent `{"ds":…}` envelope, which is why wrappers call `HandleResponse(await RESTCallAsync(...))` before passing the result on. Route every new step's response through `HandleResponse` so the next link in the chain receives the normalized shape.
+**Input is consistent; responses are not.** The envelope you *send* is reliably `{"ds":{...}}`. What Epicor *returns* is not — some methods wrap the payload under `returnObj`, some under `parameters`, some return it bare. The base class's `HandleResponse` collapses all three back into a consistent `{"ds":…}` envelope, which is why wrappers call `HandleResponse(await RestCallAsync(...))` before passing the result on. Route every new step's response through `HandleResponse` so the next link in the chain receives the normalized shape.
 
 **Worked example** — a representative wrapper that fetches a new receipt header, seeded with the values Epicor needs to initialize the row:
 
@@ -167,7 +167,7 @@ public async Task<OperationResult<JObject>> GetNewRcvHeadAsync(
     ds.Add(new JProperty("purPoint", purPoint));
 
     JObject response = HandleResponse(
-        await RESTCallAsync(svc, ds, ct).ConfigureAwait(false));
+        await RestCallAsync(svc, ds, ct).ConfigureAwait(false));
     return response.ToOperationResult(r => r);       // hand the normalized dataset on
 }
 ```
@@ -176,7 +176,7 @@ An orchestrator takes that returned dataset, populates the new row, threads it t
 
 ### DTOs
 
-Typed DTOs live in `EpicorSvcs/Dtos/` (Epicor business-object models) and `FileHandling/Dtos/` (the email DTOs — `EmailSpecs`, `EMailMeta`). The Epicor DTOs model the **practical core** of each BO — the columns every Epicor install has, not install-specific custom columns.
+Typed DTOs live in `Keri.Epicor/Dtos/` (Epicor business-object models) and `FileHandling/Dtos/` (the email DTOs — `EmailSpecs`, `EMailMeta`). The Epicor DTOs model the **practical core** of each BO — the columns every Epicor install has, not install-specific custom columns.
 
 - **The DTO’s name says what it is.** A class named after an Epicor table (`Customer`, `Part`, `OrderHed`) mirrors that real table. A `Dataset`-suffixed class (`InvTransferDataset`, `GroupUnLockDataset`) mirrors an Epicor transaction-input shape that spans several tables. An `Input`-suffixed class (`QuoteInput`, `MiscShipLineInput`, `ECOMtlInput`) is a caller-facing convenience shape — a reshaped subset that feeds one orchestrator. Match this when you add a DTO: the table name for a table model, `Dataset` for a transaction shape, `Input` for a convenience shape.
 - **No `_c` columns.** Install-specific custom columns (Epicor's `_c` suffix) belong to the installation, not the library. They remain accessible to callers via `OperationResult.RawResponse`.

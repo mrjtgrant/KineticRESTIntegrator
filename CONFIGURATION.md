@@ -6,7 +6,7 @@ How Keri connects to Epicor — from a fresh checkout, to a working run, to your
 
 Keri's configuration lives in a **single shared `App.config`**, owned by **KeriConfigurator** — the composition root. KeriConfigurator holds the unified settings schema (Epicor connection *and* email/SMTP), reads it, and builds the sessions and clients the rest of the solution uses.
 
-The three libraries — `RESTServices`, `EpicorSvcs`, `FileHandling` — read **no configuration of their own**. They're handed what they need: an `EpicorRESTSessionKey` (built by `KeriConfig.BuildEpicorClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
+The three libraries — `Keri.RestTransport`, `Keri.Epicor`, `FileHandling` — read **no configuration of their own**. They're handed what they need: an `EpicorRestSessionKey` (built by `KeriConfig.BuildEpicorClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
 
 The solution's executables (`EpicorSvcDemo`, `EpicorSvcPOCs`) share KeriConfigurator's single `App.config` through an MSBuild `<AppConfig>` link, so there is exactly one file to fill in for the whole solution.
 
@@ -152,20 +152,20 @@ Use the same names KeriConfigurator referenced (`EPICOR_PASSWORD`, `EPICOR_API_K
 
 ---
 
-## Configuring from your own code (`EpicorRESTSessionKey`)
+## Configuring from your own code (`EpicorRestSessionKey`)
 
 When credentials shouldn't sit in a file at all — a web portal that authenticates each user, a secrets vault, or Windows Credential Manager — build the session in code and hand it to the client. This bypasses `App.config` entirely and is the path for any consumer outside this solution (your application supplies its own configuration; the libraries store nothing):
 
 ```csharp
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
-using RESTServices;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
+using Keri.RestTransport;
 
-var session = new EpicorRESTSessionKey
+var session = new EpicorRestSessionKey
 {
     Company    = company,
     BaseUrl    = baseUrl,                         // the Epicor app-server base URL
-    AuthObject = new RESTAuthenticationObject
+    AuthObject = new RestAuthenticationObject
     {
         Username = user,
         Userkey  = password,
@@ -185,11 +185,11 @@ The hosting portal authenticates the user, then builds a session per request fro
 
 ```csharp
 // after your portal has authenticated the request
-var session = new EpicorRESTSessionKey
+var session = new EpicorRestSessionKey
 {
     Company    = portalUser.Company,
     BaseUrl    = config.EpicorUrl,
-    AuthObject = new RESTAuthenticationObject
+    AuthObject = new RestAuthenticationObject
     {
         Username = portalUser.EpicorUser,
         Userkey  = portalUser.EpicorPasskey   // held only for this request
@@ -205,9 +205,9 @@ Store the whole connection — base URL, company, username, password, and (if us
 ```csharp
 using System;
 using System.Collections.Generic;
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
-using RESTServices;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
+using Keri.RestTransport;
 
 public string Connect(string connectionId)
 {
@@ -229,11 +229,11 @@ public string Connect(string connectionId)
     try
     {
         _epicor?.Dispose();                       // dispose any previous connection
-        _epicor = new EpicorClient(new EpicorRESTSessionKey
+        _epicor = new EpicorClient(new EpicorRestSessionKey
         {
             Company    = company,
             BaseUrl    = url,
-            AuthObject = new RESTAuthenticationObject
+            AuthObject = new RestAuthenticationObject
             {
                 Username = username,
                 Userkey  = password,
@@ -249,7 +249,7 @@ public string Connect(string connectionId)
 }
 ```
 
-`ConnectionManager` is your helper over the OS credential store (e.g. the `CredentialManagement` NuGet package or an `advapi32!CredRead` P/Invoke) — Keri doesn't depend on it; it only needs the resulting `EpicorRESTSessionKey`. Holding the client in a field (`_epicor`) and disposing the previous one lets a single app switch between stored connections at runtime.
+`ConnectionManager` is your helper over the OS credential store (e.g. the `CredentialManagement` NuGet package or an `advapi32!CredRead` P/Invoke) — Keri doesn't depend on it; it only needs the resulting `EpicorRestSessionKey`. Holding the client in a field (`_epicor`) and disposing the previous one lets a single app switch between stored connections at runtime.
 
 `GetApiKey` is an extension of that same password storage. An API key is held as a Windows Credential Manager **password** entry exactly like the login secret — same secured store, same retrieval — distinguished only by a **custom prefix on the credential’s target name** that marks the entry as the connection’s API key rather than its login password. API keys are treated as passwords; the prefix is what lets one connection carry both a login password and an API key as two separate, independently-resolved credentials.
 
@@ -259,7 +259,7 @@ public string Connect(string connectionId)
 
 Configuration describes **one** environment — a single `DefaultBaseUrl`. There's no selector, by design: a base URL on its own can't carry the credentials and company that belong to a *different* environment, so a one-word switch would only change the address while reusing the same login.
 
-To work against more than one environment, build a full `EpicorRESTSessionKey` per environment in code (each session carries its own URL *and* its own credentials) and hand it to the `EpicorClient` constructor, as shown above. This is the same mechanism the portal/vault examples use.
+To work against more than one environment, build a full `EpicorRestSessionKey` per environment in code (each session carries its own URL *and* its own credentials) and hand it to the `EpicorClient` constructor, as shown above. This is the same mechanism the portal/vault examples use.
 
 ---
 
@@ -296,9 +296,9 @@ Within this solution, `KeriConfig.BuildSmtpSettings()` produces that `SmtpSettin
 
 If you used Keri before 0.3.0, the configuration model changed substantially:
 
-- **Per-library `App.config` files are gone.** `EpicorSvcs` and `FileHandling` no longer read configuration or have their own settings. There's one shared `App.config`, owned by KeriConfigurator.
+- **Per-library `App.config` files are gone.** `Keri.Epicor` and `FileHandling` no longer read configuration or have their own settings. There's one shared `App.config`, owned by KeriConfigurator.
 - **`EpicorClient.FromConfiguration()` and `EpicorConfiguration` were removed.** Build a client with `KeriConfig.BuildEpicorClient()` (inside this solution) or `new EpicorClient(session)` (from your own code).
 - **`SmtpSettings` is now public and config-free**, and `FileProcessing.EmailReport` takes an `SmtpSettings` parameter.
-- **Environment-variable *auto-reading* (`EPICOR_*`) was removed in 0.3.0 — then reintroduced in a clearer form.** 0.3.0 dropped the old behavior in which settings were silently overridden by `EPICOR_*` variables. Environment variables are supported again, now as explicit **`{ENV:NAME}` references** written into `App.config` (see [Environment-variable references](#environment-variable-references-envname) above): a value reads from the environment only when you write it as a token, so there is no hidden override to reason about. The programmatic `EpicorRESTSessionKey` path remains for keeping secrets out of any file entirely.
+- **Environment-variable *auto-reading* (`EPICOR_*`) was removed in 0.3.0 — then reintroduced in a clearer form.** 0.3.0 dropped the old behavior in which settings were silently overridden by `EPICOR_*` variables. Environment variables are supported again, now as explicit **`{ENV:NAME}` references** written into `App.config` (see [Environment-variable references](#environment-variable-references-envname) above): a value reads from the environment only when you write it as a token, so there is no hidden override to reason about. The programmatic `EpicorRestSessionKey` path remains for keeping secrets out of any file entirely.
 
-The migration in one line: wherever you called `EpicorClient.FromConfiguration()`, call `KeriConfig.BuildEpicorClient()` (in-solution) or construct an `EpicorRESTSessionKey` and pass it to `new EpicorClient(...)` (external).
+The migration in one line: wherever you called `EpicorClient.FromConfiguration()`, call `KeriConfig.BuildEpicorClient()` (in-solution) or construct an `EpicorRestSessionKey` and pass it to `new EpicorClient(...)` (external).

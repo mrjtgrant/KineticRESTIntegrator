@@ -1,5 +1,5 @@
 using System;
-using EpicorSvcs;
+using Keri.Epicor;
 
 namespace EpicorSvcDemo
 {

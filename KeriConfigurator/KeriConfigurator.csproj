@@ -41,8 +41,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RESTServices\RESTServices.csproj" />
-    <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
+    <ProjectReference Include="..\Keri.RestTransport\Keri.RestTransport.csproj" />
+    <ProjectReference Include="..\Keri.Epicor\Keri.Epicor.csproj" />
     <ProjectReference Include="..\Keri.Mail\Keri.Mail.csproj" />
   </ItemGroup>
 

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using RESTServices;
-using EpicorSvcs;
+using Keri.RestTransport;
+using Keri.Epicor;
 using Keri.Mail;
-using EpicorSvcs.Dtos;
+using Keri.Epicor.Dtos;
 
 namespace KeriConfigurator
 {
@@ -30,20 +30,20 @@ namespace KeriConfigurator
     public static class KeriConfig
     {
         /// <summary>
-        /// Builds a validated <see cref="EpicorRESTSessionKey"/> from
+        /// Builds a validated <see cref="EpicorRestSessionKey"/> from
         /// configuration. Throws <see cref="InvalidOperationException"/> with an
         /// actionable message if required settings are missing, still hold
         /// template placeholders, or reference an environment variable that is
         /// not set.
         /// </summary>
-        public static EpicorRESTSessionKey BuildSession()
+        public static EpicorRestSessionKey BuildSession()
         {
             ValidateSettings();
 
-            return new EpicorRESTSessionKey
+            return new EpicorRestSessionKey
             {
                 Company = Resolve(Properties.Settings.Default.DefaultCompany),
-                AuthObject = new RESTAuthenticationObject
+                AuthObject = new RestAuthenticationObject
                 {
                     Username = Resolve(Properties.Settings.Default.DefaultUser),
                     Userkey = Resolve(Properties.Settings.Default.DefaultPasskey),

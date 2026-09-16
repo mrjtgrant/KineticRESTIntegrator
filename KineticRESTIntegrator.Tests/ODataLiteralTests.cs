@@ -1,4 +1,4 @@
-using EpicorSvcs;
+using Keri.Epicor;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests

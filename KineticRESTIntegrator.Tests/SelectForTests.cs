@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using RESTServices;
+using Keri.RestTransport;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests
@@ -46,7 +46,7 @@ namespace KineticRESTIntegrator.Tests
         // string, which no SelectFor call touches.
         private static EpicorSvc NewSvc()
         {
-            return new EpicorSvc(new EpicorRESTSessionKey());
+            return new EpicorSvc(new EpicorRestSessionKey());
         }
 
         // ---------------------------------------------------------------

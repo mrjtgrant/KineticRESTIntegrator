@@ -1,5 +1,5 @@
 using System;
-using EpicorSvcs.Dtos;
+using Keri.Epicor.Dtos;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -9,7 +9,7 @@ namespace KineticRESTIntegrator.Tests
     /// Tests for <see cref="UDRow"/> serialization behavior. <see cref="UDRow"/>
     /// is the one DTO in the library that carries <c>[JsonProperty]</c>
     /// attributes — the unset <c>Date</c> columns must drop out of the
-    /// serialized object so <see cref="EpicorSvcs.UDTableSvc"/>'s
+    /// serialized object so <see cref="Keri.Epicor.UDTableSvc"/>'s
     /// "which columns did the caller touch" detection keeps working. These
     /// tests pin that behavior down. Pure, offline.
     /// </summary>

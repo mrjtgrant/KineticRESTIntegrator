@@ -15,7 +15,7 @@ calling an Epicor endpoint Keri doesn't wrap, see
 
 ## Contents
 
-1. [Finding your way around `EpicorSvcs`](#1-finding-your-way-around-epicorsvcs)
+1. [Finding your way around `Keri.Epicor`](#1-finding-your-way-around-epicorsvcs)
 2. [Using a single service directly](#2-using-a-single-service-directly)
 3. [Writing data into Epicor (UD-row upsert)](#3-writing-data-into-epicor-ud-row-upsert)
 4. [UD-row conventions](#4-ud-row-conventions)
@@ -23,9 +23,9 @@ calling an Epicor endpoint Keri doesn't wrap, see
 
 ---
 
-## 1. Finding your way around `EpicorSvcs`
+## 1. Finding your way around `Keri.Epicor`
 
-`EpicorSvcs` wraps a large surface of Epicor business objects, but it follows
+`Keri.Epicor` wraps a large surface of Epicor business objects, but it follows
 a small, consistent shape that lets you predict where any given wrapper
 lives — or, if you're looking at a wrapper, what Epicor BO call it ultimately
 makes. If you know the Epicor BO and method name, you know the Keri class and
@@ -119,7 +119,7 @@ populated. Three knobs adjust that:
 > full, untrimmed collection with no error. If column or row trimming isn't
 > taking effect, check that you're authenticating with an API key.
 
-> The examples below pass a `session` — an `EpicorRESTSessionKey`. [Section 2](#2-using-a-single-service-directly) shows how to build one, or obtain it from `KeriConfig` in-solution.
+> The examples below pass a `session` — an `EpicorRestSessionKey`. [Section 2](#2-using-a-single-service-directly) shows how to build one, or obtain it from `KeriConfig` in-solution.
 
 ```csharp
 using (var part = new PartSvc(session))
@@ -141,7 +141,7 @@ using (var part = new PartSvc(session))
 ```
 
 For a BO method that Keri does not wrap, the same shape is available through
-`RESTConnect` directly — see [Calling an un-wrapped endpoint](#calling-an-un-wrapped-endpoint) below.
+`RestConnect` directly — see [Calling an un-wrapped endpoint](#calling-an-un-wrapped-endpoint) below.
 
 ### Building filters with `ODataFilter`
 
@@ -221,7 +221,7 @@ newpartrev.Add(new JProperty("partNum", partNum));
 newpartrev.Add(new JProperty("revisionNum", ""));
 newpartrev.Add(new JProperty("altMethod", ""));
 
-JObject ds = HandleResponse(await RESTCallAsync(svc, newpartrev, ct).ConfigureAwait(false));
+JObject ds = HandleResponse(await RestCallAsync(svc, newpartrev, ct).ConfigureAwait(false));
 ```
 
 `NewDataset()` is a method, not a shared field, precisely for this reason: two
@@ -329,7 +329,7 @@ with the dataset as the carrier.
 ```csharp
 // 1. ChangePartUnitPrice returns a modified dataset, wrapped under
 //    "parameters" — unwrap it.
-JObject changed = await RESTCallAsync(svc, ds, ct).ConfigureAwait(false);
+JObject changed = await RestCallAsync(svc, ds, ct).ConfigureAwait(false);
 JObject payload = JObject.FromObject(changed["parameters"]);
 
 // 2. CheckPartChanges takes that dataset and returns advisory messages.
@@ -386,7 +386,7 @@ choose whichever fits the shape of the code you are writing.
 
 ### One service, multiple calls
 
-Each service constructor takes a fully-configured `EpicorRESTSessionKey` — build
+Each service constructor takes a fully-configured `EpicorRestSessionKey` — build
 one with the base URL, company, and credentials, and pass it in. In-solution
 code can get a ready session from `KeriConfig.BuildSession()` (or a whole client
 from `KeriConfig.BuildEpicorClient()`); the example below builds one directly, which
@@ -395,15 +395,15 @@ from a vault, a portal, or Windows Credential Manager (see
 [CONFIGURATION.md](CONFIGURATION.md) for those patterns).
 
 ```csharp
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
-using RESTServices;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
+using Keri.RestTransport;
 
-var session = new EpicorRESTSessionKey
+var session = new EpicorRestSessionKey
 {
     Company    = "EPIC01",
     BaseUrl    = "https://company.epicorsaas.com/server",
-    AuthObject = new RESTAuthenticationObject
+    AuthObject = new RestAuthenticationObject
     {
         Username = "...",
         Userkey  = "..."
@@ -435,10 +435,10 @@ hand the same instance to each. Stack the `using` blocks; the services live
 only for the block that needs them.
 
 ```csharp
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
 
-var session = new EpicorRESTSessionKey { /* ... */ };
+var session = new EpicorRestSessionKey { /* ... */ };
 
 using (var part = new PartSvc(session))
 using (var udTable = new UDTableSvc(session))
@@ -474,8 +474,8 @@ that touches one or two services — direct construction is the simpler shape.
 ### Calling an un-wrapped endpoint
 
 The transport-direct path also works against Epicor itself, for the rare case
-of an endpoint `EpicorSvcs` does not wrap. This is the corner case: prefer the
-typed services for anything they cover, and reach for `RESTConnect` against
+of an endpoint `Keri.Epicor` does not wrap. This is the corner case: prefer the
+typed services for anything they cover, and reach for `RestConnect` against
 Epicor only when there is no wrapper for what you need.
 
 Epicor's REST endpoints live under one of two URL shapes, depending on which
@@ -494,7 +494,7 @@ session.AuthObject.DynamicURLModifier_Keyed = string.Format("/api/v2/odata/{0}/"
 
 …and the transport picks between them automatically: when `ApiKey` is empty
 it uses `DynamicURLModifier_Basic`, otherwise `DynamicURLModifier_Keyed`. This
-is the work the wrapper saves you. Going through `RESTConnect` directly, you
+is the work the wrapper saves you. Going through `RestConnect` directly, you
 populate those fields yourself, and the same pick-by-`ApiKey` logic applies.
 (The generic mechanism — two URL shapes selected by `ApiKey` — is described in
 [EXAMPLES_RESTAPI.md](EXAMPLES_RESTAPI.md#switching-url-shape-by-authentication-path).)
@@ -505,13 +505,13 @@ populate those fields yourself, and the same pick-by-`ApiKey` logic applies.
 populated. The request URL becomes `{BaseUrl}/api/v1/{path}`.
 
 ```csharp
-using RESTServices;
+using Keri.RestTransport;
 using Newtonsoft.Json.Linq;
 
-var session = new RESTSessionKey
+var session = new RestSessionKey
 {
     BaseUrl = "https://company-pilot.example.com/server",
-    AuthObject  = new RESTAuthenticationObject
+    AuthObject  = new RestAuthenticationObject
     {
         Username                 = "YOUR_USER",
         Userkey                  = "YOUR_PASSWORD",
@@ -519,9 +519,9 @@ var session = new RESTSessionKey
     }
 };
 
-using (var rest = new RESTConnect(session))
+using (var rest = new RestConnect(session))
 {
-    JObject result = await rest.RESTCallAsync(
+    JObject result = await rest.RestCallAsync(
         "Erp.BO.SalesOrderSvc/GetByID?orderNum=12345");
 
     if (result["ErrorMessage"] != null)
@@ -537,25 +537,25 @@ using (var rest = new RESTConnect(session))
 The request URL becomes `{BaseUrl}/api/v2/odata/{Company}/{path}`. This is
 the path Epicor's `Company` segment lives in — going direct, you interpolate
 your company into the modifier yourself (the wrapper does the same thing,
-using `EpicorRESTSessionKey.Company` as the source).
+using `EpicorRestSessionKey.Company` as the source).
 
 ```csharp
-using RESTServices;
+using Keri.RestTransport;
 using Newtonsoft.Json.Linq;
 
-var session = new RESTSessionKey
+var session = new RestSessionKey
 {
     BaseUrl = "https://company-pilot.example.com/server",
-    AuthObject  = new RESTAuthenticationObject
+    AuthObject  = new RestAuthenticationObject
     {
         ApiKey                   = "YOUR_API_KEY",
         DynamicURLModifier_Keyed = "/api/v2/odata/EPIC01/"
     }
 };
 
-using (var rest = new RESTConnect(session))
+using (var rest = new RestConnect(session))
 {
-    JObject result = await rest.RESTCallAsync(
+    JObject result = await rest.RestCallAsync(
         "Erp.BO.SalesOrderSvc/GetByID?orderNum=12345");
 
     // ...
@@ -571,7 +571,7 @@ headers) for the v2 path.
 The choice between the two URL shapes is a deployment decision about which
 Epicor API version you're targeting, not a property of the endpoint you're
 calling — the same business object is reachable under either. v2 OData is
-Epicor's current direction and is what `EpicorSvcs` defaults to when an
+Epicor's current direction and is what `Keri.Epicor` defaults to when an
 `ApiKey` is configured.
 
 ---
@@ -588,8 +588,8 @@ are explicitly armed. Mirror that in your own code: a write you can see before
 it leaves is a write you can catch a mistake in.
 
 ```csharp
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
 using KeriConfigurator;
 using Newtonsoft.Json;
 
@@ -739,7 +739,7 @@ helpers on `UDTableSvc` build and parse it:
 
 ```csharp
 using System.Collections.Generic;
-using EpicorSvcs;
+using Keri.Epicor;
 
 var legend = new Dictionary<string, string>
 {

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using EpicorSvcs;
-using EpicorSvcs.Dtos;
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 

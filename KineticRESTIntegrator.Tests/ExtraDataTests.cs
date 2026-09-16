@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using EpicorSvcs.Dtos;
+using Keri.Epicor.Dtos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -9,7 +9,7 @@ namespace KineticRESTIntegrator.Tests
     /// <summary>
     /// Verifies that DTOs round-trip unknown JSON properties through the
     /// <c>ExtraData</c> dictionary — including installation-specific custom
-    /// columns (Epicor's <c>_c</c> convention). The DTOs in <see cref="EpicorSvcs.Dtos"/>
+    /// columns (Epicor's <c>_c</c> convention). The DTOs in <see cref="Keri.Epicor.Dtos"/>
     /// carry a <c>[JsonExtensionData]</c> property so that columns the typed
     /// DTO doesn't model are preserved on deserialization and emitted on
     /// serialization, rather than being silently dropped.

@@ -41,11 +41,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The tests exercise EpicorSvcs' offline-deterministic surface:
+    <!-- The tests exercise Keri.Epicor' offline-deterministic surface:
          OperationResult<T>, the OperationResultExtensions, UDRow, and the
-         UDTableSvc static legend helpers. No RESTServices reference is needed —
+         UDTableSvc static legend helpers. No Keri.RestTransport reference is needed —
          nothing here touches the transport layer. -->
-    <ProjectReference Include="..\EpicorSvcs\EpicorSvcs.csproj" />
+    <ProjectReference Include="..\Keri.Epicor\Keri.Epicor.csproj" />
 
     <!-- The file/mail surface: the CSV renderer, the header-map rules,
          FileSpec's computed filename, FileWriter's validation and collision

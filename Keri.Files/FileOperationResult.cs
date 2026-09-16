@@ -18,7 +18,7 @@ namespace Keri.Files
     /// </para>
     /// <para>
     /// It is deliberately <em>not</em> <c>OperationResult&lt;T&gt;</c>. That type
-    /// lives in <c>EpicorSvcs</c> and models a single REST call; reusing it here
+    /// lives in <c>Keri.Epicor</c> and models a single REST call; reusing it here
     /// would make a CSV writer depend on the ERP client, which is backwards. The
     /// two are cousins, not the same type: <see cref="FailedAt"/> plays the part
     /// <c>FailureStage</c> plays over there.

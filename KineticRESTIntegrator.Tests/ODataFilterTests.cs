@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
-using EpicorSvcs;
+using Keri.Epicor;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests

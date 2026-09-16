@@ -1,0 +1,65 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Keri.RestTransport</RootNamespace>
+    <AssemblyName>Keri.RestTransport</AssemblyName>
+
+    <!-- Assembly metadata (replaces AssemblyInfo.cs) -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>Keri.RestTransport</Product>
+    <AssemblyTitle>Keri.RestTransport</AssemblyTitle>
+    <Description>Generic REST client library. Provides session, authentication (Basic auth or API key), environment selection, and JSON error handling. Vendor-agnostic.</Description>
+    <Company>Justin Grant</Company>
+    <Authors>Justin Grant</Authors>
+	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
+    <Version>0.4.0</Version>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <FileVersion>0.4.0.0</FileVersion>
+
+    <!-- NuGet package metadata. Without PackageLicenseExpression a packed
+         artifact carries no license at all, whatever LICENSE says. -->
+    <PackageId>Keri.RestTransport</PackageId>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mrjtgrant/KineticRESTIntegrator</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mrjtgrant/KineticRESTIntegrator</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>rest;http;json;client;odata;httpclient</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!-- Keep the original ProjectGuid so the .sln reference still resolves -->
+    <ProjectGuid>{FDE58B4C-D608-4412-AB9B-07E91748C174}</ProjectGuid>
+
+    <!-- COM visibility -->
+    <ComVisible>false</ComVisible>
+
+    <!-- Misc -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <!-- Expose internal members (e.g. ResolveApiKeyHeaderName) to the test project. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" />
+  </ItemGroup>
+
+  <!-- System.Net.Http is a built-in assembly on .NET Framework 4.8 but is not
+       auto-referenced by the SDK — needs an explicit Reference. On .NET 6+,
+       HttpClient is part of the BCL and auto-referenced; no Reference needed. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <!-- Shipped inside the package so the gallery page has content. -->
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

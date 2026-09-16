@@ -1,6 +1,6 @@
 # REST API Examples (non-Epicor)
 
-Keri's transport layer — the `RESTServices` project — is the low-level REST
+Keri's transport layer — the `Keri.RestTransport` project — is the low-level REST
 client that the Epicor wrappers are built on. It is a public, usable class in
 its own right, and you can point it at REST APIs that have nothing to do with
 Epicor.
@@ -44,27 +44,27 @@ the right tool as it stands today.
 
 ## A GET request
 
-Construct a `RESTConnect` with a `RESTSessionKey`. For a non-Epicor API, set
+Construct a `RestConnect` with a `RestSessionKey`. For a non-Epicor API, set
 `BaseUrl` to the API's base URL:
 
 ```csharp
-using RESTServices;
+using Keri.RestTransport;
 using Newtonsoft.Json.Linq;
 
-var session = new RESTSessionKey
+var session = new RestSessionKey
 {
     BaseUrl = "https://api.example.com/",
-    AuthObject  = new RESTAuthenticationObject
+    AuthObject  = new RestAuthenticationObject
     {
         Username = "api-user",
         Userkey  = "api-password"
     }
 };
 
-using (var rest = new RESTConnect(session))
+using (var rest = new RestConnect(session))
 {
     // The request URL is BaseUrl + the path you pass here.
-    JObject result = await rest.RESTCallAsync("v1/widgets?limit=10");
+    JObject result = await rest.RestCallAsync("v1/widgets?limit=10");
 
     if (result["ErrorMessage"] != null)
     {
@@ -79,7 +79,7 @@ using (var rest = new RESTConnect(session))
 ```
 
 **How the URL is built:** the request URL is `BaseUrl` joined to the path
-you pass to `RESTCallAsync`. The seam between them is normalized to a single
+you pass to `RestCallAsync`. The seam between them is normalized to a single
 `/` — a trailing slash on `BaseUrl`, a leading slash on the path, both, or
 neither all produce the same correct URL, so you don't have to babysit the
 slashes.
@@ -92,7 +92,7 @@ Pass a `JObject` payload as the second argument. A non-null payload makes the
 call a POST; the payload is serialized as the JSON request body:
 
 ```csharp
-using (var rest = new RESTConnect(session))
+using (var rest = new RestConnect(session))
 {
     var body = new JObject
     {
@@ -100,7 +100,7 @@ using (var rest = new RESTConnect(session))
         ["quantity"] = 5
     };
 
-    JObject result = await rest.RESTCallAsync("v1/widgets", body);
+    JObject result = await rest.RestCallAsync("v1/widgets", body);
 
     if (result["ErrorMessage"] != null)
     {
@@ -121,10 +121,10 @@ Basic, set `ApiKey` and — if the API expects a header name other than the
 default `X-API-Key` — `ApiKeyHeaderName`:
 
 ```csharp
-var session = new RESTSessionKey
+var session = new RestSessionKey
 {
     BaseUrl = "https://api.example.com/",
-    AuthObject  = new RESTAuthenticationObject
+    AuthObject  = new RestAuthenticationObject
     {
         ApiKey           = "your-api-key-value",
         ApiKeyHeaderName = "X-API-Key"   // override for e.g. "apikey",
@@ -151,18 +151,18 @@ header:
 // store, wherever it comes from in your environment.
 string token = await GetTokenFromYourIdentityProvider();
 
-var session = new RESTSessionKey
+var session = new RestSessionKey
 {
     BaseUrl = "https://api.example.com/",
-    AuthObject  = new RESTAuthenticationObject
+    AuthObject  = new RestAuthenticationObject
     {
         BearerToken = token
     }
 };
 
-using (var rest = new RESTConnect(session))
+using (var rest = new RestConnect(session))
 {
-    JObject result = await rest.RESTCallAsync("v1/widgets");
+    JObject result = await rest.RestCallAsync("v1/widgets");
     // ...
 }
 ```
@@ -176,10 +176,10 @@ common case without it.
 
 The practical consequence is **expiry**. A bearer token is typically valid for
 a short window (often an hour). The transport applies whatever token was on the
-`RESTAuthenticationObject` when the `RESTConnect` was constructed. If a single
-`RESTConnect` is kept alive longer than the token's lifetime, its later calls
+`RestAuthenticationObject` when the `RestConnect` was constructed. If a single
+`RestConnect` is kept alive longer than the token's lifetime, its later calls
 will start failing with HTTP 401. For a long-running process, obtain a fresh
-token and construct a new `RESTConnect` with it before the old token expires —
+token and construct a new `RestConnect` with it before the old token expires —
 or simply construct the connection per unit of work rather than holding one
 open.
 
@@ -201,22 +201,22 @@ picks between them automatically based on whether an `ApiKey` is set:
 - **Basic auth** (`ApiKey` empty) → `DynamicURLModifier_Basic`, e.g. `{BaseUrl}/api/basic/{service-path}`
 - **API-key auth** (`ApiKey` set) → `DynamicURLModifier_Keyed`, e.g. `{BaseUrl}/api/v0XX/{service-path}`
 
-Set the two modifiers on the `RESTAuthenticationObject`. On each call the
+Set the two modifiers on the `RestAuthenticationObject`. On each call the
 transport joins the chosen modifier between `BaseUrl` and the path you pass to
-`RESTCallAsync`, selecting by `ApiKey` presence — empty picks `_Basic`, set
+`RestCallAsync`, selecting by `ApiKey` presence — empty picks `_Basic`, set
 picks `_Keyed`. Populate whichever credential the path you're targeting wants;
 the URL prefixes above are illustrative — set them to whatever shapes your API
 actually uses.
 
 ```csharp
-using RESTServices;
+using Keri.RestTransport;
 using Newtonsoft.Json.Linq;
 
 // Basic-auth path: ApiKey empty, _Basic set, Username/Userkey supplied.
-var basicSession = new RESTSessionKey
+var basicSession = new RestSessionKey
 {
     BaseUrl = "https://api.example.com",
-    AuthObject = new RESTAuthenticationObject
+    AuthObject = new RestAuthenticationObject
     {
         Username                 = "api-user",
         Userkey                  = "api-password",
@@ -225,18 +225,18 @@ var basicSession = new RESTSessionKey
 };
 // request URL: https://api.example.com/api/basic/{path}
 
-using (var rest = new RESTConnect(basicSession))
+using (var rest = new RestConnect(basicSession))
 {
-    JObject result = await rest.RESTCallAsync("orders/12345");
+    JObject result = await rest.RestCallAsync("orders/12345");
     if (result["ErrorMessage"] != null)
         Console.WriteLine($"Call failed: {result["ErrorMessage"]}");
 }
 
 // Key-auth path: ApiKey set, _Keyed set.
-var keyedSession = new RESTSessionKey
+var keyedSession = new RestSessionKey
 {
     BaseUrl = "https://api.example.com",
-    AuthObject = new RESTAuthenticationObject
+    AuthObject = new RestAuthenticationObject
     {
         ApiKey                   = "your-api-key-value",
         DynamicURLModifier_Keyed = "/api/v0XX/"
@@ -244,9 +244,9 @@ var keyedSession = new RESTSessionKey
 };
 // request URL: https://api.example.com/api/v0XX/{path}
 
-using (var rest = new RESTConnect(keyedSession))
+using (var rest = new RestConnect(keyedSession))
 {
-    JObject result = await rest.RESTCallAsync("orders/12345");
+    JObject result = await rest.RestCallAsync("orders/12345");
     // ...
 }
 ```
@@ -262,7 +262,7 @@ that for their own two URL shapes (see
 
 ## Error handling
 
-`RESTCallAsync` never throws for a failed request. Instead, the returned
+`RestCallAsync` never throws for a failed request. Instead, the returned
 `JObject` carries an `ErrorMessage` property describing what went wrong — an
 HTTP error status with the response body, a connection failure, a timeout, or
 a response that could not be parsed as JSON. On a failed call the returned
@@ -272,7 +272,7 @@ debugging.
 Always check for `ErrorMessage` before using the result:
 
 ```csharp
-JObject result = await rest.RESTCallAsync("v1/widgets");
+JObject result = await rest.RestCallAsync("v1/widgets");
 
 if (result["ErrorMessage"] != null)
 {
@@ -285,4 +285,4 @@ else
 ```
 
 The request timeout is configurable on the session via
-`RESTSessionKey.Timeout` (default 60 seconds).
+`RestSessionKey.Timeout` (default 60 seconds).

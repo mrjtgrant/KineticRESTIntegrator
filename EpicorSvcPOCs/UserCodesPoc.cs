@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using EpicorSvcs;
+using Keri.Epicor;
 
 namespace EpicorSvcPOCs
 {
