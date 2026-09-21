@@ -25,56 +25,56 @@ namespace Keri.Files
 
         /// <summary>
         /// Reads a worksheet from an Excel file into a <see cref="DataTable"/>.
-        /// The first row is treated as the header row and supplies column names
-        /// (sanitized via <see cref="GetAlphaFromStr"/>).
         /// </summary>
         /// <remarks>
+        /// <para>
+        /// The first used row is the header row and supplies the column names
+        /// (sanitized via <see cref="GetAlphaFromStr"/>). The columns span the
+        /// header's first to last used cell, and every later row is read across
+        /// exactly those columns, so each value lands under its own header even
+        /// when a row starts with an empty cell. A row with no values becomes a
+        /// row of empty strings.
+        /// </para>
+        /// <para>
         /// Relies on ClosedXML. The Excel file must not be open in another
-        /// process while this runs.
+        /// process while this runs. Failures — a missing or locked file, an
+        /// invalid sheet index, duplicate header names — are thrown. Use
+        /// <see cref="WorksheetToJArray"/> to receive them as a result instead.
+        /// </para>
         /// </remarks>
         /// <param name="filePath">Path to the <c>.xlsx</c> file.</param>
         /// <param name="sheetindex">1-based worksheet index. Default 1.</param>
+        /// <returns>The worksheet's data rows. Empty when the sheet has no used cells.</returns>
         public DataTable WorksheetToDataTable(string filePath, int sheetindex = 1)
         {
-            // Open the Excel file using ClosedXML.
-            // Keep in mind the Excel file cannot be open when trying to read it
             using (XLWorkbook workBook = new XLWorkbook(filePath))
             {
-                //Read the first Sheet from Excel file.
                 IXLWorksheet workSheet = workBook.Worksheet(sheetindex);
-
-                //Create a new DataTable.
                 DataTable dt = new DataTable();
 
-                //Loop through the Worksheet rows.
-                bool firstRow = true;
-                foreach (IXLRow row in workSheet.Rows())
-                {
-                    //Use the first row to add columns to DataTable.
-                    if (firstRow)
-                    {
-                        foreach (IXLCell cell in row.Cells())
-                        {
-                            dt.Columns.Add(GetAlphaFromStr(cell.Value.ToString()));
-                        }
-                        firstRow = false;
-                    }
-                    else
-                    {
-                        //Add rows to DataTable.
-                        dt.Rows.Add();
-                        int i = 0;
+                IXLRow header = workSheet.FirstRowUsed();
+                IXLCell firstHeaderCell = header == null ? null : header.FirstCellUsed();
+                if (firstHeaderCell == null)
+                    return dt;
 
-                        try
-                        {
-                            foreach (IXLCell cell in row.Cells(row.FirstCellUsed().Address.ColumnNumber, row.LastCellUsed().Address.ColumnNumber))
-                            {
-                                dt.Rows[dt.Rows.Count - 1][i] = cell.Value.ToString();
-                                i++;
-                            }
-                        }
-                        catch { }
-                    }
+                int headerRow = header.RowNumber();
+                int firstColumn = firstHeaderCell.Address.ColumnNumber;
+                int lastColumn = header.LastCellUsed().Address.ColumnNumber;
+
+                for (int column = firstColumn; column <= lastColumn; column++)
+                    dt.Columns.Add(GetAlphaFromStr(workSheet.Cell(headerRow, column).Value.ToString()));
+
+                foreach (IXLRow row in workSheet.RowsUsed())
+                {
+                    int rowNumber = row.RowNumber();
+                    if (rowNumber <= headerRow)
+                        continue;
+
+                    DataRow dataRow = dt.NewRow();
+                    for (int column = firstColumn; column <= lastColumn; column++)
+                        dataRow[column - firstColumn] = workSheet.Cell(rowNumber, column).Value.ToString();
+
+                    dt.Rows.Add(dataRow);
                 }
 
                 return dt;
@@ -82,28 +82,33 @@ namespace Keri.Files
         }
 
         /// <summary>
-        /// Reads a worksheet from an Excel file into a <see cref="JArray"/>.
-        /// On failure, returns a single-element array containing the
-        /// serialized exception rather than throwing.
+        /// Reads a worksheet from an Excel file into a <see cref="JArray"/>, one
+        /// object per data row. Failures are returned on the result rather than
+        /// thrown.
         /// </summary>
+        /// <remarks>
+        /// Reads the worksheet exactly as <see cref="WorksheetToDataTable"/> does.
+        /// </remarks>
         /// <param name="file">Path to the <c>.xlsx</c> file.</param>
         /// <param name="sheetindex">1-based worksheet index. Default 1.</param>
-        public JArray WorksheetToJArray(string file, int sheetindex = 1)
+        /// <returns>
+        /// An <see cref="ExcelReadResult"/> carrying the rows on success, or the
+        /// error message and exception on failure.
+        /// </returns>
+        public ExcelReadResult WorksheetToJArray(string file, int sheetindex = 1)
         {
-            JArray result = new JArray();
-
             try
             {
                 using (DataTable dt = WorksheetToDataTable(file, sheetindex))
                 {
-                    result = JArray.FromObject(dt);
+                    return ExcelReadResult.Succeeded(JArray.FromObject(dt));
                 }
             }
             catch (Exception e)
             {
-                result.Add(JObject.FromObject(e));
+                return ExcelReadResult.Failed(
+                    "Could not read worksheet " + sheetindex + " of '" + file + "': " + e.Message, e);
             }
-            return result;
         }
     }
 }

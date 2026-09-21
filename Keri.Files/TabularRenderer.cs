@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Text;
 using Newtonsoft.Json.Linq;
 
@@ -122,7 +123,8 @@ namespace Keri.Files
         /// property of the first row.
         /// </summary>
         /// <remarks>
-        /// Cell values and headers are inserted as-is, without HTML encoding.
+        /// Headers and cell values are HTML-encoded. A row that lacks one of the
+        /// first row's properties, or holds null for it, gets an empty cell.
         /// </remarks>
         /// <param name="data">The rows to render.</param>
         /// <returns>The HTML table, or an empty string when there are no rows.</returns>
@@ -135,14 +137,18 @@ namespace Keri.Files
             //add header row
             html += "<tr>";
             for (int i = 0; i < Columns.Count; i++)
-                html += "<th style='white-space: nowrap;'>" + Columns[i] + "</th>";
+                html += "<th style='white-space: nowrap;'>" + WebUtility.HtmlEncode(Columns[i]) + "</th>";
             html += "</tr>";
             //add rows
             for (int i = 0; i < data.Count; i++)
             {
                 html += "<tr>";
                 for (int j = 0; j < Columns.Count; j++)
-                    html += "<td cellpadding='5'  style='white-space: nowrap;'>" + data[i][Columns[j]].ToString() + "</td>";
+                {
+                    JToken cell = data[i][Columns[j]];
+                    string value = cell == null || cell.Type == JTokenType.Null ? string.Empty : cell.ToString();
+                    html += "<td cellpadding='5'  style='white-space: nowrap;'>" + WebUtility.HtmlEncode(value) + "</td>";
+                }
                 html += "</tr>";
             }
             html += "</table>";

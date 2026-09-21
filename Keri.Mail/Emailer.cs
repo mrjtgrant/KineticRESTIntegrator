@@ -500,9 +500,11 @@ namespace Keri.Mail
         /// </summary>
         /// <remarks>
         /// When <see cref="EmailSpecs.EmailBody"/> is set, the body is that text
-        /// with line breaks converted to <c>&lt;br/&gt;</c>. When it is null, the
-        /// body is a report of <paramref name="mailitems"/>: each public property
-        /// is rendered as a label/value line, except the blind-copy lists
+        /// with line breaks converted to <c>&lt;br/&gt;</c>. It is inserted as
+        /// HTML without encoding, so callers can format it; encode any data
+        /// placed in it. When it is null, the body is a report of
+        /// <paramref name="mailitems"/>: each public property is rendered as an
+        /// HTML-encoded label/value line, except the blind-copy lists
         /// (<see cref="EmailSpecs.EmailBCCRecipients"/> and
         /// <see cref="EmailSpecs.EmailRecipientDefault"/>).
         /// </remarks>
@@ -516,7 +518,9 @@ namespace Keri.Mail
             if (mailitems.EmailBody == null)
                 foreach (var item in JObject.FromObject(mailitems))
                 {
-                    body.AppendFormat("<div><b>{0}:</b> <span>{1}</span></div>", item.Key, item.Value);
+                    body.AppendFormat("<div><b>{0}:</b> <span>{1}</span></div>",
+                        System.Net.WebUtility.HtmlEncode(item.Key),
+                        System.Net.WebUtility.HtmlEncode(item.Value.ToString()));
                 }
             else
                 body.AppendFormat("<div>{0}</div>", mailitems.EmailBody.Replace("\n", "<br/>"));

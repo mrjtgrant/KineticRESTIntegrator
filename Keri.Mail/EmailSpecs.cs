@@ -92,10 +92,11 @@ namespace Keri.Mail
         public string EmailError { get; set; } = "";
 
         /// <summary>
-        /// Explicit HTML/text body. When null, the body is a report generated
-        /// from this object's properties — processing errors, error level,
-        /// visible recipients, subject and attachment path. Blind-copy
-        /// recipients are never included.
+        /// Explicit HTML/text body, inserted as HTML without encoding — encode
+        /// any data you place in it. When null, the body is an HTML-encoded
+        /// report generated from this object's properties — processing errors,
+        /// error level, visible recipients, subject and attachment path.
+        /// Blind-copy recipients are never included.
         /// </summary>
         public string EmailBody { get; set; } = null;
 

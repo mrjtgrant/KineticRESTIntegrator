@@ -56,5 +56,28 @@ namespace KineticRESTIntegrator.Tests.Files
             Assert.Contains("Line one<br/>Line two", body);
             Assert.DoesNotContain("to@example.test", body);
         }
+
+        [Fact]
+        public void GeneratedBody_HtmlEncodesValues()
+        {
+            var spec = Spec();
+            spec.FileProcessErrors = new List<string> { "Qty < 5 & <script>alert(1)</script>" };
+
+            string body = Emailer.emailbody(spec);
+
+            Assert.DoesNotContain("<script>", body);
+            Assert.Contains("Qty &lt; 5 &amp; &lt;script&gt;", body);
+        }
+
+        [Fact]
+        public void ExplicitBody_IsInsertedAsHtml()
+        {
+            var spec = Spec();
+            spec.EmailBody = "<b>Total</b>";
+
+            string body = Emailer.emailbody(spec);
+
+            Assert.Contains("<b>Total</b>", body);
+        }
     }
 }

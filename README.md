@@ -428,6 +428,7 @@ KineticRESTIntegrator/
 ├── Keri.Files/                      rendering rows to files, and writing them
 │   ├── TabularRenderer.cs           rows → CSV (RFC 4180, formula-safe) / HTML
 │   ├── ExcelReader.cs               worksheet → DataTable / JArray
+│   ├── ExcelReadResult.cs           rows, or the reason a read failed
 │   ├── ExcelWriter.cs               DataTable → .xlsx
 │   ├── FileWriter.cs                FileSpec → a file on disk
 │   ├── FileSpec.cs                  what to produce, and where to put it
@@ -492,7 +493,7 @@ The SDK has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->278<!--/TESTS--> tests, run on both `net48` and `net8.0`.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->292<!--/TESTS--> tests, run on both `net48` and `net8.0`.
 
 Test Explorer in Visual Studio also discovers and runs them.
 
