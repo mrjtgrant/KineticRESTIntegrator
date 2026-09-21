@@ -40,10 +40,10 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 | Project | Version |
 |---|---|
-| `Keri.Epicor` | <!--VER:Keri.Epicor-->0.8.0<!--/VER--> |
-| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->0.4.0<!--/VER--> |
-| `Keri.Files` | <!--VER:Keri.Files-->0.6.0<!--/VER--> |
-| `Keri.Mail` | <!--VER:Keri.Mail-->0.6.0<!--/VER--> |
+| `Keri.Epicor` | <!--VER:Keri.Epicor-->0.9.0<!--/VER--> |
+| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->0.5.0<!--/VER--> |
+| `Keri.Files` | <!--VER:Keri.Files-->0.7.0<!--/VER--> |
+| `Keri.Mail` | <!--VER:Keri.Mail-->0.7.0<!--/VER--> |
 | `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
 
 All the Epicor service wrappers are converted, and the packages are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The SDK builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.

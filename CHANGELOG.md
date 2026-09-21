@@ -6,15 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Versioning
 
-This project follows Semantic Versioning, with one pragmatic qualification **while it remains a solo, single-solution project with no external consumers**: "breaking" is judged by *actual* breakage risk, not by category. A minor bump (`0.X.0`) is reserved for changes that alter documented runtime behavior or meaningfully reshape the API. In-solution renames or removals that are fixed within the same change — together with fixes, additions, internal refactors, and documentation — are patch bumps (`0.0.X`), even when they technically touch a public symbol, because nothing outside the solution can break.
+This project follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). Each package versions independently.
 
-The project stays on `0.x` until its API is deliberately committed to as stable. `1.0.0` is a maturity decision, not an automatic milestone — a high `0.x` minor implies nothing about stability; the leading `0.` is the signal that the API may still change.
+- **Before 1.0.0**, a minor version (`0.X.0`) may contain breaking changes. A patch version (`0.x.Y`) contains only backward-compatible fixes.
+- **From 1.0.0**, breaking changes appear only in major versions.
+- **Every breaking change is marked Breaking** in its entry, with a note on how to migrate.
 
-**If an external consumer is ever added** — a published package, a shared assembly, or a separate repository that takes a dependency on this one — this relaxation no longer applies. Revert to strict Semantic Versioning at that point: any public rename or removal is a breaking change and bumps the minor.
-
-**Each project versions independently.** As of `KeriConfigurator 0.5.0`, the four projects — `RESTServices`, `EpicorSvcs`, `FileHandling`, and `KeriConfigurator` — carry their own version numbers and are released and git-tagged per project (e.g. `KeriConfigurator-v0.5.0`), rather than under a single aggregate repo version. The `[0.x.y]` entries below and the matching `vX.Y.Z` tags were whole-repo releases driven by `EpicorSvcs`; they remain as the historical record. New entries are headed by the project and its version.
+Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epicor-v0.9.0`. The `[0.x.y]` entries and `vX.Y.Z` tags further down are earlier whole-repository releases.
 
 ---
+
+## Keri.RestTransport 0.5.0 / Keri.Epicor 0.9.0 / Keri.Files 0.7.0 / Keri.Mail 0.7.0 — 2026-09-21
+
+Every package gains a .NET Standard 2.0 build and a lower .NET Framework floor, and ships its XML documentation. `Keri.Files` changes one method's return type. **Breaking:** `ExcelReader.WorksheetToJArray`.
+
+### Added
+
+- **`netstandard2.0` builds** of all four packages, for applications on .NET 5, 6 and 7 — including assemblies loaded by a Kinetic application server running on .NET 6.
+- **XML documentation in every package.** IntelliSense shows the doc comments for package consumers.
+- **`ExcelReadResult`** in `Keri.Files`: `IsSuccess`, `Rows`, `ErrorMessage` and `Exception` for a worksheet read.
+- **`COMPATIBILITY.md`** — supported Epicor versions, running outside Epicor versus inside a BPM or Function, which build to deploy on which server runtime, and what has been verified.
+- **`ADDING_A_SERVICE.md`** — a worked example of adding a Business Object service and its DTO.
+- **Trademark and independence notice** in `README.md` and `NOTICE`.
+
+### Changed
+
+- **.NET Framework targets lowered.** `Keri.RestTransport`, `Keri.Epicor` and `Keri.Files` target `net461`; `Keri.Mail` targets `net462`. `net48` applications use these builds. Each package now builds for three targets: .NET Framework, `netstandard2.0` and `net8.0`.
+- **Breaking — `ExcelReader.WorksheetToJArray` returns `ExcelReadResult`** instead of `JArray`. A failed read is reported on the result instead of being returned as a serialized exception inside the array. To migrate:
+
+  ```csharp
+  ExcelReadResult result = new ExcelReader().WorksheetToJArray(path);
+  if (result.IsFailure)
+  {
+      Console.WriteLine(result.ErrorMessage);
+      return;
+  }
+  JArray rows = result.Rows;
+  ```
+
+- **`Keri.Mail` selects its SMTP client by target family.** `System.Net.Mail` on .NET Framework; MailKit on `netstandard2.0` and `net8.0`. Port 465 (implicit TLS) is rejected on every target.
+- **The test suite runs on `net48` and `net8.0`.**
+- **Documentation describes Keri as an SDK**, adds the Epicor compatibility section to the README, and documents the port 465 limitation in `CONFIGURATION.md` and `SECURITY.md`.
+
+### Fixed
+
+- **`ExcelReader.WorksheetToDataTable` put values under the wrong headers** when a data row began with an empty cell. Each row is now read across the header's columns. An empty `catch` that discarded row-read errors is removed.
+- **`TabularRenderer.ConvertJArrayToHTMLTable` threw** when a row lacked a column present in the first row, or held null. Those cells are now empty.
+- **Doc comments** that linked to renamed or removed methods, and public members without documentation.
+- **Removed an unverified claim** from the XML docs and guides that OData query options are ignored on REST v1 sessions.
+
+### Security
+
+- **The generated email report no longer includes blind-copy recipients.** `EmailSpecs.EmailBCCRecipients` and `EmailSpecs.EmailRecipientDefault` are omitted from the body `Emailer` builds when `EmailBody` is null.
+- **Generated HTML is encoded.** The email report and `ConvertJArrayToHTMLTable` HTML-encode headers and values. An explicit `EmailBody` is inserted as the caller's HTML, as documented.
+
+### Version
+
+- `Keri.RestTransport` 0.4.0 → 0.5.0. `Keri.Epicor` 0.8.0 → 0.9.0. `Keri.Files` 0.6.0 → 0.7.0. `Keri.Mail` 0.6.0 → 0.7.0. `KeriConfigurator` (0.5.0) is unchanged.
 
 ## Documentation caught up — 2026-09-16
 

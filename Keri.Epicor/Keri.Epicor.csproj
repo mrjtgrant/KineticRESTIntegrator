@@ -19,9 +19,9 @@
     <Company>Justin Grant</Company>
     <Authors>Justin Grant</Authors>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
-    <Version>0.8.0</Version>
-    <AssemblyVersion>0.8.0.0</AssemblyVersion>
-    <FileVersion>0.8.0.0</FileVersion>
+    <Version>0.9.0</Version>
+    <AssemblyVersion>0.9.0.0</AssemblyVersion>
+    <FileVersion>0.9.0.0</FileVersion>
 
     <!-- NuGet package metadata. Without PackageLicenseExpression a packed
          artifact carries no license at all, whatever LICENSE says. -->
