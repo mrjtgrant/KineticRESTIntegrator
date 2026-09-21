@@ -5,13 +5,19 @@ using System.Text;
 using Keri.Files;
 using Newtonsoft.Json.Linq;
 
-#if NET48
+// Mail stack by target family:
+//   NETFRAMEWORK  .NET Framework 4.x          -> System.Net.Mail (BCL, no dependencies)
+//   NETSTANDARD   .NET Standard (.NET 5-7)    -> MailKit
+//   NET           .NET 5 and later            -> MailKit
+#if NETFRAMEWORK
 using System.Net;
 using System.Net.Mail;
-#else
+#elif NET || NETSTANDARD
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+#else
+#error Keri.Mail has no mail implementation for this target framework.
 #endif
 
 namespace Keri.Mail
@@ -19,13 +25,19 @@ namespace Keri.Mail
     /// <summary>
     /// Sends emails via SMTP, and composes the build-then-send flow for a report
     /// email (<see cref="SendReport"/>). Uses <see cref="System.Net.Mail.SmtpClient"/> on
-    /// .NET Framework 4.8 and <see cref="MailKit.Net.Smtp.SmtpClient"/> on
-    /// .NET 8+. The implementation choice is invisible to callers — the same
-    /// configurations behave the same way on both targets. Default behavior is
+    /// .NET Framework and <c>MailKit.Net.Smtp.SmtpClient</c> everywhere
+    /// else. The implementation choice is invisible to callers — the same
+    /// configurations behave the same way on every target. Default behavior is
     /// anonymous, no TLS, port 25 — suitable for internal relays. Auth and
     /// STARTTLS are opt-in via the <c>SMTPUsername</c>, <c>SMTPPassword</c>,
     /// <c>SMTPPort</c>, and <c>SMTPEnableSsl</c> settings.
     /// </summary>
+    /// <remarks>
+    /// The .NET Framework path uses <c>System.Net.Mail</c>, which is part of
+    /// the framework and adds no dependencies. Its <c>EnableSsl</c> performs
+    /// STARTTLS only, so port 465 (implicit TLS) is rejected on every target.
+    /// Use STARTTLS, typically on port 587.
+    /// </remarks>
     public class Emailer
     {
         /// <summary>
@@ -59,7 +71,7 @@ namespace Keri.Mail
 
             string fromAddress = report.EmailFrom ?? report.smtpspecs.from;
 
-#if NET48
+#if NETFRAMEWORK
             // ===== .NET Framework path: System.Net.Mail =====
             try
             {
@@ -121,8 +133,8 @@ namespace Keri.Mail
             {
                 report.EmailError = e.Message;
             }
-#else
-            // ===== .NET 8+ path: MailKit =====
+#elif NET || NETSTANDARD
+            // ===== .NET / .NET Standard path: MailKit =====
             try
             {
                 var message = new MimeMessage();
@@ -167,7 +179,7 @@ namespace Keri.Mail
 
                 // Pick the SecureSocketOptions. Validation already rejected port 25
                 // and port 465 with EnableSsl, so the choice is binary: plain or
-                // STARTTLS. The same rules apply on net48 via System.Net.Mail's
+                // STARTTLS. The same rules apply on .NET Framework via System.Net.Mail's
                 // EnableSsl flag.
                 SecureSocketOptions socketOptions = report.smtpspecs.enableSsl
                     ? SecureSocketOptions.StartTls
@@ -483,6 +495,19 @@ namespace Keri.Mail
             return true;
         }
 
+        /// <summary>
+        /// Builds the HTML body for <paramref name="mailitems"/>.
+        /// </summary>
+        /// <remarks>
+        /// When <see cref="EmailSpecs.EmailBody"/> is set, the body is that text
+        /// with line breaks converted to <c>&lt;br/&gt;</c>. When it is null, the
+        /// body is a report of <paramref name="mailitems"/>: each public property
+        /// is rendered as a label/value line, except the blind-copy lists
+        /// (<see cref="EmailSpecs.EmailBCCRecipients"/> and
+        /// <see cref="EmailSpecs.EmailRecipientDefault"/>).
+        /// </remarks>
+        /// <param name="mailitems">The email being sent.</param>
+        /// <returns>The HTML body.</returns>
         public static string emailbody(EmailSpecs mailitems)
         {
             StringBuilder body = new StringBuilder();

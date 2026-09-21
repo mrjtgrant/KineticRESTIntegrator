@@ -1,7 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net48;net8.0</TargetFrameworks>
+    <!-- Targets:
+           net461          .NET Framework 4.6.1 and later (Epicor 10.1 and up)
+           netstandard2.0  .NET 5, 6 and 7 — including Kinetic application
+                           servers that run on .NET 6
+           net8.0          .NET 8 and later -->
+    <!-- ClosedXML ships netstandard2.0 and netstandard2.1 builds only, so the
+         .NET Framework target consumes it through .NET Standard facades. If the
+         net461 build has binding-redirect problems, net472 is the next floor. -->
+    <TargetFrameworks>net461;netstandard2.0;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>Keri.Files</RootNamespace>
     <AssemblyName>Keri.Files</AssemblyName>
@@ -10,7 +18,7 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>Keri.Files</Product>
     <AssemblyTitle>Keri.Files</AssemblyTitle>
-    <Description>File output for the Kinetic REST Integrator: render query results to Excel or CSV and write them to disk.</Description>
+    <Description>File output for the Keri SDK: render query results to Excel or CSV and write them to disk, with spreadsheet formula injection neutralized on the CSV path. Usable with any JSON rows, not only Epicor's.</Description>
     <Company>Justin Grant</Company>
     <Authors>Justin Grant</Authors>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
@@ -40,18 +48,23 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <Deterministic>true</Deterministic>
+
+    <!-- Ship the XML doc comments with the package so IntelliSense shows them. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <!-- Build-warning suppression.
-       MSB3277 fires on net48 because ClosedXML (a netstandard2.0 library)
-       transitively references newer versions of System.Memory, System.Buffers,
-       System.Numerics.Vectors, and System.Runtime.CompilerServices.Unsafe than
-       the .NET Framework 4.8 facade assemblies provide. App.config's
-       <bindingRedirect> entries resolve this at runtime — the warning is a
-       build-time complaint about a state that is deliberately handled.
+       MSB3277 fires on the .NET Framework target because ClosedXML (a
+       netstandard2.0 library) transitively references newer versions of
+       System.Memory, System.Buffers, System.Numerics.Vectors, and
+       System.Runtime.CompilerServices.Unsafe than the Framework facade
+       assemblies provide. App.config's <bindingRedirect> entries resolve this
+       at runtime — the warning is a build-time complaint about a state that is
+       deliberately handled. Expect it to get louder, not quieter, at a lower
+       floor: the facades on 4.6.1 are older than the ones on 4.8.
        MSB3836 fires on net8.0 because <AutoGenerateBindingRedirects> produces
        its own redirects that overlap with the hand-coded ones in App.config
-       (which are there for the net48 runtime path). Same underlying root
+       (which are there for the Framework runtime path). Same underlying root
        cause; same "already handled, please stop complaining" character. -->
   <PropertyGroup>
     <NoWarn>$(NoWarn);MSB3277;MSB3836</NoWarn>
@@ -62,9 +75,9 @@
        for library projects is to NOT copy them (consumers resolve NuGet
        themselves), but this library is consumed by projects that reference its
        DLLs directly from a local lib/ folder rather than via NuGet — so the
-       DLLs need to be alongside the library's own output. Not applied to net48
-       to avoid disturbing the existing binding-redirect and BCL-facade-conflict
-       handling on that target. -->
+       DLLs need to be alongside the library's own output. Not applied to the
+       .NET Framework target to avoid disturbing the existing binding-redirect
+       and BCL-facade-conflict handling there. -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
@@ -85,6 +98,14 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>KineticRESTIntegrator.Tests</_Parameter1>
     </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- Reference assemblies for the .NET Framework targets. Without this, the
+       build requires the 4.6.1/4.6.2 targeting packs to be installed on the
+       machine; with it, any machine that can run the .NET SDK can build every
+       Framework target. PrivateAssets="all" keeps it out of consumers' graphs. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Shipped inside the package so the gallery page has content. -->

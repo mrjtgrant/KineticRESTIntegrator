@@ -61,9 +61,11 @@ namespace Keri.Epicor
         /// <c>_c</c> columns or Epicor UD placeholder columns), append their names at
         /// the call site; they arrive in the DTO's <c>[JsonExtensionData]</c> overflow.
         /// <para>
-        /// <c>$select</c> is an OData query option, honored only on Epicor's v2 OData
-        /// endpoint (API-key sessions). On a Basic-auth (v1) session the option is
-        /// ignored by the server and the full collection is returned regardless.
+        /// Every name in the list goes into the request, so a DTO property whose name
+        /// does not match a real Epicor column is sent to the server as a column to
+        /// select. Standard OData rejects an unknown property in <c>$select</c>, so
+        /// expect the whole read to fail rather than just that column. Property names
+        /// must match Epicor's column names exactly.
         /// </para>
         /// </remarks>
         /// <typeparam name="T">The DTO type whose properties define the columns.</typeparam>
@@ -116,11 +118,10 @@ namespace Keri.Epicor
         }
 
         /// <summary>
-        /// Construct with a programmatic session. Build one from configuration
-        /// via <see cref="EpicorConfiguration.BuildSession"/> (or the
-        /// <see cref="EpicorClient.FromConfiguration"/> facade), or assemble an
-        /// <see cref="EpicorRestSessionKey"/> directly. Sets the v1 / v2 URL
-        /// modifiers on the session's auth object before use.
+        /// Construct with a session: an <see cref="EpicorRestSessionKey"/>
+        /// assembled in code, or one built by the application's configuration
+        /// layer (in this solution, <c>KeriConfig</c> in KeriConfigurator). Sets
+        /// the v1 / v2 URL modifiers on the session's auth object before use.
         /// </summary>
         /// <param name="session">A fully-configured session.</param>
         public EpicorSvc(EpicorRestSessionKey session) : base(session)

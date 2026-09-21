@@ -10,10 +10,15 @@ is the real one** and should be read before proposing any change.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — naming, file layout, the async and
   `OperationResult<T>` contract, the design decisions already settled, and the
   shape a new service takes on its first commit.
-- **[README.md](README.md)** — what the library is and how it's used.
+- **[README.md](README.md)** — what the SDK is and how it's used.
 - **[EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md)** — the design tour, in Section 1.
 - **[SECURITY.md](SECURITY.md)** — credential handling and what the library
   deliberately leaves to the caller.
+- **[ADDING_A_SERVICE.md](ADDING_A_SERVICE.md)** — the worked example to follow
+  when adding a Business Object service and its DTO.
+- **[COMPATIBILITY.md](COMPATIBILITY.md)** — supported Epicor versions, and
+  what is verified versus assumed. Don't add compatibility claims elsewhere
+  without updating it.
 
 ## Non-negotiables
 

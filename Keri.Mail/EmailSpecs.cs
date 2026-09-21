@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Newtonsoft.Json;
 
 namespace Keri.Mail
 {
@@ -50,6 +51,8 @@ namespace Keri.Mail
         public List<string> EmailCCRecipients { get; set; }
 
         /// <summary>Blind-carbon-copy recipients.</summary>
+        /// <remarks>Never included in the auto-generated body.</remarks>
+        [JsonIgnore]
         public List<string> EmailBCCRecipients { get; set; }
 
         /// <summary>Per-line errors collected during file processing.</summary>
@@ -64,6 +67,11 @@ namespace Keri.Mail
         /// configuration by <see cref="Emailer.SendReport"/>;
         /// empty on a bare instance.
         /// </summary>
+        /// <remarks>
+        /// Sent as a blind copy outside debug mode, so it is never included in
+        /// the auto-generated body.
+        /// </remarks>
+        [JsonIgnore]
         public List<string> EmailRecipientDefault { get; set; } = new List<string>();
 
         /// <summary>The email subject line.</summary>
@@ -84,8 +92,10 @@ namespace Keri.Mail
         public string EmailError { get; set; } = "";
 
         /// <summary>
-        /// Explicit HTML/text body. When null, the body is auto-generated from
-        /// this object's properties.
+        /// Explicit HTML/text body. When null, the body is a report generated
+        /// from this object's properties — processing errors, error level,
+        /// visible recipients, subject and attachment path. Blind-copy
+        /// recipients are never included.
         /// </summary>
         public string EmailBody { get; set; } = null;
 

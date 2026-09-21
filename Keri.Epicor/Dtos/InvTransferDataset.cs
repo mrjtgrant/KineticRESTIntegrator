@@ -4,7 +4,7 @@ namespace Keri.Epicor.Dtos
 {
     /// <summary>
     /// Caller-facing input bundle for
-    /// <see cref="InvTransferSvc._MoveInventoryAsync"/>.
+    /// <see cref="InvTransferSvc.MoveInventoryAsync"/>.
     /// </summary>
     /// <remarks>
     /// <para>

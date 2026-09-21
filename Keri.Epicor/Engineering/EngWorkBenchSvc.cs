@@ -301,8 +301,8 @@ namespace Keri.Epicor
         // Disposal
         // ---------------------------------------------------------------
 
-        // Dispose the inner BomSearchSvc when this service is disposed,
-        // then chain to the base which disposes the HttpClient.
+        /// <inheritdoc/>
+        /// <remarks>Also disposes the inner <see cref="BomSearchSvc"/>.</remarks>
         protected override void Dispose(bool disposing)
         {
             if (disposing)

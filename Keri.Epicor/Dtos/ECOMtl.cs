@@ -12,7 +12,7 @@ namespace Keri.Epicor.Dtos
     /// <remarks>
     /// This DTO includes both standard Epicor fields AND installation-specific
     /// custom columns (suffixed with <c>_c</c>). Used by
-    /// <see cref="EngWorkBenchSvc._AddMtlsAsync"/>.
+    /// <see cref="EngWorkBenchSvc.AddMtlsAsync"/>.
     /// </remarks>
     public class ECOMtl
     {

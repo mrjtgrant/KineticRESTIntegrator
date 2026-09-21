@@ -1,7 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net48;net8.0</TargetFrameworks>
+    <!-- Targets:
+           net461          .NET Framework 4.6.1 and later (Epicor 10.1 and up)
+           netstandard2.0  .NET 5, 6 and 7 — including Kinetic application
+                           servers that run on .NET 6
+           net8.0          .NET 8 and later -->
+    <TargetFrameworks>net461;netstandard2.0;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>Keri.Epicor</RootNamespace>
     <AssemblyName>Keri.Epicor</AssemblyName>
@@ -10,7 +15,7 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>Keri.Epicor</Product>
     <AssemblyTitle>Keri.Epicor</AssemblyTitle>
-    <Description>Strongly typed C# wrappers for Epicor Kinetic Business Objects (BOs) and Business Activity Queries (BAQs). Built on Keri.RestTransport.</Description>
+    <Description>Keri SDK for Epicor Kinetic: strongly typed C# services over Epicor's Business Objects and Business Activity Queries, with result objects that report which side of the commit boundary a failure landed on. An independent project, not affiliated with Epicor Software Corporation.</Description>
     <Company>Justin Grant</Company>
     <Authors>Justin Grant</Authors>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
@@ -39,6 +44,9 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <Deterministic>true</Deterministic>
+
+    <!-- Ship the XML doc comments with the package so IntelliSense shows them. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <!-- For net8.0 only: copy transitive NuGet package DLLs into the output
@@ -46,8 +54,8 @@
        resolve NuGet themselves), but this library is consumed by projects
        that reference its DLLs directly from a local lib/ folder rather than
        via NuGet — so the DLLs need to be alongside the library's own output.
-       Not applied to net48 to avoid disturbing the existing binding-redirect
-       and BCL-facade-conflict handling on that target. -->
+       Not applied to the .NET Framework target to avoid disturbing the existing
+       binding-redirect and BCL-facade-conflict handling there. -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
@@ -65,7 +73,7 @@
 
   <!-- Microsoft.CSharp is required on .NET Framework to enable `dynamic`
        typing support. On .NET 6+, `dynamic` works without this reference. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 
@@ -77,6 +85,14 @@
        Local.targets.template in this folder for the shape and usage. -->
   <Import Project="$(MSBuildThisFileDirectory)Local.targets"
           Condition="Exists('$(MSBuildThisFileDirectory)Local.targets')" />
+
+  <!-- Reference assemblies for the .NET Framework targets. Without this, the
+       build requires the 4.6.1/4.6.2 targeting packs to be installed on the
+       machine; with it, any machine that can run the .NET SDK can build every
+       Framework target. PrivateAssets="all" keeps it out of consumers' graphs. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
 
   <!-- Shipped inside the package so the gallery page has content. -->
   <ItemGroup>

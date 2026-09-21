@@ -1,7 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net48;net8.0</TargetFrameworks>
+    <!-- Targets:
+           net462          .NET Framework 4.6.2 and later — System.Net.Mail
+           netstandard2.0  .NET 5, 6 and 7 — MailKit
+           net8.0          .NET 8 and later — MailKit
+         The Framework floor matches MailKit's lowest .NET Framework build. -->
+    <TargetFrameworks>net462;netstandard2.0;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>Keri.Mail</RootNamespace>
     <AssemblyName>Keri.Mail</AssemblyName>
@@ -10,7 +15,7 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>Keri.Mail</Product>
     <AssemblyTitle>Keri.Mail</AssemblyTitle>
-    <Description>SMTP delivery for the Kinetic REST Integrator: send a report built by Keri.Files, or any file, as an email attachment.</Description>
+    <Description>SMTP delivery for the Keri SDK: send a report built by Keri.Files, or any file, as an email attachment. Uses MailKit on .NET and System.Net.Mail on .NET Framework.</Description>
     <Company>Justin Grant</Company>
     <Authors>Justin Grant</Authors>
 	<Copyright>Copyright © 2025-2026 Justin Grant</Copyright>
@@ -38,6 +43,9 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <Deterministic>true</Deterministic>
+
+    <!-- Ship the XML doc comments with the package so IntelliSense shows them. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -61,12 +69,12 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
-  <!-- MailKit 4.16.0+ for SMTP on .NET 6+. The net48 build uses
-       System.Net.Mail.SmtpClient (BCL) instead - MailKit 4.x dropped
-       .NET Framework support, and the only net48-compatible MailKit (3.x)
-       has an unpatched STARTTLS-Response-Injection CVE (GHSA-9j88-vvj5-vhgr).
-       Using System.Net.Mail on net48 avoids that CVE entirely. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+  <!-- MailKit on netstandard2.0 and net8.0. The .NET Framework build uses
+       System.Net.Mail from the BCL, which adds no dependencies to a Framework
+       consumer. System.Net.Mail supports STARTTLS only, so port 465 (implicit
+       TLS) is rejected on every target to keep one configuration valid
+       everywhere. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' != '.NETFramework'">
     <PackageReference Include="MailKit" Version="4.16.0" />
   </ItemGroup>
 
@@ -77,6 +85,14 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>KineticRESTIntegrator.Tests</_Parameter1>
     </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- Reference assemblies for the .NET Framework targets. Without this, the
+       build requires the 4.6.1/4.6.2 targeting packs to be installed on the
+       machine; with it, any machine that can run the .NET SDK can build every
+       Framework target. PrivateAssets="all" keeps it out of consumers' graphs. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Shipped inside the package so the gallery page has content. -->

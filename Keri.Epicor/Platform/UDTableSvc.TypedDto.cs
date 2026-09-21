@@ -73,6 +73,10 @@ namespace Keri.Epicor
         /// is used.
         /// </param>
         /// <param name="row">The DTO to save.</param>
+        /// <param name="mode">
+        /// The row operation. <see cref="Dtos.RowMod.Automatic"/> (the default)
+        /// updates the row if it exists and adds it otherwise.
+        /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The raw Epicor response wrapped in an
         /// <see cref="OperationResult{T}"/>.</returns>

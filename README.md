@@ -1,8 +1,8 @@
 # Keri — Kinetic REST Integrator
 
-**Keri** is a C# library for integrating with **Epicor Kinetic** (formerly Epicor ERP 10/11) over its REST API. It wraps Epicor's Business Objects (BOs) and Business Activity Queries (BAQs) in async, strongly-typed C# classes, and adds Excel export and SMTP email helpers on top.
+**Keri** is an independent .NET SDK for **Epicor Kinetic** (formerly Epicor ERP 10/11) and its REST API. It models Epicor's Business Objects (BOs) and Business Activity Queries (BAQs) as async, strongly-typed C# services, returns results that say *which side of the commit boundary* a failure landed on, and ships companion packages for Excel/CSV output and SMTP delivery.
 
-Multi-targets **.NET Framework 4.8** and **.NET 8.0**.
+Targets **.NET Framework 4.6.1+**, **.NET Standard 2.0** and **.NET 8.0** — see [Target frameworks](#target-frameworks).
 
 ```csharp
 using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinetic connection, built from the shared App.config (run KeriConfigurator first)
@@ -30,7 +30,7 @@ using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinet
 }
 ```
 
-That snippet is the whole shape: construct a client, await an async call, check `IsFailure`, then use `Value`. Every service in the library works this way.
+That snippet is the whole shape: construct a client, await an async call, check `IsFailure`, then use `Value`. Every service in the SDK works this way.
 
 ---
 
@@ -46,19 +46,36 @@ That snippet is the whole shape: construct a client, await an async call, check 
 | `Keri.Mail` | <!--VER:Keri.Mail-->0.6.0<!--/VER--> |
 | `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
 
-All the Epicor service wrappers are converted, and the libraries are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The library builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
+All the Epicor service wrappers are converted, and the packages are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The SDK builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
+
+---
+
+## Epicor compatibility
+
+Keri works with **Epicor 10.1.500 and later**, the first release with a REST API, on-premises or cloud, over REST v1 and v2.
+
+Applications that talk to Epicor over the network — services, web backends, scheduled jobs — can use Keri with any of those releases. Your own assemblies built on Keri can also be called from **BPM custom code** and **Epicor Functions** on an on-premises server running .NET Framework or .NET 6. Epicor Cloud does not accept custom assemblies.
+
+**[COMPATIBILITY.md](COMPATIBILITY.md)** has the full table, deployment details for BPMs and Functions, and what has been verified.
 
 ---
 
 ## Target frameworks
 
-The library multi-targets **.NET Framework 4.8** (`net48`) and **.NET 8.0** (`net8.0`).
+Each package ships three builds, and NuGet picks the right one for the consuming project automatically:
 
-The four library projects (`Keri.RestTransport`, `Keri.Epicor`, `Keri.Files`, `Keri.Mail`) each produce two binaries — one per target framework — and consumers automatically resolve the correct one for their own project's target. The public API is identical across both targets; configurations behave the same way regardless of which framework you build against.
+| Package | .NET Framework | .NET 5 – 7 | .NET 8+ |
+|---|---|---|---|
+| `Keri.RestTransport` | `net461` | `netstandard2.0` | `net8.0` |
+| `Keri.Epicor` | `net461` | `netstandard2.0` | `net8.0` |
+| `Keri.Files` | `net461` | `netstandard2.0` | `net8.0` |
+| `Keri.Mail` | `net462` | `netstandard2.0` | `net8.0` |
 
-The consumer projects (`KeriDemo`, `KeriPocs`) and the test project are single-target `net48`. `KeriConfigurator` — the setup tool and composition root — multi-targets `net48;net8.0` so the net48 executables can consume it while it stays runnable on net8. Each consumes the matching build of the libraries.
+The public API is identical across builds.
 
-The one place where target framework matters internally is `Keri.Mail`'s `Emailer.Send`: on `net48` it uses `System.Net.Mail.SmtpClient` (BCL, no NuGet dependency), and on `net8.0` it uses `MailKit.Net.Smtp.SmtpClient` 4.16.0+ (a patched, modern SMTP client). The `#if NET48` switch is purely an implementation detail; the same `App.config` settings produce the same behavior on both targets.
+`Keri.Mail` sends through `System.Net.Mail` on .NET Framework, which adds no dependencies, and through MailKit 4.16.0+ everywhere else. `System.Net.Mail` supports STARTTLS only, so **port 465 (implicit TLS) is rejected on every target** and one `App.config` works everywhere. Use STARTTLS, typically on port 587.
+
+The sample projects (`KeriDemo`, `KeriPocs`) target `net48`, `KeriConfigurator` targets `net48` and `net8.0`, and the test suite runs on both `net48` and `net8.0`.
 
 ---
 
@@ -73,7 +90,7 @@ The one place where target framework matters internally is `Keri.Mail`'s `Emaile
 | `KeriDemo` | `KeriDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `KeriPocs` | `KeriPocs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
 | `KeriConfigurator` | `KeriConfigurator.exe` | Composition root + interactive setup: owns the unified config, builds clients/sessions, and onboards and live-tests the connection and SMTP. |
-| `KineticRESTIntegrator.Tests` | xUnit test project | Offline unit tests covering the framework's deterministic surface. |
+| `KineticRESTIntegrator.Tests` | xUnit test project | Offline unit tests covering the SDK's deterministic surface. |
 
 ---
 
@@ -82,7 +99,7 @@ The one place where target framework matters internally is `Keri.Mail`'s `Emaile
 ### Prerequisites
 
 - Windows, Visual Studio 2022 (or `dotnet` CLI / `msbuild`)
-- **One of:** .NET Framework 4.8 developer pack, or the .NET 8.0 SDK (or any newer SDK that can target net8.0)
+- The .NET 8.0 SDK (or newer), and the .NET Framework 4.8 developer pack for the sample and test projects' `net48` targets. The packages' own .NET Framework builds need no targeting packs — they compile against `Microsoft.NETFramework.ReferenceAssemblies`, which restore pulls in.
 - Network access to your Epicor Kinetic application server
 - An Epicor account with REST access — plus an Epicor API key if you authenticate via v2 OData
 
@@ -159,7 +176,7 @@ See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding 
 
 ---
 
-## Using the library
+## Using the SDK
 
 ### The `EpicorClient` facade
 
@@ -226,7 +243,7 @@ On a failure, `Value` returns `default(T)` rather than throwing — so the check
 
 The `OperationResult` also carries:
 - `StatusCode` — HTTP status (when applicable)
-- `ResourcePath` — the full URL the call used, on success and failure alike. Besides naming which BO was reached, its shape identifies the API version: `/api/v1/` is the Basic-auth v1 endpoint, `/api/v2/odata/{Company}/` is the API-key v2 OData endpoint. That matters, because OData query options (`filters`, `select`, `top`, `additionalColumns`) are honored only on v2 and are silently dropped on v1. Note the URL also carries the company code and any `$filter` you passed, so decide deliberately what your logs keep.
+- `ResourcePath` — the full URL the call used, on success and failure alike. Besides naming which BO was reached, its shape identifies the API version: `/api/v1/` is the Basic-auth v1 endpoint, `/api/v2/odata/{Company}/` is the API-key v2 OData endpoint. Note the URL also carries the company code and any `$filter` you passed, so decide deliberately what your logs keep.
 - `RawResponse` — the underlying `JObject`, an escape hatch for columns the typed DTO doesn't model
 - `Exception` — the underlying exception on transport-level failures
 - `ErrorType` — Epicor's fully-qualified exception class (e.g. `Ice.Common.RecordNotFoundException`). Branch on this rather than matching `ErrorMessage` text
@@ -235,12 +252,12 @@ The `OperationResult` also carries:
 
 ### Naming conventions
 
-A few conventions hold across the library:
+A few conventions hold across the SDK:
 
 - **Every public call is async.** Methods end in `Async` and return `Task<OperationResult<T>>`. Always `await` them.
 - **Services are split into two files.** `*Svc.cs` holds thin wrappers around individual Epicor BO calls; `*Svc.Workflows.cs` holds the orchestrators that compose them. You don't have to know which file a method lives in to call it — the split is for contributors (see [CONTRIBUTING.md — File layout](CONTRIBUTING.md#file-layout-for-services)).
 - **DTOs come in three flavors.** A class named after an Epicor table (`Customer`, `Part`) mirrors that table; a `Dataset`-suffixed class (`InvTransferDataset`) mirrors a multi-table transaction shape; an `Input`-suffixed class (`QuoteInput`, `ECOMtlInput`) is a caller-facing convenience shape for an orchestrator. Full rationale in [CONTRIBUTING.md — DTOs](CONTRIBUTING.md#dtos).
-- **List reads default to the DTO's columns.** Entity-set reads (`PartsAsync`, `POesAsync`, …) build their OData `$select` from the row DTO via `SelectFor<T>()`, so every typed property on the returned rows is populated. Pass `select` to override with your own list (for example, a leaner projection on a large read), or `additionalColumns` to add columns the DTO doesn't model. Like `filters` and `top`, these are OData query options — honored only on the v2 OData endpoint (API-key sessions); a Basic/v1 session ignores them and returns the full collection.
+- **List reads default to the DTO's columns.** Entity-set reads (`PartsAsync`, `POesAsync`, …) build their OData `$select` from the row DTO via `SelectFor<T>()`, so every typed property on the returned rows is populated. Pass `select` to override with your own list (for example, a leaner projection on a large read), or `additionalColumns` to add columns the DTO doesn't model. Like `filters` and `top`, these are passed straight through as OData query options (`$select`).
 - **`_c` columns flow through `ExtraData`.** Default DTOs model only standard Epicor columns — per-installation custom columns (Epicor's `_c` suffix convention) aren't typed because they're installation-specific by definition. They are still preserved: every Epicor-table DTO carries an `ExtraData` dictionary that captures any JSON property the typed properties don't consume. On a **list read**, name the custom column in `additionalColumns` (`await part.PartsAsync(additionalColumns: new[] { "WarrantyPeriod_c" })`) and it rides back in `ExtraData`; a **`GetByID`** read pulls the whole row, so every `_c` and UD column is there automatically. To write one: `part.ExtraData["WarrantyPeriod_c"] = 12;` — the value rides along when the DTO is serialized. The standard user-defined columns (`Character01`, `ShortChar01`, `Number01`, `CheckBox01`, etc.) remain typed since they exist on every install. `RawResponse` is still available for data that isn't on a row at all — nested child tables in a multi-table response, or the wide `GetByID` dataset.
 - **Dataset writes start from `NewDataset()`.** A create/modify flow (`GetNew*` → populate → `Update`) begins with `NewDataset()` on `EpicorSvc`, which returns a fresh `{"ds":{}}` envelope on every call — it's a method, not a shared field, so concurrent flows never alias one object. The full lifecycle is in [CONTRIBUTING.md](CONTRIBUTING.md#the-dataset-envelope-ds).
 
@@ -248,7 +265,7 @@ A few conventions hold across the library:
 
 Public methods come in two kinds: generic primitives (`GetByIDAsync`, `UpdateAsync`, `GetRowsAsync<T>`, `GetNew*Async`, and table-name reads like `PartsAsync`), and **orchestrators** in `*Svc.Workflows.cs` (`NewOrderAsync`, `AddMtlsAsync`, …) that compose several BO calls into one operation. For any multi-step operation the orchestrator is the entry point — from a caller's perspective, it *is* the operation.
 
-Keri exists to cut out the heavy lifting of talking to Epicor's REST API — but it can't anticipate every workflow your installation needs. When you need an operation it doesn't ship, you extend it by writing a new orchestrator. How to do that — the `ds` dataset-envelope lifecycle, the public-vs-internal split, the naming and DTO conventions — lives in [CONTRIBUTING.md](CONTRIBUTING.md#code-conventions). That guide is worth reading even if you never open a pull request: understanding how Keri is built is how you extend it cleanly for your own project.
+Keri exists to cut out the heavy lifting of talking to Epicor's REST API — but it can't anticipate every workflow your installation needs. When you need an operation it doesn't ship, you extend it by writing a new orchestrator. How to do that — the `ds` dataset-envelope lifecycle, the public-vs-internal split, the naming and DTO conventions — lives in [CONTRIBUTING.md](CONTRIBUTING.md#code-conventions), and [ADDING_A_SERVICE.md](ADDING_A_SERVICE.md) walks through adding a whole Business Object service — DTO, service class, wiring, tests — end to end. That guide is worth reading even if you never open a pull request: understanding how Keri is built is how you extend it cleanly for your own project.
 
 ### Typed UD-table access
 
@@ -282,7 +299,7 @@ var byCategory = await epicorClient.UDTable.QueryAsync<OrderTracking>(
     new OrderTracking { Category = "ORDER_TRACKING" }, "UD22", top: 100);
 ```
 
-The mapper validates the DTO on first use (column names exist on `UDRow`, types are compatible with their column family, no two properties map to the same column, and `Key1` + `Key2` are mapped — Epicor identifies UD rows by the composite of all five keys, and these two carry no default). String overflows throw `UDTableColumnCapacityException` *before* the save reaches the wire. When the DTO doesn't map `Character10`, the framework auto-emits a column-legend into it describing the mapping — useful when the row is later opened in Epicor's UI.
+The mapper validates the DTO on first use (column names exist on `UDRow`, types are compatible with their column family, no two properties map to the same column, and `Key1` + `Key2` are mapped — Epicor identifies UD rows by the composite of all five keys, and these two carry no default). String overflows throw `UDTableColumnCapacityException` *before* the save reaches the wire. When the DTO doesn't map `Character10`, the mapper auto-emits a column-legend into it describing the mapping — useful when the row is later opened in Epicor's UI.
 
 For the full conventions — when to use which column family, the 2^5 key grain levels, reserved columns, and four progressively complete worked examples — see [EXAMPLES_EPICOR.md — Typed UD-table access](EXAMPLES_EPICOR.md#typed-ud-table-access).
 
@@ -350,20 +367,19 @@ Keri ships its full dependency tree alongside its own DLLs. The consumer referen
 
 This makes consumer setup trivial — reference the DLLs you use, done — at the cost of locking the consumer to whatever versions Keri ships. If the consumer adds its own NuGet reference to a package Keri also uses, the two versions compete at build time. The NuGet-resolved version usually wins for the consumer's bin folder, and Keri's calls into that package then fail at runtime with a `MissingMethodException`, `FileLoadException`, or `TypeLoadException` referencing the package.
 
-The pinned versions (net8.0 build) are:
+The pinned versions are:
 
 | Package | Pinned version | Used by |
 |---|---|---|
 | `Newtonsoft.Json` | 13.0.4 | all four libraries (JSON parsing throughout) |
 | `ClosedXML` | 0.105.0 | `Keri.Files` (Excel read / write) |
-| `MailKit` / `MimeKit` | 4.16.0 | `Keri.Mail` (SMTP on net8.0) |
-| `System.Configuration.ConfigurationManager` | 8.0.0 | `Keri.Epicor` (`App.config` loading on net8.0) |
+| `MailKit` / `MimeKit` | 4.16.0 | `Keri.Mail` (SMTP on the `netstandard2.0` and `net8.0` builds) |
 
 A consumer that writes spreadsheets but never sends mail takes on ClosedXML and nothing else — MailKit, MimeKit and BouncyCastle arrive only with `Keri.Mail`. That is what the split between the two is for.
 
 If your consumer hits a runtime error referencing one of these packages, check for a competing `<PackageReference>` in the consumer's `.csproj` and remove it — Keri's bundled copy will take over.
 
-The same principle applies on net48, where the pinned versions are `Newtonsoft.Json` 13.0.4 and `ClosedXML` 0.105.0 (no MailKit — `System.Net.Mail.SmtpClient` from the BCL handles SMTP on this target).
+The .NET Framework builds don't reference MailKit; `System.Net.Mail` handles SMTP there.
 
 ---
 
@@ -373,10 +389,14 @@ The same principle applies on net48, where the pinned versions are `Newtonsoft.J
 KineticRESTIntegrator/
 ├── KineticRESTIntegrator.sln
 ├── LICENSE                          Apache License 2.0
-├── NOTICE                           Apache 2.0 attribution
+├── NOTICE                           attribution and trademark notice
 ├── README.md                        (this file)
 ├── EXAMPLES_EPICOR.md                Worked Epicor examples
 ├── EXAMPLES_RESTAPI.md               Using the transport for non-Epicor APIs
+├── COMPATIBILITY.md                  Which Epicor versions, inside and outside Epicor
+├── CONFIGURATION.md                  Connection and SMTP settings
+├── SECURITY.md                       Credentials, and what Keri leaves to you
+├── ADDING_A_SERVICE.md               Worked example: a new BO service and its DTO
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── CLEANUP_RECOMMENDATIONS.md
@@ -459,20 +479,20 @@ KineticRESTIntegrator/
 | `Error converting value {null} to type 'System.DateTime'` when reading UD rows | A legacy UD row has a null `Date20`. Confirm you have v0.1.0 or later — the type is `DateTime?` and accommodates this. |
 | `pcNeqQtyAction = "Stop"` on inventory transfer | The move would create negative on-hand. Check source bin quantity. |
 | Email arrives with no attachment, only the error message in the body | `MailSpec.Error` was set, or the attached `FileSpec` had no rows. Either is treated as a no-data case: the message carries the error text instead of a file. |
-| Email never arrives | SMTP host unreachable, port blocked, or auth failed. By default the library connects anonymously on port 25 with no TLS; for relays that require auth or TLS, set `SMTPPort=587`, `SMTPEnableSsl=true`, `SMTPUsername`, and `SMTPPassword` in `App.config`. Port 25 + TLS and port 465 (implicit TLS) are rejected as misconfigurations — use port 587 with STARTTLS instead. Check `EmailError` in the returned `EmailSpecs` for the underlying exception message. |
+| Email never arrives | SMTP host unreachable, port blocked, or auth failed. By default Keri connects anonymously on port 25 with no TLS; for relays that require auth or TLS, set `SMTPPort=587`, `SMTPEnableSsl=true`, `SMTPUsername`, and `SMTPPassword` in `App.config`. Port 25 + TLS and port 465 (implicit TLS) are rejected as misconfigurations — use port 587 with STARTTLS instead. Check `EmailError` in the returned `EmailSpecs` for the underlying exception message. |
 | `KineticRESTIntegrator.Tests` fails on first run | First run pulls xUnit/test-SDK packages from NuGet — slow, ~30s, network required. Subsequent runs are fast and offline. |
 
 ---
 
 ## Tests
 
-The library has a real test project. From the command line:
+The SDK has a real test project. From the command line:
 
 ```
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the framework's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->275<!--/TESTS--> tests, all green.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->278<!--/TESTS--> tests, run on both `net48` and `net8.0`.
 
 Test Explorer in Visual Studio also discovers and runs them.
 
@@ -493,3 +513,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
 Licensed under the Apache License, Version 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 Copyright © 2025–2026 Justin Grant.
+
+---
+
+## Independence and trademarks
+
+Keri is an independent open-source project by Justin Grant. Epicor®, Epicor ERP® and Kinetic® are trademarks of Epicor Software Corporation, which is not affiliated with this project and neither endorses nor supports it. Those names are used here only to identify the system this SDK integrates with.
+
+Keri is not a product of Epicor, carries no Epicor warranty, and is not covered by any Epicor support agreement. Anything it does to your Epicor environment is your responsibility — see [SECURITY.md](SECURITY.md) and the warranty disclaimer in [LICENSE](LICENSE), sections 7 and 8.

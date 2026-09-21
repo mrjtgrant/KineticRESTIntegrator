@@ -234,14 +234,20 @@ Keri is four packages, and which you install decides what you inherit:
 | `Keri.RestTransport` | `Newtonsoft.Json` |
 | `Keri.Epicor` | `Newtonsoft.Json`, `Keri.RestTransport` |
 | `Keri.Files` | `Newtonsoft.Json`, `ClosedXML` |
-| `Keri.Mail` | `Newtonsoft.Json`, `MailKit` (net8.0 only), `Keri.Files` |
+| `Keri.Mail` | `Newtonsoft.Json`, `Keri.Files`, and `MailKit` on the `netstandard2.0` and `net8.0` builds |
 
 The split between `Keri.Files` and `Keri.Mail` exists for this reason among
 others: a consumer who writes spreadsheets but never sends mail does not take on
-MailKit, MimeKit and BouncyCastle — or their advisories. On `net48` MailKit is
-absent entirely; `Keri.Mail` uses `System.Net.Mail` from the BCL there, because
-the only net48-compatible MailKit (3.x) carries an unpatched STARTTLS
-response-injection advisory.
+MailKit, MimeKit and BouncyCastle — or their advisories.
+
+The .NET Framework build of `Keri.Mail` sends through `System.Net.Mail` from the
+BCL and references no mail packages. The other builds use MailKit 4.16.0.
+
+`System.Net.Mail` performs STARTTLS and cannot do implicit TLS on port 465, so
+port 465 is rejected as a misconfiguration on every target, and one `App.config`
+stays valid everywhere. If your relay offers only implicit TLS on 465, Keri
+cannot talk to it; use STARTTLS on 587, or terminate TLS in front of the relay.
+Neither path ever falls back to plaintext when TLS was requested.
 
 Versions are pinned. Enable Dependabot or an equivalent on your fork and keep
 them current; the maintainer does not issue advisories for upstream packages.

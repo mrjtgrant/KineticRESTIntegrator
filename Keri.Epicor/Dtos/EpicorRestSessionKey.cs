@@ -7,7 +7,12 @@ using Keri.RestTransport;
 
 namespace Keri.Epicor.Dtos
 {
-    public class EpicorRestSessionKey:RestSessionKey
+    /// <summary>
+    /// Session settings for Epicor: the transport's <see cref="RestSessionKey"/>
+    /// plus the Epicor company. Pass one to <see cref="EpicorClient"/> or to any
+    /// service constructor.
+    /// </summary>
+    public class EpicorRestSessionKey : RestSessionKey
     {
         /// <summary>
         /// Epicor company ID. This is an Epicor-specific concept: it is used

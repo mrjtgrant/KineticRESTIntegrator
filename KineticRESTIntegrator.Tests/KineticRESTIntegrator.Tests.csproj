@@ -1,7 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <!-- The suite runs once per target: net48 exercises the packages' .NET
+         Framework builds, net8.0 their .NET 8 builds. -->
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
     <RootNamespace>KineticRESTIntegrator.Tests</RootNamespace>
     <AssemblyName>KineticRESTIntegrator.Tests</AssemblyName>
 
@@ -10,7 +12,7 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Deterministic>true</Deterministic>
 
-    <!-- Referencing Keri.Files pulls ClosedXML onto this net48 project, and
+    <!-- On the net48 target, referencing Keri.Files pulls ClosedXML in, and
          ClosedXML (a netstandard2.0 library) wants newer System.Memory,
          System.Buffers, System.Numerics.Vectors and
          System.Runtime.CompilerServices.Unsafe than the 4.8 facades provide.

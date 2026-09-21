@@ -24,7 +24,7 @@ namespace Keri.Epicor
     /// <list type="bullet">
     /// <item><see cref="ExecuteAsync{TRow}(string, Dictionary{string, object}, CancellationToken)"/>
     /// — generic, recommended for production. Each row is materialized as an
-    /// instance of <typeparamref name="TRow"/>, giving compile-time safety on
+    /// instance of <c>TRow</c>, giving compile-time safety on
     /// column access.</item>
     /// <item><see cref="ExecuteAsync(string, Dictionary{string, object}, CancellationToken)"/>
     /// — untyped, returns rows as <see cref="JObject"/>s. Useful for one-off

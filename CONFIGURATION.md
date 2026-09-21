@@ -59,18 +59,22 @@ The console prompts for two groups. Every field shows its current value as `[def
 
 Authentication uses Basic (`DefaultUser` + `DefaultPasskey`) and/or an API key. The API key's presence is what selects v2 OData; without it the transport uses v1 Basic. At least one form of auth, plus the base URL and company, must be set — KeriConfigurator's connection test reads a single Part record and reports the HTTP status if it fails (401 → check credentials, 404 → check URL/company).
 
-> **v2 vs v1 affects more than authentication.** Keri's OData query options — `select`, `additionalColumns`, `top`, and `filters` on the entity-set reads (`PartsAsync`, `POesAsync`, …) — are honored only on the **v2 OData** endpoint, i.e. when an API key is set. On a Basic/v1 session they are silently ignored and the full collection is returned. If you depend on column or row trimming, authenticate with an API key.
-
 **Email / SMTP** (optional — only if you use the email features):
 
 | Setting | Meaning |
 |---|---|
 | `SMTPHost` | SMTP relay host or IP. Leave blank to skip email entirely. |
-| `SMTPPort` | SMTP port (`25` default; `587` for STARTTLS) |
+| `SMTPPort` | SMTP port (`25` default; `587` for STARTTLS). Port `465` — implicit TLS — is rejected; see below |
 | `SMTPEnableSsl` | `False` for a plain port-25 relay; `True` for STARTTLS on 587 |
 | `SMTPUsername` / `SMTPPassword` | SMTP auth; leave the username blank for an anonymous relay (the password is then skipped) |
 | `FromEmail` | Default `From:` address on outbound mail |
 | `DeveloperEmail` | Default BCC (audit), and the only recipient when `EmailSpecs.IsDebug = true` — set this to your own address so test runs don't email customers |
+
+> **Port 465 is not supported.** Keri uses STARTTLS. On .NET Framework it sends
+> through `System.Net.Mail`, which supports STARTTLS only, so port 465 (implicit
+> TLS) is rejected on every target and one `App.config` works everywhere. If your
+> relay offers only 465, use its STARTTLS port (typically 587), or put a relay in
+> front that terminates TLS.
 
 After you enter the SMTP host, KeriConfigurator runs a **reachability test**: it opens a connection to `host:port` and reads the server's greeting, with a timeout. This proves the host, port, and firewall are right. It does **not** authenticate or send a message, so it doesn't verify credentials or TLS — a bad password would surface on the first real send. If the test fails, you're asked whether to **[K]eep** the settings anyway (e.g. a relay reachable only from production), **[R]e-enter** them, or **[S]kip** email for now.
 

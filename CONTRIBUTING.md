@@ -10,9 +10,11 @@ The README's [Quick start](README.md#quick-start) covers clone, restore, build. 
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-Expected: <!--TESTS-->275<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
+Expected: <!--TESTS-->278<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
 
-The library multi-targets `net48` and `net8.0`. `dotnet build` produces both target framework outputs from each library project; if you change library code, make sure both targets still compile. Consumer projects (`KeriDemo`, `KeriPocs`, the test project) remain single-target `net48`.
+Each package builds for `net461` (`net462` for `Keri.Mail`), `netstandard2.0` and `net8.0`, and the test suite runs on `net48` and `net8.0`. A change must compile for every target and pass on both test runs. Raising a package's .NET Framework floor drops support for the Epicor releases below it, so it needs discussion first.
+
+Code must stay within the `netstandard2.0` API surface. Conditional compilation uses target-family symbols — `NETFRAMEWORK`, `NETSTANDARD`, `NET` — not version symbols such as `NET48`.
 
 ---
 
@@ -28,7 +30,7 @@ The same logic extends:
 
 - **No secrets** in source files, tests, examples, or commit messages. No real passwords, API keys, connection strings, tokens.
 - **No internal URLs.** Use the `company-live.example.com/server` pattern (or any other `example.com`-anchored stub) when an example needs a URL.
-- **No real email addresses, customer IDs, part numbers, vendor names, or other identifiable production data** in examples, tests, or POCs. The library is intended to be open-source; whatever lands here is public forever once pushed.
+- **No real email addresses, customer IDs, part numbers, vendor names, or other identifiable production data** in examples, tests, or POCs. The SDK is intended to be open-source; whatever lands here is public forever once pushed.
 
 Use the established placeholders so it's obvious at a glance that a value is fake: **`EPIC01`** for a company code (the primary one, used throughout the README and CHANGELOG), with `DEMO01` and `TESTCO` as alternates; **`ACME01`**, **`ACME-MFG`**, and **`TESTCUST`** for customer and vendor IDs. This rule exists because a real company code once shipped in test data and had to be sanitized after the fact.
 
@@ -38,7 +40,7 @@ If you accidentally commit any of the above, a force-push to overwrite the commi
 
 ## Code conventions
 
-The library is internally consistent on a few patterns. New code should match.
+The SDK is internally consistent on a few patterns. New code should match.
 
 ### Naming
 
@@ -49,7 +51,7 @@ When adding a new service or method, the names follow Epicor's. A reader who kno
 - **Always confirm the actual entity-set name against Epicor's REST help.** Epicor uses awkward plurals the convention still requires us to match — `JobEntries` for `JobHead` rows, `POes` for `POHeader` rows. Inferring the name from the pattern rather than checking produces an inconsistency that ships as part of the public API.
 - **Orchestrators are named for what they accomplish.** A method in `*Svc.Workflows.cs` composes multiple BO calls and has no single Epicor counterpart, so there is no name to mirror. Use a verb-phrase name that reads as the intent: `ChangePartUnitPriceAsync`, `GetNewPartRevAsync`, `AddMtlsAsync`. A reader should know roughly what the method does without opening it.
 
-The single documented architectural exception is `UDTableSvc`, which parameterizes over Epicor's per-table UD services (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`, etc.) rather than wrapping each as its own class. Don't generalize like this for any new service without discussion — `UDTableSvc` exists because the UD-table interface is uniform across 30+ services, which is a special case. See [EXAMPLES_EPICOR.md — Finding your way around `Keri.Epicor`](EXAMPLES_EPICOR.md#1-finding-your-way-around-epicorsvcs) for the user-facing version of these rules, including the worked mapping tables.
+The single documented architectural exception is `UDTableSvc`, which parameterizes over Epicor's per-table UD services (`Ice.BO.UD01Svc`, `Ice.BO.UD22Svc`, etc.) rather than wrapping each as its own class. Don't generalize like this for any new service without discussion — `UDTableSvc` exists because the UD-table interface is uniform across 30+ services, which is a special case. See [EXAMPLES_EPICOR.md — Finding your way around `Keri.Epicor`](EXAMPLES_EPICOR.md#1-finding-your-way-around-keriepicor) for the user-facing version of these rules, including the worked mapping tables.
 
 ### Async + `OperationResult<T>`
 
@@ -78,7 +80,7 @@ if (additionalColumns != null && additionalColumns.Count > 0)
 
 Never mutate the caller's `select` list — `Concat(...).ToList()` builds a new one.
 
-These are OData query options, so they take effect only on the **v2 OData** endpoint (API-key sessions); a Basic/v1 session ignores them and returns the full collection. Note that limitation on the method's XML doc, as the existing services do.
+These are passed straight through as OData query options (`$filter`, `$select`, `$top`). Document behavior specific to an API version or Epicor release only once it has been verified against a live install.
 
 ### File layout for services
 
@@ -118,17 +120,17 @@ These were decided deliberately. A change proposal that reverses one needs to ar
 
 **Epicor specifically** requires `Username` and `Userkey` *always*. Its v1 endpoints (URL shape `/api/v1/`) take Basic only; its v2 OData endpoints (`/api/v2/odata/{Company}/`) take Basic **plus** the API key — both, not either. Setting `ApiKey` is what selects the v2 URL shape; it does not "switch from Basic to API-key auth." Don't reason about this from analogy to other REST APIs.
 
-**`UDXSvc` is the only naming exception**, because it parameterizes over Epicor's 30-plus per-table UD services rather than wrapping each as its own class. Don't generalize the pattern to a new service without discussion.
+**`UDTableSvc` is the only naming exception**, because it parameterizes over Epicor's 30-plus per-table UD services rather than wrapping each as its own class. Don't generalize the pattern to a new service without discussion.
 
 **No leading-underscore method names.** An earlier pass removed every `_FooAsync`-style method from the public surface. If a method needs a hint that it's internal or advanced, make it `internal` — don't prefix it.
 
 **Custom columns flow through `ExtraData`.** Every Epicor-table DTO carries `[JsonExtensionData] public IDictionary<string, JToken> ExtraData`, and installation-specific `_c` columns round-trip through it in both directions. `RawResponse` remains the escape hatch for data outside the row's own table — other tables in a multi-table response, or the wide `GetByID` dataset.
 
-**UD-row company resolution.** `UDRow.Company` is a real property. Left empty, `UDXSvc.UpdateAsync` falls back to the session's company through a `ResolveCompany` helper; multi-company shops set it per row. Don't try to default it on the property getter — the DTO can't see the session, and making it session-aware would couple a DTO to runtime state.
+**UD-row company resolution.** `UDRow.Company` is a real property. Left empty, `UDTableSvc.UpdateAsync` falls back to the session's company through a `ResolveCompany` helper; multi-company shops set it per row. Don't try to default it on the property getter — the DTO can't see the session, and making it session-aware would couple a DTO to runtime state.
 
 ### The dataset envelope (`ds`)
 
-Epicor's transaction methods speak in **datasets** — a JSON envelope shaped `{"ds": { ...tables... }}`. Any operation that creates or modifies a record (a `GetNew*` → populate → `Update` sequence) starts from an *empty* envelope and grows it as it goes. This lifecycle is the key to writing a new orchestrator, and it's the part of the framework that isn't obvious from the method signatures.
+Epicor's transaction methods speak in **datasets** — a JSON envelope shaped `{"ds": { ...tables... }}`. Any operation that creates or modifies a record (a `GetNew*` → populate → `Update` sequence) starts from an *empty* envelope and grows it as it goes. This lifecycle is the key to writing a new orchestrator, and it's the part of the SDK that isn't obvious from the method signatures.
 
 **Start from `NewDataset()`.** The base class `EpicorSvc` (which every service inherits) exposes a factory:
 
@@ -198,6 +200,8 @@ Every public method, property, class, and DTO carries `/// <summary>` documentat
 ---
 
 ## Adding a new service
+
+**For a complete worked example — DTO, service class, `EpicorClient` wiring, tests, POC and changelog entry — see [ADDING_A_SERVICE.md](ADDING_A_SERVICE.md).** This section is the rulebook it follows.
 
 Recent additions have settled into a consistent first-cut shape. The first commit for a new Epicor service wrapper should:
 

@@ -98,8 +98,7 @@ namespace Keri.Epicor
         /// Optional extra column names appended to the <c>$select</c> — custom
         /// <c>_c</c> columns or Epicor UD placeholder columns not on the
         /// <see cref="RcvHead"/> DTO. They are returned in the DTO's
-        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
-        /// on a v2 OData (API-key) session; ignored on Basic/v1.
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -149,8 +148,7 @@ namespace Keri.Epicor
         /// Optional extra column names appended to the <c>$select</c> — custom
         /// <c>_c</c> columns or Epicor UD placeholder columns not on the
         /// <see cref="RcvDtl"/> DTO. They are returned in the DTO's
-        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
-        /// on a v2 OData (API-key) session; ignored on Basic/v1.
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>
@@ -205,8 +203,7 @@ namespace Keri.Epicor
         /// Optional extra column names appended to the <c>$select</c> — custom
         /// <c>_c</c> columns or Epicor UD placeholder columns not on the
         /// <see cref="RcvHeadAttch"/> DTO. They are returned in the DTO's
-        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow. Honored only
-        /// on a v2 OData (API-key) session; ignored on Basic/v1.
+        /// <c>ExtraData</c> (<c>[JsonExtensionData]</c>) overflow.
         /// </param>
         /// <param name="top">Maximum number of rows to return. Defaults to 500.</param>
         /// <param name="ct">Cancellation token.</param>

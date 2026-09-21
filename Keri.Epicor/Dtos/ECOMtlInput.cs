@@ -4,7 +4,7 @@ namespace Keri.Epicor.Dtos
 {
     /// <summary>
     /// Caller-facing input describing a single ECO material to add via
-    /// <see cref="EngWorkBenchSvc._AddMtlsAsync"/>.
+    /// <see cref="EngWorkBenchSvc.AddMtlsAsync"/>.
     /// </summary>
     /// <remarks>
     /// <para>

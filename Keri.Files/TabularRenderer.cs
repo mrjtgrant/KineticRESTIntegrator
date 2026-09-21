@@ -117,9 +117,15 @@ namespace Keri.Files
             return csv.ToString();
         }
 
-        /**
-         * Convert DataTable into HTML Table
-         */
+        /// <summary>
+        /// Renders <paramref name="data"/> as an HTML table, one column per
+        /// property of the first row.
+        /// </summary>
+        /// <remarks>
+        /// Cell values and headers are inserted as-is, without HTML encoding.
+        /// </remarks>
+        /// <param name="data">The rows to render.</param>
+        /// <returns>The HTML table, or an empty string when there are no rows.</returns>
         public static string ConvertJArrayToHTMLTable(JArray data)
         {
             if (data == null || data.Count == 0) return string.Empty;
@@ -143,6 +149,13 @@ namespace Keri.Files
             return html;
         }
 
+        /// <summary>
+        /// Returns the property names of <paramref name="line"/>, renamed through
+        /// <paramref name="HeaderMap"/> where it has an entry.
+        /// </summary>
+        /// <param name="line">A row whose property names become column headers.</param>
+        /// <param name="HeaderMap">Optional map of property name to display name.</param>
+        /// <returns>The header names, in property order.</returns>
         public static List<string> GetPropertyNames(JObject line, Dictionary<string, string> HeaderMap = null)
         {
             List<string> headers = (from row in line.Properties() select row.Name).ToList();

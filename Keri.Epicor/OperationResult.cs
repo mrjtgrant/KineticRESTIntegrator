@@ -12,7 +12,7 @@ namespace Keri.Epicor
     /// <remarks>
     /// <para>
     /// Construct via the static factory methods <see cref="Success"/> and
-    /// <see cref="Failure(string, int?, string, JObject)"/> rather than the
+    /// <see cref="Failure(string, int?, string, JObject, string, string)"/> rather than the
     /// constructor. Always check <see cref="IsSuccess"/> before reading
     /// <see cref="Value"/> — reading <c>Value</c> on a failed result returns
     /// <c>default(T)</c>; it does not throw.
@@ -53,9 +53,8 @@ namespace Keri.Epicor
         /// Besides naming which BO was reached, the URL's shape is what
         /// identifies the API version in use: an <c>/api/v1/</c> path is the
         /// Basic-auth v1 endpoint, and <c>/api/v2/odata/{Company}/</c> is the
-        /// API-key v2 OData endpoint. That distinction matters — OData query
-        /// options (<c>filters</c>, <c>select</c>, <c>top</c>) are honored only
-        /// on v2 and are silently dropped on v1.
+        /// API-key v2 OData endpoint. Useful when diagnosing a call against an
+        /// environment whose configuration you did not set up yourself.
         /// </remarks>
         public string ResourcePath { get; set; }
 
@@ -137,6 +136,12 @@ namespace Keri.Epicor
         /// </param>
         /// <param name="rawResponse">
         /// Optional raw Epicor response — see <see cref="RawResponse"/>.
+        /// </param>
+        /// <param name="errorType">
+        /// Optional provider error type — see <see cref="ErrorType"/>.
+        /// </param>
+        /// <param name="correlationId">
+        /// Optional provider correlation id — see <see cref="CorrelationId"/>.
         /// </param>
         /// <returns>A failure-flavored <see cref="OperationResult{T}"/>.</returns>
         public static OperationResult<T> Failure(

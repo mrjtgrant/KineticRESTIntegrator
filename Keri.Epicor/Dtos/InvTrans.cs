@@ -14,7 +14,7 @@ namespace Keri.Epicor.Dtos
     /// This is the actual Epicor table that records inventory transfer
     /// activity. It is distinct from <see cref="InvTransferDataset"/>, which
     /// is a Keri caller-facing input bundle for the
-    /// <see cref="InvTransferSvc._MoveInventoryAsync"/> orchestrator.
+    /// <see cref="InvTransferSvc.MoveInventoryAsync"/> orchestrator.
     /// </para>
     /// <para>
     /// Minimal starter DTO. The transfer orchestrator reads and writes several

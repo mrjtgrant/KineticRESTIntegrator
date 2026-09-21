@@ -11,7 +11,7 @@ namespace Keri.Epicor.Dtos
     /// numbers available for an inventory transaction.
     /// </summary>
     /// <remarks>
-    /// Used by <see cref="InvTransferSvc._MoveInventoryAsync"/> as an
+    /// Used by <see cref="InvTransferSvc.MoveInventoryAsync"/> as an
     /// intermediate step in serial-number tracking. The
     /// <see cref="whereClause"/> Epicor returns is passed back to
     /// <see cref="SelectedSerialNumbersSvc.RetrieveSerialNumbersAsync"/>

@@ -259,12 +259,18 @@ namespace Keri.RestTransport
             return result;
         }
 
+        /// <summary>Releases the underlying <see cref="HttpClient"/>.</summary>
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Releases resources held by this instance. Derived services override
+        /// this to also dispose services they own.
+        /// </summary>
+        /// <param name="disposing">True when called from <see cref="Dispose()"/>.</param>
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed) return;

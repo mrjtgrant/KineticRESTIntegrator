@@ -15,7 +15,7 @@ calling an Epicor endpoint Keri doesn't wrap, see
 
 ## Contents
 
-1. [Finding your way around `Keri.Epicor`](#1-finding-your-way-around-epicorsvcs)
+1. [Finding your way around `Keri.Epicor`](#1-finding-your-way-around-keriepicor)
 2. [Using a single service directly](#2-using-a-single-service-directly)
 3. [Writing data into Epicor (UD-row upsert)](#3-writing-data-into-epicor-ud-row-upsert)
 4. [UD-row conventions](#4-ud-row-conventions)
@@ -111,13 +111,6 @@ populated. Three knobs adjust that:
   (`ShortChar01`, `Character01`, …), that aren't on the DTO. They come back in
   the row's `ExtraData` (covered below).
 - **`top`** — the row cap (default 500).
-
-> **These options require v2 OData.** `select`, `additionalColumns`, `top`, and
-> `filters` are OData query options, honored only on Epicor's **v2 OData**
-> endpoint — which Keri uses when the session carries an **API key**. On a
-> **Basic-auth (v1)** session they are silently ignored: Epicor returns the
-> full, untrimmed collection with no error. If column or row trimming isn't
-> taking effect, check that you're authenticating with an API key.
 
 > The examples below pass a `session` — an `EpicorRestSessionKey`. [Section 2](#2-using-a-single-service-directly) shows how to build one, or obtain it from `KeriConfig` in-solution.
 
@@ -713,7 +706,7 @@ if (all.IsFailure)
 A UD table's columns are generic — `ShortChar01`, `Number05`, `CheckBox02`,
 `Date10`, and so on — with no built-in meaning. To keep UD data legible, Keri
 adopts a small set of **conventions** for how certain columns are used. None of
-them are enforced by the framework; they are strong suggestions, and the
+them are enforced by the SDK; they are strong suggestions, and the
 `UDRow` DTO defaults are set up to make them visible and easy to follow.
 
 ### `Key1` — the row category
@@ -795,7 +788,7 @@ var row = new UDRow
 };
 ```
 
-All of these are conventions only. The framework does not require a UD row to
+All of these are conventions only. The SDK does not require a UD row to
 carry a legend, use `Key1` as a category, or treat the `*20` columns as
 reserved — and any of those columns remains free for another use if your design
 calls for it. Keep the column size limits in mind (`Character` columns hold up
@@ -892,7 +885,7 @@ your data shape:
 - **All five keys** — when uniqueness needs all five dimensions; each
   added key is one more *which* on top of `Key1`'s *what kind*.
 
-**The framework requires `Key1` and `Key2` to be mapped on every typed
+**The mapper requires `Key1` and `Key2` to be mapped on every typed
 DTO.** A DTO without one or both fails validation at first use. The
 reasoning is upstream of typed DTOs: `UDRow.Key1` and `UDRow.Key2`
 carry no default value, so a row that doesn't set them is rejected by
@@ -907,7 +900,7 @@ mapped property is sent as an empty string, the same as an unmapped key.
 
 Key1 by convention identifies the row's category — "the kind of thing
 this row is." Examples: `"ORDER_TRACKING"`, `"WEBSITE_INQUIRY"`,
-`"REPAIR_INTAKE"`. The framework doesn't enforce that convention;
+`"REPAIR_INTAKE"`. The SDK doesn't enforce that convention;
 it's strongly recommended because a UD table without categorized rows
 is hard to organize or query later.
 
@@ -920,7 +913,7 @@ mapper writes a column-legend string into `Character10` on save —
 someone opening the row in Epicor's UI see what each generic column
 means in this row's shape.
 
-If you *do* map a property to `Character10`, the framework backs off
+If you *do* map a property to `Character10`, the mapper backs off
 and uses your value unchanged — you've taken ownership.
 
 ### Capacity checks
@@ -1074,10 +1067,10 @@ await epicorClient.UDTable.SaveAsync("UD22", new WorkLog
 ```
 
 `ShortChar20` is documented in `UDRow.cs` as a *reserved* column with
-this kind of tag-search use case in mind; the framework doesn't
+this kind of tag-search use case in mind; the SDK doesn't
 enforce it, and the convention is yours to follow or ignore. If you
 have a different reserved use for `ShortChar20`, map it accordingly —
-the framework's recommendations are documentation, not constraints.
+the SDK's recommendations are documentation, not constraints.
 
 ### ExtraData on typed DTOs — install-specific columns
 

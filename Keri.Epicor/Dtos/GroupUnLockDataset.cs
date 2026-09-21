@@ -13,7 +13,7 @@ namespace Keri.Epicor.Dtos
     /// Epicor transaction pattern that has no single backing table — the
     /// <c>ip*</c>-prefixed properties are Epicor's own parameter names for the
     /// <c>GroupUnLock</c> call. It is used by
-    /// <see cref="EngWorkBenchSvc._AddMtlsAsync"/>.
+    /// <see cref="EngWorkBenchSvc.AddMtlsAsync"/>.
     /// </remarks>
     public class GroupUnLockDataset
     {

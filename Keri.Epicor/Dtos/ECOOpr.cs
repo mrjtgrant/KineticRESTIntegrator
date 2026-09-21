@@ -10,7 +10,7 @@ namespace Keri.Epicor.Dtos
     /// operation (an operation step within an ECO).
     /// </summary>
     /// <remarks>
-    /// Used by <see cref="EngWorkBenchSvc._AddOprsAsync"/> which copies
+    /// Used by <see cref="EngWorkBenchSvc.AddOprsAsync"/> which copies
     /// operations from a source BOM into a new ECO. Minimal starter DTO —
     /// the orchestrator currently works on the raw JObject for flexibility.
     /// </remarks>
