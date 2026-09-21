@@ -34,7 +34,7 @@ namespace Keri.Mail
     /// </summary>
     /// <remarks>
     /// The .NET Framework path uses <c>System.Net.Mail</c>, which is part of
-    /// the framework and adds no dependencies. Its <c>EnableSsl</c> performs
+    /// .NET Framework and adds no dependencies. Its <c>EnableSsl</c> performs
     /// STARTTLS only, so port 465 (implicit TLS) is rejected on every target.
     /// Use STARTTLS, typically on port 587.
     /// </remarks>

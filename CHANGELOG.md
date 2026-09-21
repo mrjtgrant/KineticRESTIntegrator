@@ -16,6 +16,21 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ---
 
+## Unreleased
+
+### Added
+
+- **`FunctionSvc`**, reachable as `EpicorClient.Function`, calls Epicor Functions. `InvokeAsync` returns the output parameters as a `JObject`; `InvokeAsync<T>` maps them onto your own type. Input parameters are passed as an object whose properties are named after them. `staged: true` calls a library's unpublished version.
+- **`RestConnect.RestCallWithModifierAsync`**, a protected method that calls a path under a different URL segment than the session's default. `FunctionSvc` uses it to reach `/api/v2/efx/`.
+
+### Changed
+
+- **Comments and XML docs refer to Keri as an SDK throughout.**
+
+### Fixed
+
+- **`ECOMtl`'s doc said the DTO includes installation-specific `_c` columns.** It models standard columns only; custom columns arrive in `ExtraData`, as on every DTO.
+
 ## Keri.RestTransport 0.5.0 / Keri.Epicor 0.9.0 / Keri.Files 0.7.0 / Keri.Mail 0.7.0 — 2026-09-21
 
 Every package gains a .NET Standard 2.0 build and a lower .NET Framework floor, and ships its XML documentation. `Keri.Files` changes one method's return type. **Breaking:** `ExcelReader.WorksheetToJArray`.

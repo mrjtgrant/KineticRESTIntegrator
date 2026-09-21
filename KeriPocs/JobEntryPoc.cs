@@ -56,7 +56,7 @@ namespace KeriPocs
             //
             // The OData filter is a list of clauses combined with " and ".
             // Booleans bare, strings single-quoted, dates ISO-format and
-            // bare. The framework handles URL encoding.
+            // bare. The SDK handles URL encoding.
 
             Console.WriteLine($"Fetching the first {PageSize} OPEN jobs (JobClosed eq false)...");
 

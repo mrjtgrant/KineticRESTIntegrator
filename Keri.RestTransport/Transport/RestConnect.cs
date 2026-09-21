@@ -234,15 +234,34 @@ namespace Keri.RestTransport
         /// <param name="svc">Service path, e.g. "Erp.BO.SalesOrderSvc/GetByID".</param>
         /// <param name="payload">Optional request body. If null, the call is a GET.</param>
         /// <param name="ct">Cancellation token.</param>
-        public async Task<JObject> RestCallAsync(
+        public Task<JObject> RestCallAsync(
             string svc,
             JObject payload = null,
             CancellationToken ct = default)
         {
+            return RestCallWithModifierAsync(sesh.AuthObject.DynamicURLModifier, svc, payload, ct);
+        }
+
+        /// <summary>
+        /// Calls a REST service using <paramref name="modifier"/> in place of the
+        /// session's auth-mode URL modifier. For endpoints that live under a
+        /// different path than the session's default — for Epicor, Functions
+        /// under <c>/api/v2/efx/</c>.
+        /// </summary>
+        /// <param name="modifier">The path segment between the base URL and
+        /// <paramref name="svc"/>, e.g. <c>"/api/v2/efx/EPIC01/"</c>.</param>
+        /// <param name="svc">Service path appended after the modifier.</param>
+        /// <param name="payload">Optional request body. If null, the call is a GET.</param>
+        /// <param name="ct">Cancellation token.</param>
+        protected async Task<JObject> RestCallWithModifierAsync(
+            string modifier,
+            string svc,
+            JObject payload,
+            CancellationToken ct)
+        {
             // Build one absolute URL from environment + modifier + svc,
             // tolerant of stray or missing slashes at each seam.
-            string resource = BuildResourceUrl(
-                sesh.BaseUrl, sesh.AuthObject.DynamicURLModifier, svc);
+            string resource = BuildResourceUrl(sesh.BaseUrl, modifier, svc);
 
             JObject result = await RestTransactionAsync(resource, payload, ct).ConfigureAwait(false);
 

@@ -25,7 +25,7 @@ namespace Keri.Epicor
     /// receipt tables: <see cref="ReceiptsAsync"/> for <c>RcvHead</c> rows
     /// (Epicor's entity set on this service is <c>Receipts</c> — not
     /// <c>RcvHeads</c> — confirmed from the REST help and matched here per
-    /// the framework's name-tracking convention), <see cref="RcvDtlsAsync"/>
+    /// the SDK's name-tracking convention), <see cref="RcvDtlsAsync"/>
     /// for receipt-line rows, and <see cref="RcvHeadAttchesAsync"/> for
     /// receipt-header attachment rows. The wide multi-table dataset is
     /// returned by <see cref="GetByIDAsync"/>. New-row template fetching
@@ -66,7 +66,7 @@ namespace Keri.Epicor
         // ---------------------------------------------------------------
         // OData entity-set wrappers
         //
-        // Naming follows the framework convention: the Epicor entity sets
+        // Naming follows the SDK convention: the Epicor entity sets
         // on this service are Receipts (RcvHead rows — note the friendly
         // entity-set name, not "RcvHeads"), RcvDtls (line rows), and
         // RcvHeadAttches (header attachment rows). All three confirmed
@@ -80,7 +80,7 @@ namespace Keri.Epicor
         /// <remarks>
         /// The method is <c>ReceiptsAsync</c> because Epicor's OData entity
         /// set on this service is <c>Receipts</c>, not <c>RcvHeads</c>. The
-        /// framework convention is to match Epicor's exposed names exactly.
+        /// SDK convention is to match Epicor's exposed names exactly.
         /// </remarks>
         /// <param name="filters">
         /// Optional OData filter clauses, combined with <c>and</c>. Each entry

@@ -20,7 +20,7 @@ namespace Keri.Epicor
     /// (<c>AddMscShpDtAsync</c>) lives in <c>MiscShipSvc.Workflows.cs</c>.
     /// </para>
     /// <para>
-    /// Method visibility on this service follows the framework convention:
+    /// Method visibility on this service follows the SDK convention:
     /// the generic <c>GetNew*</c> template-fetcher and <c>UpdateAsync</c>
     /// are <c>public</c> and return <see cref="OperationResult{T}"/>.
     /// The <c>OnChange*</c> dataset mutators that run Epicor's on-change
@@ -130,7 +130,7 @@ namespace Keri.Epicor
         // Internal API — shipment-line build steps
         //
         // These methods mutate an in-flight shipment-line dataset and run
-        // Epicor's on-change logic. They are not part of the framework's
+        // Epicor's on-change logic. They are not part of the SDK's
         // public surface; callers reach this functionality via
         // AddMscShpDtAsync. They keep raw JObject returns because they are
         // chained inside the orchestrator where wrapping each step in

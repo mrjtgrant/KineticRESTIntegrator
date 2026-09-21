@@ -10,7 +10,7 @@ namespace KeriPocs
     /// <b>Read-only.</b> Demonstrates the typed-projection pattern using
     /// <see cref="MenuSvc.GetRowsAsync{T}"/> — a generic method that lets
     /// you receive Epicor responses as your own narrow DTO instead of the
-    /// framework's full table DTO.
+    /// SDK's full table DTO.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -46,11 +46,11 @@ namespace KeriPocs
 
             // ---- 1) Pull the projected rows --------------------------------
             //
-            // GetRowsAsync<MenuTreeEntry> tells the framework to materialize
+            // GetRowsAsync<MenuTreeEntry> tells the SDK to materialize
             // each row of the Menu response as MenuTreeEntry — Newtonsoft.Json
             // populates only the properties on MenuTreeEntry and silently
             // ignores every other column in the response. The result is a
-            // typed list of YOUR DTO, not the framework's full Menu DTO.
+            // typed list of YOUR DTO, not the SDK's full Menu DTO.
 
             Console.WriteLine("Fetching Menu rows as MenuTreeEntry projection...");
             var result = await client.Menu

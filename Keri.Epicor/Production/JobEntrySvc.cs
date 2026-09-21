@@ -40,7 +40,7 @@ namespace Keri.Epicor
         // ---------------------------------------------------------------
         // OData entity-set wrappers
         //
-        // Naming follows the framework convention: the Epicor entity set on
+        // Naming follows the SDK convention: the Epicor entity set on
         // this service is JobEntries (not JobHeads), so the method is
         // JobEntriesAsync. The other three (JobMtls, JobAsmbls, JobParts)
         // follow Epicor's names directly.
@@ -53,7 +53,7 @@ namespace Keri.Epicor
         /// <remarks>
         /// The Epicor entity set on this service is <c>JobEntries</c>
         /// (projecting rows of the <c>JobHead</c> table), so the method
-        /// name is <c>JobEntriesAsync</c> per the framework convention of
+        /// name is <c>JobEntriesAsync</c> per the SDK convention of
         /// matching Epicor's entity-set names. The row DTO is still
         /// <see cref="JobHead"/>.
         /// </remarks>

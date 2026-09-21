@@ -24,7 +24,7 @@ namespace Keri.Epicor
     /// Three OData entity-set wrappers are exposed for the practical-core
     /// PO tables: <see cref="POesAsync"/> for <c>POHeader</c> rows (Epicor's
     /// entity set on this service is <c>POes</c> — the unusual plural is
-    /// Epicor's, matched here per the framework's name-tracking convention),
+    /// Epicor's, matched here per the SDK's name-tracking convention),
     /// <see cref="PODetailsAsync"/> for line rows, and
     /// <see cref="PORelsAsync"/> for release rows. The wide multi-table
     /// dataset is returned by <see cref="GetByIDAsync"/>. New-row template
@@ -47,7 +47,7 @@ namespace Keri.Epicor
         // ---------------------------------------------------------------
         // OData entity-set wrappers
         //
-        // Naming follows the framework convention: the Epicor entity sets
+        // Naming follows the SDK convention: the Epicor entity sets
         // on this service are POes (header rows), PODetails (line rows),
         // and PORels (release rows). The "POes" name is Epicor's unusual
         // plural form — matched here exactly per the same rule that gave
@@ -61,7 +61,7 @@ namespace Keri.Epicor
         /// <remarks>
         /// The method is <c>POesAsync</c> because Epicor's OData entity set
         /// on this service is <c>POes</c> (the unusual plural is Epicor's
-        /// own). The framework convention is to match Epicor's names — same
+        /// own). The SDK convention is to match Epicor's names — same
         /// rule that produced <c>JobEntriesAsync</c> over the friendlier
         /// <c>JobsAsync</c>.
         /// </remarks>

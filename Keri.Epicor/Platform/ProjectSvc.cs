@@ -19,7 +19,7 @@ namespace Keri.Epicor
     /// <c>ProjectSvc.Workflows.cs</c>.
     /// </para>
     /// <para>
-    /// Method visibility on this service follows the framework convention:
+    /// Method visibility on this service follows the SDK convention:
     /// <c>ProjectsAsync</c> (table-name read), <c>GetNewProjectAsync</c>
     /// (<c>GetNew*</c> template-fetcher), and <c>UpdateAsync</c> (generic
     /// CRUD write) are <c>public</c> and return <see cref="OperationResult{T}"/>.
@@ -144,7 +144,7 @@ namespace Keri.Epicor
         // Internal API — project-creation process steps
         //
         // These methods mutate an in-flight project dataset and run Epicor's
-        // on-change logic. They are not part of the framework's public
+        // on-change logic. They are not part of the SDK's public
         // surface; callers reach this functionality via CreateProjectAsync.
         // They keep raw JObject returns because they are chained inside the
         // orchestrator where wrapping each step in OperationResult would

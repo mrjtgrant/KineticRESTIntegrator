@@ -58,6 +58,7 @@ namespace Keri.Epicor
         private UserCodesSvc _userCodes;
         private GenxDataSvc _genxData;
         private UDTableSvc _udTable;
+        private FunctionSvc _function;
         private ProjectSvc _project;
         private CustomerSvc _customer;
         private VendorSvc _vendor;
@@ -175,6 +176,12 @@ namespace Keri.Epicor
         public UDTableSvc UDTable
         {
             get { ThrowIfDisposed(); return _udTable ?? (_udTable = new UDTableSvc(_session)); }
+        }
+
+        /// <summary>Call Epicor Functions.</summary>
+        public FunctionSvc Function
+        {
+            get { ThrowIfDisposed(); return _function ?? (_function = new FunctionSvc(_session)); }
         }
 
         /// <summary>Project header lookup and creation.</summary>
@@ -340,6 +347,7 @@ namespace Keri.Epicor
             _userCodes?.Dispose();
             _genxData?.Dispose();
             _udTable?.Dispose();
+            _function?.Dispose();
             _project?.Dispose();
             _customer?.Dispose();
             _vendor?.Dispose();

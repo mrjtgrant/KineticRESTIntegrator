@@ -31,7 +31,7 @@ KeriConfigurator/App.config   ← the one config file
    ```
    dotnet run --project KeriConfigurator -f net8.0
    ```
-   (or run the built `KeriConfigurator.exe`, or set it as the startup project in Visual Studio and run). It multi-targets, so the `dotnet run` CLI needs a `-f` to pick one; either framework behaves identically.
+   (or run the built `KeriConfigurator.exe`, or set it as the startup project in Visual Studio and run). It multi-targets, so the `dotnet run` CLI needs a `-f` to pick one; either target behaves identically.
 
 3. **Run the demo** to confirm end-to-end:
    ```

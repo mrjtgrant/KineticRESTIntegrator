@@ -70,7 +70,7 @@
   </ItemGroup>
 
   <!-- MailKit on netstandard2.0 and net8.0. The .NET Framework build uses
-       System.Net.Mail from the BCL, which adds no dependencies to a Framework
+       System.Net.Mail from the BCL, which adds no dependencies to a .NET Framework
        consumer. System.Net.Mail supports STARTTLS only, so port 465 (implicit
        TLS) is rejected on every target to keep one configuration valid
        everywhere. -->

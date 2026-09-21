@@ -59,7 +59,7 @@ namespace KineticRESTIntegrator.Tests
             public string Alpha { get; set; }
             public int Beta { get; set; }
 
-            [JsonProperty("Gamma_c")]
+            [JsonProperty("GammaColumn")]
             public string Gamma { get; set; }
 
             [JsonIgnore]
@@ -87,7 +87,7 @@ namespace KineticRESTIntegrator.Tests
         public void SelectFor_HonorsJsonPropertyName()
         {
             var cols = NewSvc().SelectFor<SampleDto>();
-            Assert.Contains("Gamma_c", cols);     // the [JsonProperty] name
+            Assert.Contains("GammaColumn", cols);     // the [JsonProperty] name
             Assert.DoesNotContain("Gamma", cols);  // not the C# property name
         }
 
@@ -117,7 +117,7 @@ namespace KineticRESTIntegrator.Tests
         {
             var cols = NewSvc().SelectFor<SampleDto>();
             Assert.Equal(
-                new[] { "Alpha", "Beta", "Gamma_c" }.OrderBy(c => c),
+                new[] { "Alpha", "Beta", "GammaColumn" }.OrderBy(c => c),
                 cols.OrderBy(c => c));
         }
 

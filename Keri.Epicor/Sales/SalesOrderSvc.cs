@@ -21,7 +21,7 @@ namespace Keri.Epicor
     /// <c>CreateOrderAsync</c>) live in <c>SalesOrderSvc.Workflows.cs</c>.
     /// </para>
     /// <para>
-    /// Method visibility on this service follows the framework convention:
+    /// Method visibility on this service follows the SDK convention:
     /// <c>GetByIDAsync</c> (CRUD read), the <c>GetNew*</c> template-fetchers,
     /// and <c>MasterUpdateAsync</c> (the BO's CRUD write primitive — Epicor
     /// names it <c>MasterUpdate</c> instead of <c>Update</c> on this service)
@@ -201,7 +201,7 @@ namespace Keri.Epicor
         //
         // These methods mutate an in-flight order or order-detail dataset
         // and run Epicor's on-change logic. They are not part of the
-        // framework's public surface; callers reach this functionality via
+        // SDK's public surface; callers reach this functionality via
         // CreateOrderAsync or AddOrderLineAsync. They keep raw JObject returns
         // because they are chained inside orchestrators where wrapping each
         // step in OperationResult would add ceremony without value.

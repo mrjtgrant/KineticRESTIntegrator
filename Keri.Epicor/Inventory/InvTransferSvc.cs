@@ -20,7 +20,7 @@ namespace Keri.Epicor
     /// <c>InvTransferSvc.Workflows.cs</c>.
     /// </para>
     /// <para>
-    /// Method visibility on this service follows the framework convention:
+    /// Method visibility on this service follows the SDK convention:
     /// only <see cref="GetNewInventoryTransferAsync"/> is public — it is the
     /// one true primitive (a <c>GetNew*</c> template-fetcher). Every other
     /// wrapper is a dataset-mutation step inside the inventory-transfer
@@ -71,7 +71,7 @@ namespace Keri.Epicor
         // Internal API — inventory-transfer process steps
         //
         // These methods are implementation details of the inventory-transfer
-        // workflow. They are not part of the framework's public surface;
+        // workflow. They are not part of the SDK's public surface;
         // callers reach this functionality via MoveInventoryAsync or
         // TrackSerialNumberAsync. They keep raw JObject returns because they
         // are chained inside orchestrators where wrapping each step in

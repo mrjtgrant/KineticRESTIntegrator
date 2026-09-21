@@ -57,14 +57,14 @@
        MSB3277 fires on the .NET Framework target because ClosedXML (a
        netstandard2.0 library) transitively references newer versions of
        System.Memory, System.Buffers, System.Numerics.Vectors, and
-       System.Runtime.CompilerServices.Unsafe than the Framework facade
+       System.Runtime.CompilerServices.Unsafe than the .NET Framework facade
        assemblies provide. App.config's <bindingRedirect> entries resolve this
        at runtime — the warning is a build-time complaint about a state that is
        deliberately handled. Expect it to get louder, not quieter, at a lower
        floor: the facades on 4.6.1 are older than the ones on 4.8.
        MSB3836 fires on net8.0 because <AutoGenerateBindingRedirects> produces
        its own redirects that overlap with the hand-coded ones in App.config
-       (which are there for the Framework runtime path). Same underlying root
+       (which are there for the .NET Framework runtime path). Same underlying root
        cause; same "already handled, please stop complaining" character. -->
   <PropertyGroup>
     <NoWarn>$(NoWarn);MSB3277;MSB3836</NoWarn>

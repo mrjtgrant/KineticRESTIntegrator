@@ -49,6 +49,11 @@ Keri supports both. A session's API version is set by one value:
 The earliest REST-capable releases offer v1 only. A result's `ResourcePath` shows
 which version a call used.
 
+### Epicor Functions
+
+`FunctionSvc` calls Epicor Functions through REST v2 (`/api/v2/efx/…`), so it
+needs a session with an API key and an Epicor release that has Functions.
+
 ### Older releases and the typed DTOs
 
 Keri's DTOs model the core columns of each Epicor table as they exist in current

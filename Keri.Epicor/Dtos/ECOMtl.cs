@@ -10,8 +10,8 @@ namespace Keri.Epicor.Dtos
     /// material (BOM line within an ECO).
     /// </summary>
     /// <remarks>
-    /// This DTO includes both standard Epicor fields AND installation-specific
-    /// custom columns (suffixed with <c>_c</c>). Used by
+    /// Models standard Epicor columns only. Installation-specific custom
+    /// columns arrive in <see cref="ExtraData"/>. Used by
     /// <see cref="EngWorkBenchSvc.AddMtlsAsync"/>.
     /// </remarks>
     public class ECOMtl

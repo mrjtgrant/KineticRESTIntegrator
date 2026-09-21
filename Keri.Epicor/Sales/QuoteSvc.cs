@@ -20,7 +20,7 @@ namespace Keri.Epicor
     /// (<c>NewQuoteHedAsync</c>) lives in <c>QuoteSvc.Workflows.cs</c>.
     /// </para>
     /// <para>
-    /// Method visibility on this service follows the framework convention:
+    /// Method visibility on this service follows the SDK convention:
     /// the generic <c>GetNew*</c> template-fetcher and <c>UpdateAsync</c>
     /// are <c>public</c> and return <see cref="OperationResult{T}"/>.
     /// The <c>QuoteHedCustomerCustIDAfterChangeAsync</c> mutator and the
@@ -199,7 +199,7 @@ namespace Keri.Epicor
         // Internal API — quote-creation process steps
         //
         // These methods mutate an in-flight quote dataset and run Epicor's
-        // on-change / pre-update logic. They are not part of the framework's
+        // on-change / pre-update logic. They are not part of the SDK's
         // public surface; callers reach this functionality via
         // NewQuoteHedAsync. They keep raw JObject returns because they are
         // chained inside the orchestrator where wrapping each step in

@@ -17,7 +17,7 @@ namespace KeriPocs
     /// (part number, description, class, UOMs, type, status). To widen or
     /// narrow that, pass an explicit <c>select</c> list. To filter, pass
     /// OData <c>filter</c> clauses as a <see cref="List{T}"/> of strings
-    /// that the framework will combine with <c>and</c>.
+    /// that the SDK will combine with <c>and</c>.
     /// </para>
     /// <para>
     /// This POC is safe to run any time — it does not modify Epicor.
@@ -55,7 +55,7 @@ namespace KeriPocs
             //
             // The OData filter is a list of clauses combined with " and ".
             // String values must be single-quoted; numerics and booleans
-            // bare. The framework handles URL encoding.
+            // bare. The SDK handles URL encoding.
 
             Console.WriteLine();
             Console.WriteLine($"Fetching the first {PageSize} NON-STOCK parts...");

@@ -84,7 +84,7 @@ The sample projects (`KeriDemo`, `KeriPocs`) target `net48`, `KeriConfigurator` 
 | Project | Output | Purpose |
 |---|---|---|
 | `Keri.RestTransport` | `Keri.RestTransport.dll` | Low-level REST client. Owns auth, session, URL building, and JSON error handling. |
-| `Keri.Epicor` | `Keri.Epicor.dll` | Async wrappers for the Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more. Includes the `EpicorClient` facade and typed DTOs. |
+| `Keri.Epicor` | `Keri.Epicor.dll` | Async wrappers for the Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more — and for Epicor Functions. Includes the `EpicorClient` facade and typed DTOs. |
 | `Keri.Files` | `Keri.Files.dll` | Excel and CSV rendering (ClosedXML), and writing them to disk. |
 | `Keri.Mail` | `Keri.Mail.dll` | SMTP delivery of a built report, or of any existing file. |
 | `KeriDemo` | `KeriDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
@@ -303,6 +303,31 @@ The mapper validates the DTO on first use (column names exist on `UDRow`, types 
 
 For the full conventions — when to use which column family, the 2^5 key grain levels, reserved columns, and four progressively complete worked examples — see [EXAMPLES_EPICOR.md — Typed UD-table access](EXAMPLES_EPICOR.md#typed-ud-table-access).
 
+### Calling Epicor Functions
+
+`client.Function` calls a function in an Epicor Function library. Pass the input parameters as an object whose properties are named after them; the output parameters come back as a `JObject`, or as your own type:
+
+```csharp
+public class CreditStatus
+{
+    public bool CreditHold { get; set; }
+    public decimal CreditLimit { get; set; }
+}
+
+var result = await client.Function.InvokeAsync<CreditStatus>(
+    "IntegrationLib", "GetCreditStatus", new { custID = "ACME01" });
+
+if (result.IsFailure)
+{
+    Console.WriteLine(result.ErrorMessage);
+    return;
+}
+
+Console.WriteLine(result.Value.CreditHold);
+```
+
+Functions are called through Epicor's REST v2 endpoint, `/api/v2/efx/{Company}/{Library}/{Function}`, so the session needs an API key, and the calling company must be authorized on the library's Security tab. Pass `staged: true` to call a library's unpublished version. An output parameter named `ErrorMessage` is read as a failure, so give output parameters other names.
+
 ### Practical Examples
 
 The fastest way to see Keri working is `KeriDemo` — an end-to-end sample where a single run exercises the whole library: it executes a BAQ, turns the result into a formatted Excel workbook (using a column header map to control which fields appear and how they're labeled), and emails it as an attachment. Run this first to confirm your configuration works and to see how the pieces fit together:
@@ -419,7 +444,7 @@ KineticRESTIntegrator/
 │   ├── Purchasing/                  POSvc, ReceiptSvc
 │   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
 │   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
-│   ├── Platform/                    BAQSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDTableSvc, UserCodesSvc
+│   ├── Platform/                    BAQSvc, FunctionSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDTableSvc, UserCodesSvc
 │   ├── AR/                          PayMethodSvc, PaymentEntrySvc
 │   └── Keri.Epicor.csproj
 │       Services with multi-step operations have a companion
@@ -493,7 +518,7 @@ The SDK has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->292<!--/TESTS--> tests, run on both `net48` and `net8.0`.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->307<!--/TESTS--> tests, run on both `net48` and `net8.0`.
 
 Test Explorer in Visual Studio also discovers and runs them.
 

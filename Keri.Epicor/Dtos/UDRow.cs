@@ -34,7 +34,7 @@ namespace Keri.Epicor.Dtos
     /// <b>Reserved columns — conventions, not rules.</b> Six columns carry a
     /// suggested purpose so that UD rows written by different features stay
     /// readable and consistent. These are <i>strong suggestions</i> only: the
-    /// framework does not enforce them, validate them, or depend on them. You
+    /// SDK does not enforce them, validate them, or depend on them. You
     /// are free to ignore or repurpose any of them. They exist to give teams a
     /// shared starting convention and sensible defaults:
     /// </para>
@@ -134,7 +134,7 @@ namespace Keri.Epicor.Dtos
         /// <i>category</i> that groups rows of the same kind — it lets one UD
         /// table hold many distinct logical row types. Examples:
         /// <c>"PRINTED_PACKSLIP_LOG"</c>, <c>"WEBSITE_INQUIRY"</c>,
-        /// <c>"REPAIR_INTAKE"</c>. The framework does not enforce this; leave
+        /// <c>"REPAIR_INTAKE"</c>. The SDK does not enforce this; leave
         /// it unset and it stays null, but a row without a Key1 category is
         /// hard to find or organize later.
         /// </para>
@@ -199,13 +199,13 @@ namespace Keri.Epicor.Dtos
         /// </para>
         /// <para>
         /// The string is literal and entirely yours — store it, ignore it, or
-        /// parse it however you see fit. For convenience the framework
+        /// parse it however you see fit. For convenience the SDK
         /// provides <see cref="UDTableSvc.ParseColumnLegend"/> and
         /// <see cref="UDTableSvc.BuildColumnLegend"/> to convert between this
         /// string and a dictionary, and <see cref="ToMappedValues"/> to
         /// re-key this row's values by their meanings. Those helpers assume
         /// the <c>|</c> / <c>:</c> format above; they are a quick-start
-        /// convention, not a requirement. The framework does not enforce any
+        /// convention, not a requirement. The SDK does not enforce any
         /// of this. The 1000-character <c>Character</c> limit leaves ample
         /// room for a full legend.
         /// </para>
@@ -282,7 +282,7 @@ namespace Keri.Epicor.Dtos
         /// can be repurposed freely. Examples: <c>"REPAIR"</c>,
         /// <c>"LOST"</c>, <c>"RETURN"</c>, <c>"{USERNAME}"</c>, or
         /// <c>"RETURN,WARRANTY,EXPEDITE"</c>. Stay within the 100-character
-        /// <c>ShortChar</c> limit. The framework does not enforce this.
+        /// <c>ShortChar</c> limit. The SDK does not enforce this.
         /// </para>
         /// </summary>
         public string ShortChar20 { get; set; } = "";
@@ -445,7 +445,7 @@ namespace Keri.Epicor.Dtos
         /// written; it defaults to <see cref="DateTime.Now"/> at the moment
         /// the <see cref="UDRow"/> is constructed. If the row is built well
         /// before it is sent and you need send-time accuracy, set this
-        /// explicitly before the call. The framework does not enforce this.
+        /// explicitly before the call. The SDK does not enforce this.
         /// </para>
         /// </summary>
         /// 
@@ -517,7 +517,7 @@ namespace Keri.Epicor.Dtos
         /// <para>
         /// <b>Reserved (strong suggestion).</b> Use this as the row's
         /// valid / active flag — a quick way to soft-disable a row without
-        /// deleting it. Defaults to <c>true</c>. The framework does not
+        /// deleting it. Defaults to <c>true</c>. The SDK does not
         /// enforce this.
         /// </para>
         /// </summary>

@@ -12,7 +12,7 @@ namespace Keri.Epicor.Dtos
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>For future reference.</b> Nothing in the framework consumes this DTO
+    /// <b>For future reference.</b> Nothing in the SDK consumes this DTO
     /// yet — it's modeled ahead of need so that when a service method is added
     /// to read or write code-type definitions, the typed shape already exists.
     /// </para>

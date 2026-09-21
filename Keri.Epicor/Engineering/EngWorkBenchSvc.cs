@@ -22,7 +22,7 @@ namespace Keri.Epicor
     /// <c>EngWorkBenchSvc.Workflows.cs</c>.
     /// </para>
     /// <para>
-    /// Method visibility on this service follows the framework convention:
+    /// Method visibility on this service follows the SDK convention:
     /// generic read methods (<c>GetByIDAsync</c>, <c>GetNew*Async</c>,
     /// <c>ECOMtlsAsync</c>, dataset fetchers) and the generic <c>UpdateAsync</c>
     /// are <c>public</c> and return <see cref="OperationResult{T}"/>.
@@ -214,7 +214,7 @@ namespace Keri.Epicor
         // Internal API — ECO process steps
         //
         // These methods are implementation details of the ECO workflow.
-        // They are not part of the framework's public surface; callers
+        // They are not part of the SDK's public surface; callers
         // reach this functionality via the orchestrators in
         // EngWorkBenchSvc.Workflows.cs. They keep raw JObject returns
         // because they are chained inside orchestrators where wrapping
