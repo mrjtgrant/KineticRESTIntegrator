@@ -56,7 +56,7 @@ Keri works with **Epicor 10.1.500 and later**, the first release with a REST API
 
 Applications that talk to Epicor over the network — services, web backends, scheduled jobs — can use Keri with any of those releases. Your own assemblies built on Keri can also be called from **BPM custom code** and **Epicor Functions** on an on-premises server running .NET Framework or .NET 6. Epicor Cloud does not accept custom assemblies.
 
-**[COMPATIBILITY.md](COMPATIBILITY.md)** has the full table, deployment details for BPMs and Functions, and what has been verified.
+**[COMPATIBILITY.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/COMPATIBILITY.md)** has the full table, deployment details for BPMs and Functions, and what has been verified.
 
 ---
 
@@ -166,13 +166,13 @@ The fastest way to configure is to **run KeriConfigurator** (see [Setup](#setup)
 
 ### Environment-variable references
 
-Any setting can hold an environment-variable reference instead of a literal, written as `{ENV:NAME}` — e.g. `DefaultApiKey` set to `{ENV:EPICOR_API_KEY}` reads the `EPICOR_API_KEY` variable at runtime, so the secret stays out of `App.config`. KeriConfigurator offers this on the three secrets (Epicor password, API key, SMTP password) via a `[V]alue` / `[E]nv-reference` prompt; you can also hand-edit a token into any value. Literals are used as-is; the environment is read only where a value is an `{ENV:…}` reference. See [CONFIGURATION.md](CONFIGURATION.md) for the sandbox-vs-live workflow.
+Any setting can hold an environment-variable reference instead of a literal, written as `{ENV:NAME}` — e.g. `DefaultApiKey` set to `{ENV:EPICOR_API_KEY}` reads the `EPICOR_API_KEY` variable at runtime, so the secret stays out of `App.config`. KeriConfigurator offers this on the three secrets (Epicor password, API key, SMTP password) via a `[V]alue` / `[E]nv-reference` prompt; you can also hand-edit a token into any value. Literals are used as-is; the environment is read only where a value is an `{ENV:…}` reference. See [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md) for the sandbox-vs-live workflow.
 
 ### From your own application
 
 The libraries are configuration-free, so a consumer outside this solution supplies its own connection by building an `EpicorRestSessionKey` in code and passing it to `new EpicorClient(session)` — ideal for a web portal, a vault, or Credential Manager, where the secret never touches a file. Email works the same way: build an `SmtpSettings` and pass it to `Emailer.SendReport`. To produce a file without sending it, `Keri.Files` alone is enough — `FileWriter.Save` writes wherever you point it, and `Keri.Mail` is only needed when something leaves the machine.
 
-See **[CONFIGURATION.md](CONFIGURATION.md)** for the full guide: the onboarding flow, hand-editing, the programmatic / portal / vault patterns, multiple environments, and migration from the pre-0.3.0 model (per-library config, removed; and the old `EPICOR_*` auto-reader, replaced by the `{ENV:NAME}` references above).
+See **[CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md)** for the full guide: the onboarding flow, hand-editing, the programmatic / portal / vault patterns, multiple environments, and migration from the pre-0.3.0 model (per-library config, removed; and the old `EPICOR_*` auto-reader, replaced by the `{ENV:NAME}` references above).
 
 ---
 
@@ -195,7 +195,7 @@ using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinet
 
 Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDTable`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Receipt`, `Quote`, `SalesOrder`.
 
-Direct service construction (`new BAQSvc(...)`, etc.) is the underlying pattern — `EpicorClient` is a convenience wrapper over it, not a replacement. Each service is its own complete, disposable unit: open a `using` block and call as many methods on it as the workflow needs, or stack `using` blocks across several services when you want explicit control over scope. Reach for `EpicorClient` when an orchestrator touches several services together and the stack-of-`using`-blocks shape is getting repetitive; reach for direct construction otherwise. See [EXAMPLES_EPICOR.md — Using a single service directly](EXAMPLES_EPICOR.md#2-using-a-single-service-directly) for the patterns.
+Direct service construction (`new BAQSvc(...)`, etc.) is the underlying pattern — `EpicorClient` is a convenience wrapper over it, not a replacement. Each service is its own complete, disposable unit: open a `using` block and call as many methods on it as the workflow needs, or stack `using` blocks across several services when you want explicit control over scope. Reach for `EpicorClient` when an orchestrator touches several services together and the stack-of-`using`-blocks shape is getting repetitive; reach for direct construction otherwise. See [EXAMPLES_EPICOR.md — Using a single service directly](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#2-using-a-single-service-directly) for the patterns.
 
 `EpicorClient` is `sealed`. To extend it — narrow the surface to a subset of services, add a project-specific service, layer logging or telemetry around access — use composition: wrap an `EpicorClient` in your own class, expose only what you need, and dispose the inner client in your `Dispose`. This is the .NET-idiomatic pattern for client-style classes, and it works with the existing public API (the `Session` getter on `EpicorClient` exposes the configured `EpicorRestSessionKey` for constructing your own services).
 
@@ -248,24 +248,24 @@ The `OperationResult` also carries:
 - `Exception` — the underlying exception on transport-level failures
 - `ErrorType` — Epicor's fully-qualified exception class (e.g. `Ice.Common.RecordNotFoundException`). Branch on this rather than matching `ErrorMessage` text
 - `CorrelationId` — Epicor's per-call id, for matching a failure to a server-side log entry
-- `FailureStage` — on a failure from a multi-step orchestrator, which side of the commit it landed on: `Uncommitted` means nothing was written and the call can be retried as-is; `Indeterminate` means a commit was attempted and a record may exist, so establish what exists before retrying. Null on success, and null on any method without a commit boundary. See [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md#deciding-whether-a-failed-orchestrator-is-safe-to-retry)
+- `FailureStage` — on a failure from a multi-step orchestrator, which side of the commit it landed on: `Uncommitted` means nothing was written and the call can be retried as-is; `Indeterminate` means a commit was attempted and a record may exist, so establish what exists before retrying. Null on success, and null on any method without a commit boundary. See [EXAMPLES_EPICOR.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#deciding-whether-a-failed-orchestrator-is-safe-to-retry)
 
 ### Naming conventions
 
 A few conventions hold across the SDK:
 
 - **Every public call is async.** Methods end in `Async` and return `Task<OperationResult<T>>`. Always `await` them.
-- **Services are split into two files.** `*Svc.cs` holds thin wrappers around individual Epicor BO calls; `*Svc.Workflows.cs` holds the orchestrators that compose them. You don't have to know which file a method lives in to call it — the split is for contributors (see [CONTRIBUTING.md — File layout](CONTRIBUTING.md#file-layout-for-services)).
-- **DTOs come in three flavors.** A class named after an Epicor table (`Customer`, `Part`) mirrors that table; a `Dataset`-suffixed class (`InvTransferDataset`) mirrors a multi-table transaction shape; an `Input`-suffixed class (`QuoteInput`, `ECOMtlInput`) is a caller-facing convenience shape for an orchestrator. Full rationale in [CONTRIBUTING.md — DTOs](CONTRIBUTING.md#dtos).
+- **Services are split into two files.** `*Svc.cs` holds thin wrappers around individual Epicor BO calls; `*Svc.Workflows.cs` holds the orchestrators that compose them. You don't have to know which file a method lives in to call it — the split is for contributors (see [CONTRIBUTING.md — File layout](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONTRIBUTING.md#file-layout-for-services)).
+- **DTOs come in three flavors.** A class named after an Epicor table (`Customer`, `Part`) mirrors that table; a `Dataset`-suffixed class (`InvTransferDataset`) mirrors a multi-table transaction shape; an `Input`-suffixed class (`QuoteInput`, `ECOMtlInput`) is a caller-facing convenience shape for an orchestrator. Full rationale in [CONTRIBUTING.md — DTOs](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONTRIBUTING.md#dtos).
 - **List reads default to the DTO's columns.** Entity-set reads (`PartsAsync`, `POesAsync`, …) build their OData `$select` from the row DTO via `SelectFor<T>()`, so every typed property on the returned rows is populated. Pass `select` to override with your own list (for example, a leaner projection on a large read), or `additionalColumns` to add columns the DTO doesn't model. Like `filters` and `top`, these are passed straight through as OData query options (`$select`).
 - **`_c` columns flow through `ExtraData`.** Default DTOs model only standard Epicor columns — per-installation custom columns (Epicor's `_c` suffix convention) aren't typed because they're installation-specific by definition. They are still preserved: every Epicor-table DTO carries an `ExtraData` dictionary that captures any JSON property the typed properties don't consume. On a **list read**, name the custom column in `additionalColumns` (`await part.PartsAsync(additionalColumns: new[] { "WarrantyPeriod_c" })`) and it rides back in `ExtraData`; a **`GetByID`** read pulls the whole row, so every `_c` and UD column is there automatically. To write one: `part.ExtraData["WarrantyPeriod_c"] = 12;` — the value rides along when the DTO is serialized. The standard user-defined columns (`Character01`, `ShortChar01`, `Number01`, `CheckBox01`, etc.) remain typed since they exist on every install. `RawResponse` is still available for data that isn't on a row at all — nested child tables in a multi-table response, or the wide `GetByID` dataset.
-- **Dataset writes start from `NewDataset()`.** A create/modify flow (`GetNew*` → populate → `Update`) begins with `NewDataset()` on `EpicorSvc`, which returns a fresh `{"ds":{}}` envelope on every call — it's a method, not a shared field, so concurrent flows never alias one object. The full lifecycle is in [CONTRIBUTING.md](CONTRIBUTING.md#the-dataset-envelope-ds).
+- **Dataset writes start from `NewDataset()`.** A create/modify flow (`GetNew*` → populate → `Update`) begins with `NewDataset()` on `EpicorSvc`, which returns a fresh `{"ds":{}}` envelope on every call — it's a method, not a shared field, so concurrent flows never alias one object. The full lifecycle is in [CONTRIBUTING.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONTRIBUTING.md#the-dataset-envelope-ds).
 
 ### Public methods, orchestrators, and extending Keri
 
 Public methods come in two kinds: generic primitives (`GetByIDAsync`, `UpdateAsync`, `GetRowsAsync<T>`, `GetNew*Async`, and table-name reads like `PartsAsync`), and **orchestrators** in `*Svc.Workflows.cs` (`NewOrderAsync`, `AddMtlsAsync`, …) that compose several BO calls into one operation. For any multi-step operation the orchestrator is the entry point — from a caller's perspective, it *is* the operation.
 
-Keri exists to cut out the heavy lifting of talking to Epicor's REST API — but it can't anticipate every workflow your installation needs. When you need an operation it doesn't ship, you extend it by writing a new orchestrator. How to do that — the `ds` dataset-envelope lifecycle, the public-vs-internal split, the naming and DTO conventions — lives in [CONTRIBUTING.md](CONTRIBUTING.md#code-conventions), and [ADDING_A_SERVICE.md](ADDING_A_SERVICE.md) walks through adding a whole Business Object service — DTO, service class, wiring, tests — end to end. That guide is worth reading even if you never open a pull request: understanding how Keri is built is how you extend it cleanly for your own project.
+Keri exists to cut out the heavy lifting of talking to Epicor's REST API — but it can't anticipate every workflow your installation needs. When you need an operation it doesn't ship, you extend it by writing a new orchestrator. How to do that — the `ds` dataset-envelope lifecycle, the public-vs-internal split, the naming and DTO conventions — lives in [CONTRIBUTING.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONTRIBUTING.md#code-conventions), and [ADDING_A_SERVICE.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/ADDING_A_SERVICE.md) walks through adding a whole Business Object service — DTO, service class, wiring, tests — end to end. That guide is worth reading even if you never open a pull request: understanding how Keri is built is how you extend it cleanly for your own project.
 
 ### Typed UD-table access
 
@@ -301,7 +301,7 @@ var byCategory = await epicorClient.UDTable.QueryAsync<OrderTracking>(
 
 The mapper validates the DTO on first use (column names exist on `UDRow`, types are compatible with their column family, no two properties map to the same column, and `Key1` + `Key2` are mapped — Epicor identifies UD rows by the composite of all five keys, and these two carry no default). String overflows throw `UDTableColumnCapacityException` *before* the save reaches the wire. When the DTO doesn't map `Character10`, the mapper auto-emits a column-legend into it describing the mapping — useful when the row is later opened in Epicor's UI.
 
-For the full conventions — when to use which column family, the 2^5 key grain levels, reserved columns, and four progressively complete worked examples — see [EXAMPLES_EPICOR.md — Typed UD-table access](EXAMPLES_EPICOR.md#typed-ud-table-access).
+For the full conventions — when to use which column family, the 2^5 key grain levels, reserved columns, and four progressively complete worked examples — see [EXAMPLES_EPICOR.md — Typed UD-table access](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#typed-ud-table-access).
 
 ### Calling Epicor Functions
 
@@ -349,7 +349,7 @@ set KERI_POC_ALLOW_WRITES=true
 dotnet run --project KeriPocs
 ```
 
-For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EPICOR.md](EXAMPLES_EPICOR.md) — calling un-wrapped Epicor endpoints directly, writing UD-table rows, and the UD-row conventions. To use Keri's transport layer against a non-Epicor REST API, see [EXAMPLES_RESTAPI.md](EXAMPLES_RESTAPI.md).
+For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EPICOR.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md) — calling un-wrapped Epicor endpoints directly, writing UD-table rows, and the UD-row conventions. To use Keri's transport layer against a non-Epicor REST API, see [EXAMPLES_RESTAPI.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_RESTAPI.md).
 
 ---
 
@@ -382,7 +382,7 @@ When you build the consumer, MSBuild copies the referenced DLLs into the consume
 
 **Do not add NuGet PackageReferences to the libraries Keri already brings in** — `Newtonsoft.Json`, `ClosedXML`, `MailKit`, `MimeKit`, or any of their transitives. See the next section for why.
 
-**Supplying configuration.** The libraries read no config of their own, so your application owns it: build an `EpicorRestSessionKey` and pass it to `new EpicorClient(session)` (see [CONFIGURATION.md](CONFIGURATION.md)). The `KeriConfig` / `App.config` onboarding is for *this* solution's executables; an external consumer supplies a session in code.
+**Supplying configuration.** The libraries read no config of their own, so your application owns it: build an `EpicorRestSessionKey` and pass it to `new EpicorClient(session)` (see [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md)). The `KeriConfig` / `App.config` onboarding is for *this* solution's executables; an external consumer supplies a session in code.
 
 ---
 
@@ -526,7 +526,7 @@ Test Explorer in Visual Studio also discovers and runs them.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
+See [CONTRIBUTING.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONTRIBUTING.md) for the full guide. The short version:
 
 1. **Never commit `App.config`** — it has credentials. New settings go in KeriConfigurator’s unified schema and `App.config.template`.
 2. **Never commit secrets, internal URLs, real email addresses, or customer-specific data** in source files, tests, or examples.
@@ -536,7 +536,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. The short version:
 
 ## License
 
-Licensed under the Apache License, Version 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Licensed under the Apache License, Version 2.0 — see [LICENSE](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/LICENSE) and [NOTICE](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/NOTICE).
 
 Copyright © 2025–2026 Justin Grant.
 
@@ -546,4 +546,4 @@ Copyright © 2025–2026 Justin Grant.
 
 Keri is an independent open-source project by Justin Grant. Epicor®, Epicor ERP® and Kinetic® are trademarks of Epicor Software Corporation, which is not affiliated with this project and neither endorses nor supports it. Those names are used here only to identify the system this SDK integrates with.
 
-Keri is not a product of Epicor, carries no Epicor warranty, and is not covered by any Epicor support agreement. Anything it does to your Epicor environment is your responsibility — see [SECURITY.md](SECURITY.md) and the warranty disclaimer in [LICENSE](LICENSE), sections 7 and 8.
+Keri is not a product of Epicor, carries no Epicor warranty, and is not covered by any Epicor support agreement. Anything it does to your Epicor environment is your responsibility — see [SECURITY.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/SECURITY.md) and the warranty disclaimer in [LICENSE](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/LICENSE), sections 7 and 8.

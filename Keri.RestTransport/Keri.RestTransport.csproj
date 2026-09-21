@@ -47,6 +47,16 @@
 
     <!-- Ship the XML doc comments with the package so IntelliSense shows them. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Debug symbols: pack a .snupkg alongside the .nupkg, with SourceLink
+         pointing debuggers at the matching source on GitHub. -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>
