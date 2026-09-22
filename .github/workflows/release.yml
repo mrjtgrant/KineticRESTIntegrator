@@ -1,0 +1,101 @@
+name: Release
+
+# Publishes one package to nuget.org when its version tag is pushed.
+# Tag format: <Package>-v<Version>, e.g. Keri.Epicor-v1.0.0-rc.1
+#
+# Authentication is nuget.org Trusted Publishing: GitHub issues an OIDC token
+# for this workflow, and NuGet/login exchanges it for an API key that is valid
+# for one hour. No long-lived key is stored anywhere. The nuget.org policy names
+# this file (release.yml) — renaming it breaks publishing.
+
+on:
+  push:
+    tags:
+      - 'Keri.*-v*'
+
+jobs:
+  publish:
+    # Same runner as CI: net461/net462 need the .NET Framework reference
+    # assemblies.
+    runs-on: windows-latest
+
+    permissions:
+      contents: read
+      id-token: write   # lets NuGet/login request the OIDC token
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # full history, to confirm the tag is on main
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      # A published version can never be deleted from nuget.org, so everything
+      # that could make this the wrong release is checked before anything is
+      # built: the tag names a real package, the version in the tag matches the
+      # project's <Version>, and the tagged commit is on main.
+      - name: Check tag against project
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $i = $tag.IndexOf('-v')
+          if ($i -lt 1) { throw "Tag '$tag' is not in the form <Package>-v<Version>." }
+          $package = $tag.Substring(0, $i)
+          $version = $tag.Substring($i + 2)
+
+          $project = "$package/$package.csproj"
+          if (-not (Test-Path $project)) { throw "Tag '$tag' names '$package', which has no project at $project." }
+
+          $projectVersion = (dotnet msbuild $project -getProperty:Version).Trim()
+          if ($projectVersion -ne $version) {
+            throw "Tag version '$version' does not match <Version>$projectVersion</Version> in $project."
+          }
+
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw "Tag '$tag' points at a commit that is not on main." }
+
+          Write-Host "Publishing $package $version"
+          "package=$package" >> $env:GITHUB_OUTPUT
+          "project=$project" >> $env:GITHUB_OUTPUT
+
+      # See ci.yml: KeriConfigurator needs an App.config to exist on a fresh
+      # checkout, and the offline tests need no real connection values.
+      - name: Seed placeholder App.config
+        shell: pwsh
+        run: Copy-Item KeriConfigurator/App.config.template KeriConfigurator/App.config -Force
+
+      - name: Restore
+        run: dotnet restore KineticRESTIntegrator.sln
+
+      - name: Build
+        run: dotnet build KineticRESTIntegrator.sln --configuration Release --no-restore
+
+      - name: Test (offline, deterministic)
+        run: dotnet test KineticRESTIntegrator.Tests --configuration Release --no-build --verbosity normal
+
+      - name: Pack
+        run: dotnet pack ${{ steps.tag.outputs.project }} --configuration Release --no-build --output artifacts
+
+      # Requested only after build and tests pass, and just before the push,
+      # because the key it returns expires after one hour.
+      - name: NuGet login (Trusted Publishing)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # Pushing the .nupkg also pushes the .snupkg beside it.
+      - name: Push to nuget.org
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          Get-ChildItem artifacts -Filter *.nupkg | ForEach-Object {
+            dotnet nuget push $_.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($_.Name)." }
+          }
