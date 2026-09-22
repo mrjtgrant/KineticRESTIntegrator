@@ -5,7 +5,9 @@
 Targets **.NET Framework 4.6.1+**, **.NET Standard 2.0** and **.NET 8.0** — see [Target frameworks](#target-frameworks).
 
 ```csharp
-using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinetic connection, built from the shared App.config (run KeriConfigurator first)
+// session = your Epicor connection: base URL, company, credentials.
+// See "Getting started" below for how it is defined.
+using (var epicorClient = new EpicorClient(session))
 {
     // BAQ parameters are passed as a name/value dictionary.
     // Values are object, so strings and numbers both work.
@@ -30,7 +32,7 @@ using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinet
 }
 ```
 
-That snippet is the whole shape: construct a client, await an async call, check `IsFailure`, then use `Value`. Every service in the SDK works this way.
+That snippet is the whole shape: construct a client from a session, await an async call, check `IsFailure`, then use `Value`. Every service in the SDK works this way, and the session is the only thing you supply — the packages read no configuration of their own.
 
 ---
 
@@ -44,9 +46,14 @@ That snippet is the whole shape: construct a client, await an async call, check 
 | `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.1<!--/VER--> |
 | `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.1<!--/VER--> |
 | `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.1<!--/VER--> |
+
+The repo's own tooling is versioned separately and is not published:
+
+| Project | Version |
+|---|---|
 | `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
 
-All the Epicor service wrappers are converted, and the packages are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The SDK builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
+All the Epicor service wrappers are converted, and the packages are configuration-free — your application supplies the Epicor connection and email settings. An offline unit-test suite passes, and runnable example projects exist. The SDK builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.
 
 ---
 
@@ -75,7 +82,7 @@ The public API is identical across builds.
 
 `Keri.Mail` sends through `System.Net.Mail` on .NET Framework, which adds no dependencies, and through MailKit 4.16.0+ everywhere else. `System.Net.Mail` supports STARTTLS only, so **port 465 (implicit TLS) is rejected on every target** and one `App.config` works everywhere. Use STARTTLS, typically on port 587.
 
-The sample projects (`KeriDemo`, `KeriPocs`) target `net48`, `KeriConfigurator` targets `net48` and `net8.0`, and the test suite runs on both `net48` and `net8.0`.
+The repo's own sample projects target `net48`, its setup console targets `net48` and `net8.0`, and the test suite runs on both `net48` and `net8.0`. None of that affects a consumer — the packages target the three frameworks above.
 
 ---
 
@@ -87,9 +94,14 @@ The sample projects (`KeriDemo`, `KeriPocs`) target `net48`, `KeriConfigurator` 
 | `Keri.Epicor` | `Keri.Epicor.dll` | Async wrappers for the Epicor BOs — Part, SalesOrder, Quote, BAQ, InvTransfer, MiscShip, JobEntry, PO, Receipt, EngWorkBench, and more — and for Epicor Functions. Includes the `EpicorClient` facade and typed DTOs. |
 | `Keri.Files` | `Keri.Files.dll` | Excel and CSV rendering (ClosedXML), and writing them to disk. |
 | `Keri.Mail` | `Keri.Mail.dll` | SMTP delivery of a built report, or of any existing file. |
+
+Those four are the packages. The repo also carries runnable companions, which are not published and which your own application never references:
+
+| Project | Output | Purpose |
+|---|---|---|
 | `KeriDemo` | `KeriDemo.exe` | End-to-end sample: runs a BAQ, builds an Excel attachment, emails it. |
 | `KeriPocs` | `KeriPocs.exe` | Per-service runnable examples. Reads are always safe; writes are gated behind an environment variable. |
-| `KeriConfigurator` | `KeriConfigurator.exe` | Composition root + interactive setup: owns the unified config, builds clients/sessions, and onboards and live-tests the connection and SMTP. |
+| `KeriConfigurator` | `KeriConfigurator.exe` | Interactive setup for the two above: prompts for the Epicor connection and email settings, tests them live, and stores them for the samples to use. |
 | `KineticRESTIntegrator.Tests` | xUnit test project | Offline unit tests covering the SDK's deterministic surface. |
 
 ---
@@ -118,6 +130,62 @@ Every package targets .NET Framework 4.6.1+ (4.6.2+ for `Keri.Mail`), .NET Stand
 Debug symbols ship as `.snupkg` packages, so stepping into Keri's source from your debugger works once you enable the NuGet symbol server.
 
 **Cloning this repo instead?** The Quick start below builds the solution and its sample projects from source. That's for working *on* Keri, or for running the demo and POCs against your own server — you don't need it to use the packages.
+
+---
+
+## Getting started
+
+Install the package, build a session from whatever configuration your application already uses, and call a service:
+
+```csharp
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
+using Keri.RestTransport;
+
+var session = new EpicorRestSessionKey
+{
+    BaseUrl    = Environment.GetEnvironmentVariable("EPICOR_URL"),      // https://yourco.epicorsaas.com/server
+    Company    = Environment.GetEnvironmentVariable("EPICOR_COMPANY"),  // EPIC01
+    AuthObject = new RestAuthenticationObject
+    {
+        Username = Environment.GetEnvironmentVariable("EPICOR_USER"),
+        Password = Environment.GetEnvironmentVariable("EPICOR_PASSWORD"),
+        ApiKey   = Environment.GetEnvironmentVariable("EPICOR_API_KEY")  // blank = Basic auth on REST v1
+    }
+};
+
+using (var client = new EpicorClient(session))
+{
+    var parts = await client.Part.PartsAsync(top: 10);
+
+    if (parts.IsFailure)
+    {
+        Console.WriteLine(parts.ErrorMessage);
+        return;
+    }
+
+    foreach (Part part in parts.Value)
+        Console.WriteLine($"{part.PartNum}  {part.PartDescription}");
+}
+```
+
+That is the whole integration. The packages read no configuration of their own — no config file, no environment variables, no ambient state — so wherever your credentials live today, read them your way and pass them in. Environment variables above, `IConfiguration` or a secrets vault or a credential store just as easily; [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md) has worked examples. [Using the SDK](#using-the-sdk) covers what every call returns and how failures report which side of the commit boundary they landed on.
+
+**Want to watch it work against your own data before writing anything?** The repo ships three runnable companion projects that do exactly that — see [Trying it out with the companion projects](#trying-it-out-with-the-companion-projects).
+
+---
+
+## Trying it out with the companion projects
+
+Cloning this repo gets you three programs that run against your own Epicor server, so you can see real responses before writing code of your own. None of them ships in the packages, and nothing in your application references them.
+
+| | What it does |
+|---|---|
+| **KeriConfigurator** | Asks for your Epicor base URL, company, user and password — plus an API key if you use REST v2 — tests them against your live server, and stores them for the other two. Does the same for SMTP if you want the email parts. It doubles as a worked example of the configuration step: `KeriConfigurator/KeriConfig.cs` reads settings, resolves environment-variable references, validates them and returns a session, which is a pattern worth copying into your own application. |
+| **KeriDemo** | One end-to-end run: executes a BAQ, renders the result as a formatted Excel workbook, and emails it as an attachment. |
+| **KeriPocs** | One labeled scenario per service — UserCodes, Part, UD tables, SalesOrder, JobEntry, the menu tree, and an Epicor Function call. Reads run freely; anything that writes is gated behind an environment variable and prints the payload it would have sent. |
+
+The Quick start below sets all three up.
 
 ---
 
@@ -166,9 +234,11 @@ Debug symbols ship as `.snupkg` packages, so stepping into Keri's source from yo
 
 ## Configuration
 
-Configuration is owned by **KeriConfigurator**, the composition root: one unified settings schema (Epicor connection *and* email/SMTP) in one shared `App.config`. The libraries read nothing themselves — KeriConfigurator builds the session and SMTP settings and hands them in, and the executables share that one `App.config` via an MSBuild `<AppConfig>` link.
+**In your own application there is nothing to configure.** The packages read no settings of their own: you build an `EpicorRestSessionKey` — and an `SmtpSettings` if you send email — from whatever configuration your application already uses, and pass it in. See [Getting started](#getting-started) and [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md).
 
-The fastest way to configure is to **run KeriConfigurator** (see [Setup](#setup)): it prompts for each field, keeps already-set values on Enter, tests the Epicor connection against the live server, and runs an SMTP reachability check. You can also hand-edit `KeriConfigurator/App.config` directly.
+The rest of this section is about the companion projects in this repo. They share one settings schema (Epicor connection *and* email/SMTP) in a single `App.config`, written by KeriConfigurator and linked into `KeriDemo` and `KeriPocs` through an MSBuild `<AppConfig>` entry.
+
+The fastest way to fill it in is to **run KeriConfigurator** (see [Setup](#setup)): it prompts for each field, keeps already-set values on Enter, tests the Epicor connection against the live server, and runs an SMTP reachability check. You can also hand-edit `KeriConfigurator/App.config` directly.
 
 ### Connection settings
 
@@ -210,7 +280,7 @@ See **[CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob
 `EpicorClient` is a disposable wrapper that holds one configured session and lazy-constructs each Epicor service on first access. It's the recommended entry point — one connection, many services, all disposed together.
 
 ```csharp
-using (var epicorClient = KeriConfig.BuildEpicorClient())   // your Epicor/Kinetic connection, built from the shared App.config
+using (var epicorClient = new EpicorClient(session))   // the session built above
 {
     var customers = await epicorClient.Customer.CustomersAsync(
         filters: new List<string> { "Inactive eq false" });
@@ -497,7 +567,7 @@ KineticRESTIntegrator/
 │   ├── SmtpSettings.cs              relay configuration (public)
 │   └── Keri.Mail.csproj
 │
-├── KeriConfigurator/                Composition root + setup console
+├── KeriConfigurator/                Setup console for the samples
 │   ├── App.config.template          seeds the shared App.config on first build
 │   ├── App.config                   ← the one shared config (gitignored); exes link to it
 │   ├── KeriConfig.cs                builds sessions / clients + SmtpSettings from config

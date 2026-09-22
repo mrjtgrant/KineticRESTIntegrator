@@ -1,12 +1,16 @@
 # Configuration
 
-How Keri connects to Epicor — from a fresh checkout, to a working run, to your own application.
+How Keri connects to Epicor — whether you are running this repo's samples or wiring the packages into your own application.
 
-## One config, owned in one place
+## Where configuration comes from
 
-Keri's configuration lives in a **single shared `App.config`**, owned by **KeriConfigurator** — the composition root. KeriConfigurator holds the unified settings schema (Epicor connection *and* email/SMTP), reads it, and builds the sessions and clients the rest of the solution uses.
+**Your application owns it.** The four packages — `Keri.RestTransport`, `Keri.Epicor`, `Keri.Files`, `Keri.Mail` — read no configuration of their own, ever: no config file, no environment variables, no ambient state. You read your settings however your application already does, build an `EpicorRestSessionKey` (and an `SmtpSettings` if you send email), and pass it in. That is the whole story for a consumer, and it is what lets the same assemblies run inside a BPM, where there is no config file to read. Go to [Configuring your own application](#configuring-your-own-application-epicorrestsessionkey).
 
-The four libraries — `Keri.RestTransport`, `Keri.Epicor`, `Keri.Files`, `Keri.Mail` — read **no configuration of their own**. They're handed what they need: an `EpicorRestSessionKey` (built by `KeriConfig.BuildEpicorClient()`) or an `SmtpSettings` (built by `KeriConfig.BuildSmtpSettings()`). This is the config-agnostic boundary: configuration is resolved once, at the composition root, and flows inward as plain objects.
+**This repo's companion projects are a separate matter.** `KeriDemo` and `KeriPocs` need somewhere to keep a connection so they can run against your server, and `KeriConfigurator` is the small console that asks for one, tests it live, and writes it into a shared `App.config`. That arrangement belongs to this repo: its settings schema, its `{ENV:NAME}` reference syntax and its `YOUR_*` placeholder rule are conventions of that program, not features of the SDK — written into your own config, `{ENV:EPICOR_PASSWORD}` is just a string. Everything from [Quick start](#quick-start) to [Environment-variable references](#environment-variable-references-envname) describes it, and it is worth reading as a worked example even if your own application is configured differently.
+
+## One config for this repo's companion projects
+
+Inside this repo, configuration lives in a **single shared `App.config`** that KeriConfigurator owns. It holds one settings schema for both halves — the Epicor connection and the email/SMTP settings — and builds the session and `SmtpSettings` objects the samples hand to the packages.
 
 The solution's executables (`KeriDemo`, `KeriPocs`) share KeriConfigurator's single `App.config` through an MSBuild `<AppConfig>` link, so there is exactly one file to fill in for the whole solution.
 
@@ -156,9 +160,27 @@ Use the same names KeriConfigurator referenced (`EPICOR_PASSWORD`, `EPICOR_API_K
 
 ---
 
-## Configuring from your own code (`EpicorRestSessionKey`)
+## Configuring your own application (`EpicorRestSessionKey`)
 
-When credentials shouldn't sit in a file at all — a web portal that authenticates each user, a secrets vault, or Windows Credential Manager — build the session in code and hand it to the client. This bypasses `App.config` entirely and is the path for any consumer outside this solution (your application supplies its own configuration; the libraries store nothing):
+**This is the path for anything that installs the packages.** Your application reads its own configuration — environment variables, `appsettings.json` / `IConfiguration`, a secrets vault, Windows Credential Manager, or credentials a portal already holds for the signed-in user — and builds the session in code. `App.config`, KeriConfigurator and the `{ENV:…}` syntax play no part; the libraries store nothing and read nothing.
+
+The simplest version, from environment variables:
+
+```csharp
+var session = new EpicorRestSessionKey
+{
+    BaseUrl    = Environment.GetEnvironmentVariable("EPICOR_URL"),
+    Company    = Environment.GetEnvironmentVariable("EPICOR_COMPANY"),
+    AuthObject = new RestAuthenticationObject
+    {
+        Username = Environment.GetEnvironmentVariable("EPICOR_USER"),
+        Password = Environment.GetEnvironmentVariable("EPICOR_PASSWORD"),
+        ApiKey   = Environment.GetEnvironmentVariable("EPICOR_API_KEY")   // blank = Basic/v1
+    }
+};
+```
+
+The same shape, with the values coming from wherever you keep them:
 
 ```csharp
 using Keri.Epicor;
