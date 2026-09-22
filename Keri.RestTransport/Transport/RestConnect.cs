@@ -207,24 +207,43 @@ namespace Keri.RestTransport
                         };
                     }
 
-                    try
-                    {
-                        // Typical case: response is a JSON object.
-                        return JObject.Parse(body);
-                    }
-                    catch (Exception ex1)
-                    {
-                        try
-                        {
-                            // Some endpoints return a bare JSON array — wrap as {"value": [...]}.
-                            return new JObject(new JProperty("value", JArray.Parse(body)));
-                        }
-                        catch
-                        {
-                            // Neither parsed — surface the original parse error.
-                            return new JObject(new JProperty("ErrorMessage", ex1.Message));
-                        }
-                    }
+                    return ParseSuccessBody(body);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Turns a successful response's body into a <see cref="JObject"/>.
+        /// </summary>
+        /// <remarks>
+        /// An empty body is a success with nothing to say — HTTP 204, or a 200
+        /// from an endpoint that returns no content (an Epicor Function with no
+        /// output parameters, for one). It becomes an empty object, not an
+        /// error. A bare JSON array is wrapped as <c>{"value": [...]}</c>.
+        /// Anything that is not JSON comes back as an <c>ErrorMessage</c>,
+        /// which is how this layer reports every failure.
+        /// </remarks>
+        internal static JObject ParseSuccessBody(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+                return new JObject();
+
+            try
+            {
+                // Typical case: response is a JSON object.
+                return JObject.Parse(body);
+            }
+            catch (Exception ex1)
+            {
+                try
+                {
+                    // Some endpoints return a bare JSON array — wrap as {"value": [...]}.
+                    return new JObject(new JProperty("value", JArray.Parse(body)));
+                }
+                catch
+                {
+                    // Neither parsed — surface the original parse error.
+                    return new JObject(new JProperty("ErrorMessage", ex1.Message));
                 }
             }
         }

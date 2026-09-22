@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Keri.Epicor;
 using Keri.Epicor.Dtos;
+using Keri.RestTransport;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -13,12 +14,16 @@ namespace KineticRESTIntegrator.Tests
     /// </summary>
     public class FunctionSvcTests
     {
+        // An API key puts the session in REST v2 mode, which is where Functions
+        // live. Without one, InvokeAsync fails before it looks at anything else —
+        // see NoApiKeyIsAFailure.
         private static FunctionSvc Svc(string company = "EPIC01")
         {
             return new FunctionSvc(new EpicorRestSessionKey
             {
                 BaseUrl = "https://example.invalid/server",
-                Company = company
+                Company = company,
+                AuthObject = new RestAuthenticationObject { ApiKey = "not-a-real-key" }
             });
         }
 
@@ -143,6 +148,28 @@ namespace KineticRESTIntegrator.Tests
 
                 Assert.True(result.IsFailure);
                 Assert.Contains("Company", result.ErrorMessage);
+            }
+        }
+
+        [Fact]
+        public async Task NoApiKeyIsAFailure()
+        {
+            // Basic-only session: v1 credentials, no API key. Epicor would answer
+            // HTTP 403 "REST calls must pass a valid API key"; the SDK says so
+            // first, without a round trip.
+            var session = new EpicorRestSessionKey
+            {
+                BaseUrl = "https://example.invalid/server",
+                Company = "EPIC01",
+                AuthObject = new RestAuthenticationObject { Username = "user", Password = "pass" }
+            };
+
+            using (var svc = new FunctionSvc(session))
+            {
+                var result = await svc.InvokeAsync("Lib", "Fn");
+
+                Assert.True(result.IsFailure);
+                Assert.Contains("API key", result.ErrorMessage);
             }
         }
 

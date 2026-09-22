@@ -21,8 +21,8 @@ namespace Keri.Epicor
     /// </para>
     /// <para>
     /// Functions are served by Epicor's REST v2 endpoint, so the session needs an
-    /// API key. The company making the call must be authorized on the function
-    /// library's Security tab.
+    /// API key — a call without one is refused before it is sent. The company
+    /// making the call must be authorized on the function library's Security tab.
     /// </para>
     /// <para>
     /// An output parameter named <c>ErrorMessage</c> is indistinguishable from an
@@ -113,6 +113,14 @@ namespace Keri.Epicor
                 return OperationResult<T>.Failure("A function ID is required.");
             if (string.IsNullOrWhiteSpace(EpicorSession.Company))
                 return OperationResult<T>.Failure("The session has no Company; Epicor Functions are called per company.");
+
+            // Functions live only under REST v2, which rejects a call without an
+            // API key — v1 Basic credentials are not enough. Without this the
+            // call goes out and comes back as an HTTP 403 from Epicor.
+            if (EpicorSession.AuthObject == null || string.IsNullOrWhiteSpace(EpicorSession.AuthObject.ApiKey))
+                return OperationResult<T>.Failure(
+                    "Epicor Functions are served by REST v2, which requires an API key. "
+                    + "Set AuthObject.ApiKey on the session.");
 
             JObject payload;
             try

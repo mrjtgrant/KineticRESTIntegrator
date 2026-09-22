@@ -45,6 +45,8 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 - **`EpicorSvc.GetActiveRowIndex` threw a `NullReferenceException`** when no row was marked `A` or `U`, though it documented a null return. It now returns null for that case, for an empty table, and for a null argument.
 - **`RestConnect.RestInit` was public**, so a second call replaced the `HttpClient` without disposing the one in flight. It is private, and the constructor remains the only caller.
 - **`Emailer.Send(EmailSpecs)` could not be used from outside the package** — the SMTP settings it reads travel in an internal member, so no caller could supply a relay host.
+- **A successful response with an empty body was reported as a failure.** The transport tried to parse the body as JSON and returned the parse error, so an HTTP 204 — or an Epicor Function with no output parameters — looked like a failed call. An empty body on a success status is now an empty object.
+- **`FunctionSvc` sent calls it knew would be refused.** Functions are served by REST v2, which requires an API key; on a Basic-only session the call went out and came back as HTTP 403. It now fails before the request, saying which setting is missing.
 
 ## Keri.RestTransport 0.5.0 / Keri.Epicor 0.9.0 / Keri.Files 0.7.0 / Keri.Mail 0.7.0 — 2026-09-21
 
