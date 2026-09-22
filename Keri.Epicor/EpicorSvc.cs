@@ -136,7 +136,7 @@ namespace Keri.Epicor
         /// constructs is in fact an EpicorRestSessionKey, so this cast is safe
         /// and gives the Epicor service layer typed access to Company.
         /// </summary>
-        protected EpicorRestSessionKey EpicorSession
+        internal EpicorRestSessionKey EpicorSession
         {
             get { return (EpicorRestSessionKey)sesh; }
         }
@@ -147,16 +147,19 @@ namespace Keri.Epicor
         /// <c>RowMod</c> marks it as added (<c>"A"</c>) or updated
         /// (<c>"U"</c>).
         /// </summary>
-        /// <param name="items">The dataset table array to scan.</param>
-        /// <returns>The index of the active row, or null if none is marked.</returns>
+        /// <param name="items">The dataset table array to scan. Null is treated as empty.</param>
+        /// <returns>The index of the active row, or null when no row is marked.</returns>
         public int? GetActiveRowIndex(JArray items)
         {
-            var Added = items.Select((element, index) => new { element, index })
+            if (items == null)
+                return null;
+
+            var added = items.Select((element, index) => new { element, index })
             .LastOrDefault(x => {
                 return x.element.Value<string>("RowMod") == "A" || x.element.Value<string>("RowMod") == "U";
             });
 
-            return Added.index;
+            return added == null ? (int?)null : added.index;
         }
 
         /// <summary>
@@ -177,7 +180,7 @@ namespace Keri.Epicor
         /// </remarks>
         /// <param name="value">The raw value. Null is treated as empty.</param>
         /// <returns>The value with single quotes doubled, without the enclosing quotes.</returns>
-        protected internal static string EscapeODataLiteral(string value)
+        internal static string EscapeODataLiteral(string value)
         {
             return ODataFilter.Escape(value);
         }
@@ -193,7 +196,7 @@ namespace Keri.Epicor
         /// <typeparam name="T">The result's payload type.</typeparam>
         /// <param name="result">The result to mark.</param>
         /// <returns>The same result, marked when it is a failure.</returns>
-        protected internal static OperationResult<T> MarkUncommitted<T>(OperationResult<T> result)
+        internal static OperationResult<T> MarkUncommitted<T>(OperationResult<T> result)
         {
             if (result != null && result.IsFailure)
                 result.FailureStage = FailureStage.Uncommitted;
@@ -216,7 +219,7 @@ namespace Keri.Epicor
         /// <typeparam name="T">The result's payload type.</typeparam>
         /// <param name="result">The result to mark.</param>
         /// <returns>The same result, marked when it is a failure.</returns>
-        protected internal static OperationResult<T> MarkIndeterminate<T>(OperationResult<T> result)
+        internal static OperationResult<T> MarkIndeterminate<T>(OperationResult<T> result)
         {
             if (result != null && result.IsFailure)
                 result.FailureStage = FailureStage.Indeterminate;
@@ -251,7 +254,7 @@ namespace Keri.Epicor
         /// <typeparam name="T">The result's payload type.</typeparam>
         /// <param name="result">The commit call's result.</param>
         /// <returns>The same result, classified when it is a failure.</returns>
-        protected internal static OperationResult<T> ClassifyCommit<T>(OperationResult<T> result)
+        internal static OperationResult<T> ClassifyCommit<T>(OperationResult<T> result)
         {
             if (result == null || result.IsSuccess) return result;
 
@@ -299,7 +302,7 @@ namespace Keri.Epicor
         /// and the expected shape would add nothing.
         /// </param>
         /// <returns>A failure-flavored <see cref="OperationResult{T}"/>.</returns>
-        protected static OperationResult<T> StepFailure<T>(
+        internal static OperationResult<T> StepFailure<T>(
             JObject ds,
             string step,
             string expected = null)

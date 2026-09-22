@@ -27,23 +27,27 @@ namespace Keri.RestTransport
         }
 
         /// <summary>URL-encodes a string using standard .NET encoding rules.</summary>
-        public string UrlEncode(string url)
+        protected string UrlEncode(string url)
         {
             return WebUtility.UrlEncode(url);
         }
 
         /// <summary>The session this transport was initialized with.</summary>
-        public RestSessionKey sesh;
+        protected RestSessionKey sesh { get { return _sesh; } }
+
+        private RestSessionKey _sesh;
 
         private HttpClient _client;
         private bool _disposed;
 
         /// <summary>
-        /// Configures the transport for a given session. Called from the constructor.
+        /// Configures the transport for a given session. Called from the
+        /// constructor, and only from there — re-running it would replace the
+        /// HttpClient without disposing the one in flight.
         /// </summary>
-        public void RestInit(RestSessionKey seshkey)
+        private void RestInit(RestSessionKey seshkey)
         {
-            sesh = seshkey;
+            _sesh = seshkey;
 
             // No BaseAddress: RestCallAsync builds a full absolute URL via
             // BuildResourceUrl, so HttpClient has nothing to resolve against.

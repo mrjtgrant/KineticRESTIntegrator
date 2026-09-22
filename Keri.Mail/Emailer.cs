@@ -57,9 +57,31 @@ namespace Keri.Mail
         /// </para>
         /// </remarks>
         /// <param name="report">The email to send.</param>
+        /// <param name="smtp">The relay configuration. Never written to — it is
+        /// copied onto <paramref name="report"/> for this send. Null is treated
+        /// as a default <see cref="SmtpSettings"/>.</param>
         /// <returns>The same <see cref="EmailSpecs"/>, with
         /// <see cref="EmailSpecs.EmailError"/> set on failure.</returns>
-        public static EmailSpecs Send(EmailSpecs report)
+        public static EmailSpecs Send(EmailSpecs report, SmtpSettings smtp)
+        {
+            if (report == null)
+                return null;
+
+            report.smtpspecs = smtp ?? new SmtpSettings();
+            return Send(report);
+        }
+
+        /// <summary>
+        /// Sends a single email whose relay configuration is already on
+        /// <paramref name="report"/>. Internal: the SMTP settings travel in an
+        /// internal member, so callers outside the package use
+        /// <see cref="Send(EmailSpecs, SmtpSettings)"/> or
+        /// <see cref="SendReport"/>.
+        /// </summary>
+        /// <param name="report">The email to send.</param>
+        /// <returns>The same <see cref="EmailSpecs"/>, with
+        /// <see cref="EmailSpecs.EmailError"/> set on failure.</returns>
+        internal static EmailSpecs Send(EmailSpecs report)
         {
             // ----- Validation: fail fast before any message construction -----
             string validationError = ValidateSmtpConfig(report.smtpspecs);

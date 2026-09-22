@@ -22,7 +22,7 @@ namespace Keri.Epicor
     public class OperationResult<T>
     {
         /// <summary>True when the operation succeeded.</summary>
-        public bool IsSuccess { get; set; }
+        public bool IsSuccess { get; internal set; }
 
         /// <summary>Convenience inverse of <see cref="IsSuccess"/>.</summary>
         public bool IsFailure
@@ -34,16 +34,16 @@ namespace Keri.Epicor
         /// The successful payload. Only meaningful when <see cref="IsSuccess"/>
         /// is true; returns <c>default(T)</c> on failure.
         /// </summary>
-        public T Value { get; set; }
+        public T Value { get; internal set; }
 
         /// <summary>Human-readable error description. Only set on failure.</summary>
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage { get; internal set; }
 
         /// <summary>
         /// HTTP status code returned by Epicor, when applicable. Null for
         /// transport-level failures (DNS, timeout, etc.) or non-HTTP errors.
         /// </summary>
-        public int? StatusCode { get; set; }
+        public int? StatusCode { get; internal set; }
 
         /// <summary>
         /// The fully-qualified URL the transport called. Populated on success and
@@ -56,20 +56,20 @@ namespace Keri.Epicor
         /// API-key v2 OData endpoint. Useful when diagnosing a call against an
         /// environment whose configuration you did not set up yourself.
         /// </remarks>
-        public string ResourcePath { get; set; }
+        public string ResourcePath { get; internal set; }
 
         /// <summary>
         /// The raw <see cref="JObject"/> response from Epicor, when available.
         /// Escape hatch for callers who need a field the typed DTO doesn't model.
         /// May be null on transport failures.
         /// </summary>
-        public JObject RawResponse { get; set; }
+        public JObject RawResponse { get; internal set; }
 
         /// <summary>
         /// The underlying exception, for transport-level failures. Null on
         /// Epicor-reported errors (HTTP 4xx/5xx with an ErrorMessage body).
         /// </summary>
-        public Exception Exception { get; set; }
+        public Exception Exception { get; internal set; }
 
         /// <summary>
         /// The provider error type, when the response carried one. For Epicor this
@@ -78,7 +78,7 @@ namespace Keri.Epicor
         /// error body had no type. Branch on this rather than parsing
         /// <see cref="ErrorMessage"/> text.
         /// </summary>
-        public string ErrorType { get; set; }
+        public string ErrorType { get; internal set; }
 
         /// <summary>
         /// Where a failed operation stood relative to its commit — see
@@ -96,14 +96,14 @@ namespace Keri.Epicor
         /// <see cref="Keri.Epicor.FailureStage.Indeterminate"/> if you are about
         /// to retry a write.
         /// </remarks>
-        public FailureStage? FailureStage { get; set; }
+        public FailureStage? FailureStage { get; internal set; }
 
         /// <summary>
         /// The provider correlation id for the failed call, when present — Epicor's
         /// <c>CorrelationId</c>, for matching a failure to a server-side log entry.
         /// Null on success or when none was returned.
         /// </summary>
-        public string CorrelationId { get; set; }
+        public string CorrelationId { get; internal set; }
 
 
         /// <summary>Construct a successful result.</summary>

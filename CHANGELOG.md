@@ -22,14 +22,23 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 - **`FunctionSvc`**, reachable as `EpicorClient.Function`, calls Epicor Functions. `InvokeAsync` returns the output parameters as a `JObject`; `InvokeAsync<T>` maps them onto your own type. Input parameters are passed as an object whose properties are named after them. `staged: true` calls a library's unpublished version.
 - **`RestConnect.RestCallWithModifierAsync`**, a protected method that calls a path under a different URL segment than the session's default. `FunctionSvc` uses it to reach `/api/v2/efx/`.
+- **`Emailer.Send(EmailSpecs, SmtpSettings)`** — the relay configuration is supplied per call, so `EmailSpecs` can be sent directly instead of only through `SendReport`.
 
 ### Changed
 
 - **Comments and XML docs refer to Keri as an SDK throughout.**
+- **Breaking — the public surface is narrowed ahead of 1.0.** Everything below was reachable by a consumer and is not meant to be part of the API. No documented call is affected; `EpicorSvc.NewDataset()`, the services, the DTOs and the result types are unchanged.
+  - `OperationResult<T>`'s properties are now read-only outside `Keri.Epicor`. Build results with `OperationResult<T>.Success(...)` and `OperationResult<T>.Failure(...)`, which are unchanged.
+  - `EpicorSvc`'s helpers — `EpicorSession`, `EscapeODataLiteral`, `MarkUncommitted`, `MarkIndeterminate`, `ClassifyCommit`, `StepFailure` — are internal. Services are defined inside the SDK; `EpicorSvc` is not an extension point. Use `ODataFilter.Escape` (public) for literal escaping.
+  - `RestConnect.sesh` is a protected read-only property rather than a public field, `RestConnect.RestInit` is private, and `RestConnect.UrlEncode` is protected. `RestConnect` remains subclassable for non-Epicor APIs.
+  - `Emailer.Send(EmailSpecs)` is internal; the new two-argument overload replaces it.
 
 ### Fixed
 
 - **`ECOMtl`'s doc said the DTO includes installation-specific `_c` columns.** It models standard columns only; custom columns arrive in `ExtraData`, as on every DTO.
+- **`EpicorSvc.GetActiveRowIndex` threw a `NullReferenceException`** when no row was marked `A` or `U`, though it documented a null return. It now returns null for that case, for an empty table, and for a null argument.
+- **`RestConnect.RestInit` was public**, so a second call replaced the `HttpClient` without disposing the one in flight. It is private, and the constructor remains the only caller.
+- **`Emailer.Send(EmailSpecs)` could not be used from outside the package** — the SMTP settings it reads travel in an internal member, so no caller could supply a relay host.
 
 ## Keri.RestTransport 0.5.0 / Keri.Epicor 0.9.0 / Keri.Files 0.7.0 / Keri.Mail 0.7.0 — 2026-09-21
 

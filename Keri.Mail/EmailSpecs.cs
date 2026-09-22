@@ -7,7 +7,7 @@ namespace Keri.Mail
 {
     /// <summary>
     /// The data contract for a single outbound email. Populate one of these
-    /// and pass it to <see cref="Emailer.Send"/>. On failure,
+    /// and pass it to <see cref="Emailer.Send(EmailSpecs, SmtpSettings)"/>. On failure,
     /// <see cref="EmailError"/> is set on the returned instance.
     /// </summary>
     public class EmailSpecs
@@ -86,8 +86,9 @@ namespace Keri.Mail
         internal string FileName { get { return Path.GetFileName(FileAddress); } }
 
         /// <summary>
-        /// Error message, set by <see cref="Emailer.Send"/> when the
-        /// send fails or the SMTP configuration is invalid. Empty on success.
+        /// Error message, set by <see cref="Emailer.Send(EmailSpecs, SmtpSettings)"/>
+        /// when the send fails or the SMTP configuration is invalid. Empty on
+        /// success.
         /// </summary>
         public string EmailError { get; set; } = "";
 
