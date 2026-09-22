@@ -36,14 +36,14 @@ That snippet is the whole shape: construct a client, await an async call, check 
 
 ## Status
 
-**Pre-1.0 — the API may change.** Each project versions independently:
+**Release candidate — `1.0.0-rc.1`.** The public API is settled; it may still change between candidates in response to what they turn up. All four packages carry this version together, and version independently again from 1.0.0:
 
 | Project | Version |
 |---|---|
-| `Keri.Epicor` | <!--VER:Keri.Epicor-->0.9.0<!--/VER--> |
-| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->0.5.0<!--/VER--> |
-| `Keri.Files` | <!--VER:Keri.Files-->0.7.0<!--/VER--> |
-| `Keri.Mail` | <!--VER:Keri.Mail-->0.7.0<!--/VER--> |
+| `Keri.Epicor` | <!--VER:Keri.Epicor-->1.0.0-rc.1<!--/VER--> |
+| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.1<!--/VER--> |
+| `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.1<!--/VER--> |
+| `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.1<!--/VER--> |
 | `KeriConfigurator` | <!--VER:KeriConfigurator-->0.5.0<!--/VER--> |
 
 All the Epicor service wrappers are converted, and the packages are configuration-free — the Epicor connection and email settings are owned by the `KeriConfigurator` composition root, which onboards and live-tests them. An offline unit-test suite passes, and runnable example projects exist. The SDK builds clean and has been exercised against a live Epicor instance through the demo and POC projects, but it is not yet in production use anywhere and has not been independently reviewed by another team.

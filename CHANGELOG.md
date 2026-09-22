@@ -8,15 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 This project follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). Each package versions independently.
 
-- **Before 1.0.0**, a minor version (`0.X.0`) may contain breaking changes. A patch version (`0.x.Y`) contains only backward-compatible fixes.
-- **From 1.0.0**, breaking changes appear only in major versions.
+- **From 1.0.0**, the public API is stable: breaking changes appear only in a major version. A minor version (`1.X.0`) adds; a patch version (`1.x.Y`) fixes.
+- **A release candidate** (`1.0.0-rc.N`) is a prerelease. NuGet does not install it unless a consumer opts in, and its API may still change between candidates in response to what the candidates find.
+- **Before 1.0.0** — the `0.x` entries below — a minor version could break and a patch contained only fixes.
 - **Every breaking change is marked Breaking** in its entry, with a note on how to migrate.
 
-Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epicor-v0.9.0`. The `[0.x.y]` entries and `vX.Y.Z` tags further down are earlier whole-repository releases.
+Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epicor-v1.0.0-rc.1`. The `[0.x.y]` entries and `vX.Y.Z` tags further down are earlier whole-repository releases.
 
 ---
 
-## Unreleased
+## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.1 — 2026-09-22
+
+The first release candidate, and the first release published to nuget.org. All four packages move to one version together: a stable package cannot depend on a prerelease one, so they are released as a set and will version independently again afterwards.
+
+This candidate settles the public API. Everything reachable from outside the packages is meant to be there; the narrowing and the renames below are the last of that work. **Breaking:** the narrowed surface and the renamed members, both source-level — recompile against the new names. Install with the prerelease flag: `dotnet add package Keri.Epicor --prerelease`.
+
+Epicor Functions are verified against a live Kinetic tenant.
 
 ### Added
 
