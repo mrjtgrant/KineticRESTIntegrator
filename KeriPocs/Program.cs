@@ -59,6 +59,7 @@ namespace KeriPocs
                     await SafeRun("SalesOrder", () => SalesOrderPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("JobEntry",  () => JobEntryPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("MenuTree",  () => MenuTreePoc.RunAsync(client)).ConfigureAwait(false);
+                    await SafeRun("Function",  () => FunctionPoc.RunAsync(client)).ConfigureAwait(false);
                 }
 
                 Console.WriteLine();
