@@ -26,7 +26,7 @@ namespace KineticRESTIntegrator.Tests
     ///   </description></item>
     ///   <item><description>
     ///     <b>Modifier</b> — the per-service URL segment, owned by
-    ///     <c>RestAuthenticationObject.DynamicURLModifier</c>. This is the
+    ///     <c>RestAuthenticationObject.DynamicUrlModifier</c>. This is the
     ///     extension point that adapts the transport to different REST
     ///     APIs without changing the transport itself. For Epicor's v2
     ///     OData endpoint, <c>EpicorSvc</c> sets the modifier to

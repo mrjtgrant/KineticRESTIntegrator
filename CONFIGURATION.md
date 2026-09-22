@@ -172,7 +172,7 @@ var session = new EpicorRestSessionKey
     AuthObject = new RestAuthenticationObject
     {
         Username = user,
-        Userkey  = password,
+        Password = password,
         ApiKey   = ""                             // set a key here for v2 OData; independent of Basic above
     }
 };
@@ -196,7 +196,7 @@ var session = new EpicorRestSessionKey
     AuthObject = new RestAuthenticationObject
     {
         Username = portalUser.EpicorUser,
-        Userkey  = portalUser.EpicorPasskey   // held only for this request
+        Password = portalUser.EpicorPasskey   // held only for this request
     }
 };
 using (var epicor = new EpicorClient(session)) { /* serve the request */ }
@@ -240,7 +240,7 @@ public string Connect(string connectionId)
             AuthObject = new RestAuthenticationObject
             {
                 Username = username,
-                Userkey  = password,
+                Password = password,
                 ApiKey   = apiKey                 // empty/null -> Basic (v1); set -> API-key (v2 OData)
             }
         });
@@ -277,13 +277,13 @@ using Keri.Mail;
 
 var smtp = new SmtpSettings
 {
-    host = "smtp.example.com",
-    port = 587,
-    enableSsl = true,
-    username = "relay-user",
-    password = "…",
-    from = "noreply@example.com",
-    developerEmail = "you@example.com"
+    Host           = "smtp.example.com",
+    Port           = 587,
+    EnableSsl      = true,
+    Username       = "relay-user",
+    Password       = "…",
+    From           = "noreply@example.com",
+    DeveloperEmail = "you@example.com"
 };
 
 // optional: probe the relay first (connect + greeting, no send)

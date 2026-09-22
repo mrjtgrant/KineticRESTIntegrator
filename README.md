@@ -208,7 +208,7 @@ var session = new EpicorRestSessionKey
 {
     Company = "EPIC01",
     BaseUrl = "https://company-pilot.example.com/server",
-    AuthObject = new RestAuthenticationObject { Username = "...", Userkey = "..." }
+    AuthObject = new RestAuthenticationObject { Username = "...", Password = "..." }
 };
 
 using (var epicorClient = new EpicorClient(session)) { /* ... */ }

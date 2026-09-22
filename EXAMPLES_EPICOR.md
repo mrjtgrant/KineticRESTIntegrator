@@ -399,7 +399,7 @@ var session = new EpicorRestSessionKey
     AuthObject = new RestAuthenticationObject
     {
         Username = "...",
-        Userkey  = "..."
+        Password = "..."
     }
 };
 
@@ -481,12 +481,12 @@ When you go through `EpicorSvc` (or any service that derives from it), the
 constructor populates the two URL-modifier fields on the auth object for you:
 
 ```csharp
-session.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
-session.AuthObject.DynamicURLModifier_Keyed = string.Format("/api/v2/odata/{0}/", session.Company);
+session.AuthObject.DynamicUrlModifierBasic = "/api/v1/";
+session.AuthObject.DynamicUrlModifierKeyed = string.Format("/api/v2/odata/{0}/", session.Company);
 ```
 
 …and the transport picks between them automatically: when `ApiKey` is empty
-it uses `DynamicURLModifier_Basic`, otherwise `DynamicURLModifier_Keyed`. This
+it uses `DynamicUrlModifierBasic`, otherwise `DynamicUrlModifierKeyed`. This
 is the work the wrapper saves you. Going through `RestConnect` directly, you
 populate those fields yourself, and the same pick-by-`ApiKey` logic applies.
 (The generic mechanism — two URL shapes selected by `ApiKey` — is described in
@@ -494,7 +494,7 @@ populate those fields yourself, and the same pick-by-`ApiKey` logic applies.
 
 #### v1 + Basic auth
 
-`ApiKey` empty, `DynamicURLModifier_Basic` set, `Username` and `Userkey`
+`ApiKey` empty, `DynamicUrlModifierBasic` set, `Username` and `Password`
 populated. The request URL becomes `{BaseUrl}/api/v1/{path}`.
 
 ```csharp
@@ -506,9 +506,9 @@ var session = new RestSessionKey
     BaseUrl = "https://company-pilot.example.com/server",
     AuthObject  = new RestAuthenticationObject
     {
-        Username                 = "YOUR_USER",
-        Userkey                  = "YOUR_PASSWORD",
-        DynamicURLModifier_Basic = "/api/v1/"
+        Username                = "YOUR_USER",
+        Password                = "YOUR_PASSWORD",
+        DynamicUrlModifierBasic = "/api/v1/"
     }
 };
 
@@ -526,7 +526,7 @@ using (var rest = new RestConnect(session))
 
 #### v2 OData + API key
 
-`ApiKey` set, `DynamicURLModifier_Keyed` set with the company substituted in.
+`ApiKey` set, `DynamicUrlModifierKeyed` set with the company substituted in.
 The request URL becomes `{BaseUrl}/api/v2/odata/{Company}/{path}`. This is
 the path Epicor's `Company` segment lives in — going direct, you interpolate
 your company into the modifier yourself (the wrapper does the same thing,
@@ -541,8 +541,8 @@ var session = new RestSessionKey
     BaseUrl = "https://company-pilot.example.com/server",
     AuthObject  = new RestAuthenticationObject
     {
-        ApiKey                   = "YOUR_API_KEY",
-        DynamicURLModifier_Keyed = "/api/v2/odata/EPIC01/"
+        ApiKey                  = "YOUR_API_KEY",
+        DynamicUrlModifierKeyed = "/api/v2/odata/EPIC01/"
     }
 };
 

@@ -46,12 +46,12 @@ namespace KeriConfigurator
                 AuthObject = new RestAuthenticationObject
                 {
                     Username = Resolve(Properties.Settings.Default.DefaultUser),
-                    Userkey = Resolve(Properties.Settings.Default.DefaultPasskey),
+                    Password = Resolve(Properties.Settings.Default.DefaultPasskey),
                     // Empty (unset / placeholder / unset {ENV:...}) keeps the
                     // transport on Basic auth (v1); a real key switches it to
                     // API-key auth (v2 OData).
                     ApiKey = Resolve(Properties.Settings.Default.DefaultApiKey),
-                    DynamicURLModifier_Basic = "/api/v1/"
+                    DynamicUrlModifierBasic = "/api/v1/"
                 },
                 BaseUrl = Resolve(Properties.Settings.Default.DefaultBaseUrl)
             };
@@ -78,13 +78,13 @@ namespace KeriConfigurator
         {
             return new SmtpSettings
             {
-                host = Resolve(Properties.Settings.Default.SMTPHost),
-                from = Resolve(Properties.Settings.Default.FromEmail),
-                port = Properties.Settings.Default.SMTPPort,
-                enableSsl = Properties.Settings.Default.SMTPEnableSsl,
-                username = Resolve(Properties.Settings.Default.SMTPUsername),
-                password = Resolve(Properties.Settings.Default.SMTPPassword),
-                developerEmail = Resolve(Properties.Settings.Default.DeveloperEmail)
+                Host = Resolve(Properties.Settings.Default.SMTPHost),
+                From = Resolve(Properties.Settings.Default.FromEmail),
+                Port = Properties.Settings.Default.SMTPPort,
+                EnableSsl = Properties.Settings.Default.SMTPEnableSsl,
+                Username = Resolve(Properties.Settings.Default.SMTPUsername),
+                Password = Resolve(Properties.Settings.Default.SMTPPassword),
+                DeveloperEmail = Resolve(Properties.Settings.Default.DeveloperEmail)
             };
         }
 

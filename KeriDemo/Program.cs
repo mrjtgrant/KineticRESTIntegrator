@@ -372,7 +372,7 @@ namespace KeriDemo
                             // AttachmentPath attaches the file we just wrote rather
                             // than building a second copy. From and SMTPHost are
                             // intentionally left unset so they resolve from the
-                            // supplied SmtpSettings (smtp.from / smtp.host); only
+                            // supplied SmtpSettings (smtp.From / smtp.Host); only
                             // the recipient, which is per-run, is supplied here.
                             var mail = new MailSpec
                             {

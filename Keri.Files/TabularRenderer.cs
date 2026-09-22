@@ -38,7 +38,7 @@ namespace Keri.Files
         /// The column set is resolved once, from the first row: each column
         /// carries the source property name used to read its cells and the
         /// header text that gets printed. A column whose
-        /// <paramref name="HeaderMap"/> entry is
+        /// <paramref name="headerMap"/> entry is
         /// <see cref="RemoveColumnToken"/> is dropped from both, matching the
         /// Excel writer. Cells are then read <em>by name</em>, so a row that is
         /// missing a property emits an empty field rather than shifting every
@@ -61,13 +61,13 @@ namespace Keri.Files
         /// </para>
         /// </remarks>
         /// <param name="data">The rows to render.</param>
-        /// <param name="HeaderMap">Optional column rename / remove map.</param>
+        /// <param name="headerMap">Optional column rename / remove map.</param>
         /// <param name="neutralizeFormulas">False to emit values exactly as they
         /// came out of the source. Appropriate when the file is parsed by a
         /// machine rather than opened by a person.</param>
         public static string ConvertJArrayToCSV(
             JArray data,
-            Dictionary<string, string> HeaderMap = null,
+            Dictionary<string, string> headerMap = null,
             bool neutralizeFormulas = true)
         {
             if (data == null || data.Count == 0) return string.Empty;
@@ -78,7 +78,7 @@ namespace Keri.Files
             foreach (JProperty prop in JObject.FromObject(data[0]).Properties())
             {
                 string mapped;
-                if (HeaderMap != null && HeaderMap.TryGetValue(prop.Name, out mapped))
+                if (headerMap != null && headerMap.TryGetValue(prop.Name, out mapped))
                 {
                     if (mapped == RemoveColumnToken) continue;
                     headers.Add(mapped);
@@ -157,17 +157,17 @@ namespace Keri.Files
 
         /// <summary>
         /// Returns the property names of <paramref name="line"/>, renamed through
-        /// <paramref name="HeaderMap"/> where it has an entry.
+        /// <paramref name="headerMap"/> where it has an entry.
         /// </summary>
         /// <param name="line">A row whose property names become column headers.</param>
-        /// <param name="HeaderMap">Optional map of property name to display name.</param>
+        /// <param name="headerMap">Optional map of property name to display name.</param>
         /// <returns>The header names, in property order.</returns>
-        public static List<string> GetPropertyNames(JObject line, Dictionary<string, string> HeaderMap = null)
+        internal static List<string> GetPropertyNames(JObject line, Dictionary<string, string> headerMap = null)
         {
             List<string> headers = (from row in line.Properties() select row.Name).ToList();
-            if (HeaderMap != null)
+            if (headerMap != null)
             {
-                headers = headers.Select(x => (HeaderMap.ContainsKey(x) ? HeaderMap[x] : x)).ToList();
+                headers = headers.Select(x => (headerMap.ContainsKey(x) ? headerMap[x] : x)).ToList();
             }
             return headers;
         }

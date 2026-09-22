@@ -32,6 +32,12 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
   - `EpicorSvc`'s helpers — `EpicorSession`, `EscapeODataLiteral`, `MarkUncommitted`, `MarkIndeterminate`, `ClassifyCommit`, `StepFailure` — are internal. Services are defined inside the SDK; `EpicorSvc` is not an extension point. Use `ODataFilter.Escape` (public) for literal escaping.
   - `RestConnect.sesh` is a protected read-only property rather than a public field, `RestConnect.RestInit` is private, and `RestConnect.UrlEncode` is protected. `RestConnect` remains subclassable for non-Epicor APIs.
   - `Emailer.Send(EmailSpecs)` is internal; the new two-argument overload replaces it.
+- **Breaking — public names follow .NET conventions.** Source-breaking only; recompile against the new names.
+  - `SmtpSettings`: `host`, `from`, `port`, `enableSsl`, `username`, `password`, `developerEmail` are now `Host`, `From`, `Port`, `EnableSsl`, `Username`, `Password`, `DeveloperEmail`.
+  - `RestAuthenticationObject.Userkey` is now `Password`; `DynamicURLModifier_Basic` and `DynamicURLModifier_Keyed` are now `DynamicUrlModifierBasic` and `DynamicUrlModifierKeyed`.
+  - Parameter names, which callers can use as named arguments: `ExcelWriter.CreateExcelFileFromDT(dt, filePath, sheetName, headerMap)`, and `headerMap` on the `TabularRenderer` methods.
+  - `Emailer` and `ExcelWriter` are static classes. Both held only static members; neither can be instantiated now.
+  - `ExcelReader.GetAlphaFromStr`, `TabularRenderer.GetPropertyNames`, `EpicorSvc.FormatJObjectResults` and `Emailer.emailbody` are internal. They are implementation details of the methods that use them.
 
 ### Fixed
 

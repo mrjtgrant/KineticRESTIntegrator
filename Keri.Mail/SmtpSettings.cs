@@ -16,28 +16,28 @@ namespace Keri.Mail
     public class SmtpSettings
     {
         /// <summary>SMTP relay host or IP.</summary>
-        public string host { get; set; } = null;
+        public string Host { get; set; } = null;
 
         /// <summary>The <c>From:</c> address.</summary>
-        public string from { get; set; } = null;
+        public string From { get; set; } = null;
 
         /// <summary>SMTP port. Default 25.</summary>
-        public int port { get; set; } = 25;
+        public int Port { get; set; } = 25;
 
         /// <summary>When true, the connection uses STARTTLS.</summary>
-        public bool enableSsl { get; set; } = false;
+        public bool EnableSsl { get; set; } = false;
 
         /// <summary>SMTP authentication username. Empty for anonymous relays.</summary>
-        public string username { get; set; } = "";
+        public string Username { get; set; } = "";
 
         /// <summary>SMTP authentication password.</summary>
-        public string password { get; set; } = "";
+        public string Password { get; set; } = "";
 
         /// <summary>
         /// Default recipient (the developer address): the sole recipient when
         /// <see cref="EmailSpecs.IsDebug"/> is true, and a standing BCC on normal
         /// sends. Empty disables it.
         /// </summary>
-        public string developerEmail { get; set; } = "";
+        public string DeveloperEmail { get; set; } = "";
     }
 }

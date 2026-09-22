@@ -57,7 +57,7 @@ var session = new RestSessionKey
     AuthObject  = new RestAuthenticationObject
     {
         Username = "api-user",
-        Userkey  = "api-password"
+        Password = "api-password"
     }
 };
 
@@ -185,7 +185,7 @@ open.
 
 Bearer and Basic both use the `Authorization` header, so they cannot be
 combined: when `BearerToken` is set, it takes the `Authorization` header and
-Basic credentials (`Username` / `Userkey`) are not sent. An API key — a
+Basic credentials (`Username` / `Password`) are not sent. An API key — a
 separate header — may still be sent alongside a bearer token if the API expects
 both.
 
@@ -198,8 +198,8 @@ how you authenticate** — a Basic-auth path and a separate key-auth path. The
 transport supports this with two URL-modifier fields on the auth object, and
 picks between them automatically based on whether an `ApiKey` is set:
 
-- **Basic auth** (`ApiKey` empty) → `DynamicURLModifier_Basic`, e.g. `{BaseUrl}/api/basic/{service-path}`
-- **API-key auth** (`ApiKey` set) → `DynamicURLModifier_Keyed`, e.g. `{BaseUrl}/api/v0XX/{service-path}`
+- **Basic auth** (`ApiKey` empty) → `DynamicUrlModifierBasic`, e.g. `{BaseUrl}/api/basic/{service-path}`
+- **API-key auth** (`ApiKey` set) → `DynamicUrlModifierKeyed`, e.g. `{BaseUrl}/api/v0XX/{service-path}`
 
 Set the two modifiers on the `RestAuthenticationObject`. On each call the
 transport joins the chosen modifier between `BaseUrl` and the path you pass to
@@ -212,15 +212,15 @@ actually uses.
 using Keri.RestTransport;
 using Newtonsoft.Json.Linq;
 
-// Basic-auth path: ApiKey empty, _Basic set, Username/Userkey supplied.
+// Basic-auth path: ApiKey empty, _Basic set, Username/Password supplied.
 var basicSession = new RestSessionKey
 {
     BaseUrl = "https://api.example.com",
     AuthObject = new RestAuthenticationObject
     {
-        Username                 = "api-user",
-        Userkey                  = "api-password",
-        DynamicURLModifier_Basic = "/api/basic/"
+        Username                = "api-user",
+        Password                = "api-password",
+        DynamicUrlModifierBasic = "/api/basic/"
     }
 };
 // request URL: https://api.example.com/api/basic/{path}
@@ -238,8 +238,8 @@ var keyedSession = new RestSessionKey
     BaseUrl = "https://api.example.com",
     AuthObject = new RestAuthenticationObject
     {
-        ApiKey                   = "your-api-key-value",
-        DynamicURLModifier_Keyed = "/api/v0XX/"
+        ApiKey                  = "your-api-key-value",
+        DynamicUrlModifierKeyed = "/api/v0XX/"
     }
 };
 // request URL: https://api.example.com/api/v0XX/{path}

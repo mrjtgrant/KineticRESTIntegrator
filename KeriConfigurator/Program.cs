@@ -125,7 +125,7 @@ namespace KeriConfigurator
             bool connOk = await RunConnectionTestAsync(session);
 
             SmtpSettings smtp = KeriConfig.BuildSmtpSettings();
-            if (NotPlaceholder(smtp.host))
+            if (NotPlaceholder(smtp.Host))
                 RunSmtpTest(smtp);
             else
                 Console.WriteLine("(No SMTP host configured - skipping the SMTP test.)");
@@ -309,9 +309,9 @@ namespace KeriConfigurator
                 AuthObject = new RestAuthenticationObject
                 {
                     Username = KeriConfig.Resolve(c.User),
-                    Userkey = KeriConfig.Resolve(c.Pass),
+                    Password = KeriConfig.Resolve(c.Pass),
                     ApiKey = KeriConfig.Resolve(c.ApiKey),
-                    DynamicURLModifier_Basic = "/api/v1/"
+                    DynamicUrlModifierBasic = "/api/v1/"
                 },
                 BaseUrl = KeriConfig.Resolve(c.BaseUrl)
             };
@@ -321,13 +321,13 @@ namespace KeriConfigurator
         {
             return new SmtpSettings
             {
-                host = KeriConfig.Resolve(m.Host),
-                from = KeriConfig.Resolve(m.From),
-                port = m.Port,
-                enableSsl = m.EnableSsl,
-                username = KeriConfig.Resolve(m.Username),
-                password = KeriConfig.Resolve(m.Password),
-                developerEmail = KeriConfig.Resolve(m.Developer)
+                Host = KeriConfig.Resolve(m.Host),
+                From = KeriConfig.Resolve(m.From),
+                Port = m.Port,
+                EnableSsl = m.EnableSsl,
+                Username = KeriConfig.Resolve(m.Username),
+                Password = KeriConfig.Resolve(m.Password),
+                DeveloperEmail = KeriConfig.Resolve(m.Developer)
             };
         }
 
@@ -353,7 +353,7 @@ namespace KeriConfigurator
 
         private static void RunSmtpTest(SmtpSettings smtp)
         {
-            Console.WriteLine("Testing SMTP relay (connecting to " + smtp.host + ":" + smtp.port + ")...");
+            Console.WriteLine("Testing SMTP relay (connecting to " + smtp.Host + ":" + smtp.Port + ")...");
             string err = Emailer.TestConnection(smtp);
             if (err == null)
                 Console.WriteLine("  SUCCESS - SMTP relay reachable.");

@@ -116,9 +116,9 @@ These were decided deliberately. A change proposal that reverses one needs to ar
 
 **Session types.** `RestSessionKey` lives in the transport and is vendor-neutral. `EpicorRestSessionKey` (in `Keri.Epicor.Dtos`) is the Epicor subclass and the one that carries `Company`. Programmatic constructors throughout `Keri.Epicor` take `EpicorRestSessionKey`; a non-Epicor REST API uses the bare `RestSessionKey`.
 
-**Authentication — read this carefully, it gets misdescribed.** The transport is permissive: it sends whatever credentials the `RestAuthenticationObject` carries. `Username`/`Userkey` produce a Basic `Authorization` header; `ApiKey` produces a separate header (default `X-API-Key`); `BearerToken` takes the `Authorization` header instead of Basic. They are independent knobs.
+**Authentication — read this carefully, it gets misdescribed.** The transport is permissive: it sends whatever credentials the `RestAuthenticationObject` carries. `Username`/`Password` produce a Basic `Authorization` header; `ApiKey` produces a separate header (default `X-API-Key`); `BearerToken` takes the `Authorization` header instead of Basic. They are independent knobs.
 
-**Epicor specifically** requires `Username` and `Userkey` *always*. Its v1 endpoints (URL shape `/api/v1/`) take Basic only; its v2 OData endpoints (`/api/v2/odata/{Company}/`) take Basic **plus** the API key — both, not either. Setting `ApiKey` is what selects the v2 URL shape; it does not "switch from Basic to API-key auth." Don't reason about this from analogy to other REST APIs.
+**Epicor specifically** requires `Username` and `Password` *always*. Its v1 endpoints (URL shape `/api/v1/`) take Basic only; its v2 OData endpoints (`/api/v2/odata/{Company}/`) take Basic **plus** the API key — both, not either. Setting `ApiKey` is what selects the v2 URL shape; it does not "switch from Basic to API-key auth." Don't reason about this from analogy to other REST APIs.
 
 **`UDTableSvc` is the only naming exception**, because it parameterizes over Epicor's 30-plus per-table UD services rather than wrapping each as its own class. Don't generalize the pattern to a new service without discussion.
 

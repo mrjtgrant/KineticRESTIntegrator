@@ -38,7 +38,7 @@ namespace Keri.Mail
     /// STARTTLS only, so port 465 (implicit TLS) is rejected on every target.
     /// Use STARTTLS, typically on port 587.
     /// </remarks>
-    public class Emailer
+    public static class Emailer
     {
         /// <summary>
         /// Sends a single email described by <paramref name="report"/>.
@@ -91,14 +91,14 @@ namespace Keri.Mail
                 return report;
             }
 
-            string fromAddress = report.EmailFrom ?? report.smtpspecs.from;
+            string fromAddress = report.EmailFrom ?? report.smtpspecs.From;
 
 #if NETFRAMEWORK
             // ===== .NET Framework path: System.Net.Mail =====
             try
             {
                 using (var message = new MailMessage())
-                using (var client = new SmtpClient(report.smtpspecs.host, report.smtpspecs.port))
+                using (var client = new SmtpClient(report.smtpspecs.Host, report.smtpspecs.Port))
                 {
                     message.From = new MailAddress(fromAddress);
 
@@ -139,13 +139,13 @@ namespace Keri.Mail
                         message.Attachments.Add(new Attachment(report.FileAddress));
                     }
 
-                    client.EnableSsl = report.smtpspecs.enableSsl;
+                    client.EnableSsl = report.smtpspecs.EnableSsl;
 
-                    if (!String.IsNullOrEmpty(report.smtpspecs.username))
+                    if (!String.IsNullOrEmpty(report.smtpspecs.Username))
                     {
                         client.Credentials = new NetworkCredential(
-                            report.smtpspecs.username,
-                            report.smtpspecs.password);
+                            report.smtpspecs.Username,
+                            report.smtpspecs.Password);
                     }
 
                     client.Send(message);
@@ -203,17 +203,17 @@ namespace Keri.Mail
                 // and port 465 with EnableSsl, so the choice is binary: plain or
                 // STARTTLS. The same rules apply on .NET Framework via System.Net.Mail's
                 // EnableSsl flag.
-                SecureSocketOptions socketOptions = report.smtpspecs.enableSsl
+                SecureSocketOptions socketOptions = report.smtpspecs.EnableSsl
                     ? SecureSocketOptions.StartTls
                     : SecureSocketOptions.None;
 
                 using (var client = new SmtpClient())
                 {
-                    client.Connect(report.smtpspecs.host, report.smtpspecs.port, socketOptions);
+                    client.Connect(report.smtpspecs.Host, report.smtpspecs.Port, socketOptions);
 
-                    if (!String.IsNullOrEmpty(report.smtpspecs.username))
+                    if (!String.IsNullOrEmpty(report.smtpspecs.Username))
                     {
-                        client.Authenticate(report.smtpspecs.username, report.smtpspecs.password);
+                        client.Authenticate(report.smtpspecs.Username, report.smtpspecs.Password);
                     }
 
                     client.Send(message);
@@ -276,15 +276,15 @@ namespace Keri.Mail
                 // a per-message host override back into their instance would
                 // repoint every later call. Copy, then override the copy.
                 SmtpSettings effectiveSmtp = ResolveSmtp(smtp, mail.SMTPHost);
-                result.Step("Setup: relay " + (effectiveSmtp.host ?? "(none configured)"));
+                result.Step("Setup: relay " + (effectiveSmtp.Host ?? "(none configured)"));
 
                 var specs = new EmailSpecs
                 {
                     EmailSubject = mail.Subject,
                     EmailBody = mail.Body,
                     smtpspecs = effectiveSmtp,
-                    EmailRecipientDefault = new List<string> { effectiveSmtp.developerEmail },
-                    EmailFrom = effectiveSmtp.from
+                    EmailRecipientDefault = new List<string> { effectiveSmtp.DeveloperEmail },
+                    EmailFrom = effectiveSmtp.From
                 };
 
                 // ---- Attachment ---------------------------------------------
@@ -365,7 +365,7 @@ namespace Keri.Mail
         /// </summary>
         public static bool IsConfigured(SmtpSettings smtp)
         {
-            string host = smtp?.host;
+            string host = smtp?.Host;
             return !String.IsNullOrWhiteSpace(host)
                 && !host.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
         }
@@ -392,17 +392,17 @@ namespace Keri.Mail
 
             if (configured != null)
             {
-                copy.host = configured.host;
-                copy.from = configured.from;
-                copy.port = configured.port;
-                copy.enableSsl = configured.enableSsl;
-                copy.username = configured.username;
-                copy.password = configured.password;
-                copy.developerEmail = configured.developerEmail;
+                copy.Host = configured.Host;
+                copy.From = configured.From;
+                copy.Port = configured.Port;
+                copy.EnableSsl = configured.EnableSsl;
+                copy.Username = configured.Username;
+                copy.Password = configured.Password;
+                copy.DeveloperEmail = configured.DeveloperEmail;
             }
 
             if (!String.IsNullOrEmpty(perMessageHost))
-                copy.host = perMessageHost;
+                copy.Host = perMessageHost;
 
             return copy;
         }
@@ -423,7 +423,7 @@ namespace Keri.Mail
             if (validationError != null)
                 return validationError;
 
-            if (string.IsNullOrWhiteSpace(smtp.host))
+            if (string.IsNullOrWhiteSpace(smtp.Host))
                 return "No SMTP host is configured.";
 
             const int timeoutMs = 10000;
@@ -431,13 +431,13 @@ namespace Keri.Mail
             {
                 using (var tcp = new System.Net.Sockets.TcpClient())
                 {
-                    var connect = tcp.ConnectAsync(smtp.host, smtp.port);
+                    var connect = tcp.ConnectAsync(smtp.Host, smtp.Port);
                     if (!connect.Wait(timeoutMs))
-                        return "Timed out connecting to " + smtp.host + ":" + smtp.port
+                        return "Timed out connecting to " + smtp.Host + ":" + smtp.Port
                              + " (after " + (timeoutMs / 1000) + "s). Check the host, port, and firewall.";
                     if (connect.IsFaulted)
                         return (connect.Exception?.GetBaseException() ?? (Exception)connect.Exception)?.Message
-                             ?? ("Could not connect to " + smtp.host + ":" + smtp.port + ".");
+                             ?? ("Could not connect to " + smtp.Host + ":" + smtp.Port + ".");
 
                     // Read the SMTP greeting (a line starting with "220") to confirm
                     // something is actually speaking SMTP, not just an open port.
@@ -487,7 +487,7 @@ namespace Keri.Mail
         {
             // Port 25 is the legacy plain-text relay convention. Servers on port 25
             // typically don't speak STARTTLS, and never do implicit TLS.
-            if (smtp.port == 25 && smtp.enableSsl)
+            if (smtp.Port == 25 && smtp.EnableSsl)
             {
                 return "SMTP misconfiguration: port 25 with SMTPEnableSsl=true is not a "
                      + "standard setup. Port 25 is the legacy plain-text relay convention. "
@@ -498,7 +498,7 @@ namespace Keri.Mail
             // complexity (System.Net.Mail can't do it at all). The library exposes
             // STARTTLS as its single TLS path — modern, well-supported, identical
             // behavior across both target frameworks.
-            if (smtp.port == 465 && smtp.enableSsl)
+            if (smtp.Port == 465 && smtp.EnableSsl)
             {
                 return "SMTP misconfiguration: port 465 (implicit TLS) is not supported "
                      + "by this library. Use port 587 with STARTTLS instead.";
@@ -532,7 +532,7 @@ namespace Keri.Mail
         /// </remarks>
         /// <param name="mailitems">The email being sent.</param>
         /// <returns>The HTML body.</returns>
-        public static string emailbody(EmailSpecs mailitems)
+        internal static string emailbody(EmailSpecs mailitems)
         {
             StringBuilder body = new StringBuilder();
             body.AppendFormat("<html><body>");

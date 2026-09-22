@@ -11,7 +11,7 @@ namespace Keri.Files
     /// Writes in-memory data (<see cref="DataTable"/>) to Excel <c>.xlsx</c>
     /// files using ClosedXML. The read counterpart is <see cref="ExcelReader"/>.
     /// </summary>
-    public class ExcelWriter
+    public static class ExcelWriter
     {
         // Excel sheet name limit per the OOXML spec.
         private const int MaxExcelSheetNameLength = 31;
@@ -53,18 +53,18 @@ namespace Keri.Files
         /// </para>
         /// <list type="bullet">
         ///   <item><description>
-        ///   If <paramref name="SheetName"/> is supplied, it is used directly
+        ///   If <paramref name="sheetName"/> is supplied, it is used directly
         ///   after normalization (illegal characters <c>: \ / ? * [ ]</c>
         ///   substituted with underscores, truncated to 31 characters).
         ///   </description></item>
         ///   <item><description>
-        ///   If <paramref name="SheetName"/> is null or empty, the sheet name
+        ///   If <paramref name="sheetName"/> is null or empty, the sheet name
         ///   is derived from the filename (without extension) of
-        ///   <paramref name="Fileaddress"/>, normalized the same way.
+        ///   <paramref name="filePath"/>, normalized the same way.
         ///   </description></item>
         /// </list>
         /// <para>
-        /// The <paramref name="HeaderMap"/> renames or removes columns before
+        /// The <paramref name="headerMap"/> renames or removes columns before
         /// writing — keys are the source <see cref="DataTable"/> column
         /// names; values are the destination display names, or
         /// <see cref="TabularRenderer.RemoveColumnToken"/> to drop the column
@@ -72,29 +72,29 @@ namespace Keri.Files
         /// </para>
         /// </remarks>
         /// <param name="dt">The data to write. Mutated in place when
-        /// <paramref name="HeaderMap"/> renames or removes columns.</param>
-        /// <param name="Fileaddress">The full output path for the
+        /// <paramref name="headerMap"/> renames or removes columns.</param>
+        /// <param name="filePath">The full output path for the
         /// <c>.xlsx</c> file.</param>
-        /// <param name="SheetName">Optional explicit sheet name. When null,
+        /// <param name="sheetName">Optional explicit sheet name. When null,
         /// derived from the filename. See remarks for normalization rules.</param>
-        /// <param name="HeaderMap">Optional column rename / remove map.</param>
-        /// <returns>The output file path (same as <paramref name="Fileaddress"/>).</returns>
-        public static string CreateExcelFileFromDT(DataTable dt, string Fileaddress, string SheetName = null, Dictionary<string,string> HeaderMap = null) 
+        /// <param name="headerMap">Optional column rename / remove map.</param>
+        /// <returns>The output file path (same as <paramref name="filePath"/>).</returns>
+        public static string CreateExcelFileFromDT(DataTable dt, string filePath, string sheetName = null, Dictionary<string,string> headerMap = null) 
         {
             var wb = new XLWorkbook();
 
             // Sheet name: caller-supplied if given, otherwise derived from
             // the filename. Either way, normalized to Excel's 31-char limit
             // with illegal characters substituted.
-            string candidateSheetName = !string.IsNullOrEmpty(SheetName)
-                ? SheetName
-                : Path.GetFileNameWithoutExtension(Fileaddress);
+            string candidateSheetName = !string.IsNullOrEmpty(sheetName)
+                ? sheetName
+                : Path.GetFileNameWithoutExtension(filePath);
 
             dt.TableName = NormalizeSheetName(candidateSheetName);
 
-            if (HeaderMap != null)
+            if (headerMap != null)
             {
-                foreach (var map in HeaderMap)
+                foreach (var map in headerMap)
                 {
                     if (dt.Columns[map.Key] != null)
                     {
@@ -114,9 +114,9 @@ namespace Keri.Files
                 column.AdjustToContents();
             }
 
-            wb.SaveAs(Fileaddress);
+            wb.SaveAs(filePath);
 
-            return Fileaddress;
+            return filePath;
         }
     }
 }

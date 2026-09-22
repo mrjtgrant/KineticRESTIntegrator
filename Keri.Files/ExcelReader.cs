@@ -18,7 +18,7 @@ namespace Keri.Files
         /// sanitize worksheet header cells into safe <see cref="DataTable"/>
         /// column names.
         /// </summary>
-        public string GetAlphaFromStr(string str)
+        internal string GetAlphaFromStr(string str)
         {
             return Regex.Replace(str, @"[^A-Za-z0-9]", "");
         }

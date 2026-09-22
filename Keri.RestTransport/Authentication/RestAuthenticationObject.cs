@@ -15,13 +15,13 @@ namespace Keri.RestTransport
         /// e.g. "api/v1/" for Basic auth, "api/v2/odata/{Company}/" for API-key.
         /// Selected automatically based on <see cref="KeyType"/>.
         /// </summary>
-        internal string DynamicURLModifier => KeyType == "basic" ? DynamicURLModifier_Basic : DynamicURLModifier_Keyed;
+        internal string DynamicUrlModifier => KeyType == "basic" ? DynamicUrlModifierBasic : DynamicUrlModifierKeyed;
 
         /// <summary>Username for Basic authentication.</summary>
         public string Username { get; set; }
 
         /// <summary>Password (or token) for Basic authentication.</summary>
-        public string Userkey { get; set; }
+        public string Password { get; set; }
 
         /// <summary>API key for v2 OData / X-API-Key authentication. Leave empty to use Basic.</summary>
         public string ApiKey { get; set; } = "";
@@ -51,9 +51,9 @@ namespace Keri.RestTransport
         public string BearerToken { get; set; } = "";
 
         /// <summary>URL modifier used when <see cref="KeyType"/> is "basic". Typically "api/v1/".</summary>
-        public string DynamicURLModifier_Basic { get; set; } = "";
+        public string DynamicUrlModifierBasic { get; set; } = "";
 
         /// <summary>URL modifier used when <see cref="KeyType"/> is "apikey". Typically "api/v2/odata/{Company}/".</summary>
-        public string DynamicURLModifier_Keyed { get; set; } = "";
+        public string DynamicUrlModifierKeyed { get; set; } = "";
     }
 }

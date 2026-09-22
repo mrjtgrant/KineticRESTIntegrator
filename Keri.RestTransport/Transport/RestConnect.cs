@@ -65,9 +65,9 @@ namespace Keri.RestTransport
                     new AuthenticationHeaderValue("Bearer", sesh.AuthObject.BearerToken);
             }
             else if (!string.IsNullOrEmpty(sesh.AuthObject.Username) &&
-                     !string.IsNullOrEmpty(sesh.AuthObject.Userkey))
+                     !string.IsNullOrEmpty(sesh.AuthObject.Password))
             {
-                var raw = $"{sesh.AuthObject.Username}:{sesh.AuthObject.Userkey}";
+                var raw = $"{sesh.AuthObject.Username}:{sesh.AuthObject.Password}";
                 var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
                 _client.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Basic", creds);
@@ -243,7 +243,7 @@ namespace Keri.RestTransport
             JObject payload = null,
             CancellationToken ct = default)
         {
-            return RestCallWithModifierAsync(sesh.AuthObject.DynamicURLModifier, svc, payload, ct);
+            return RestCallWithModifierAsync(sesh.AuthObject.DynamicUrlModifier, svc, payload, ct);
         }
 
         /// <summary>

@@ -126,8 +126,8 @@ namespace Keri.Epicor
         /// <param name="session">A fully-configured session.</param>
         public EpicorSvc(EpicorRestSessionKey session) : base(session)
         {
-            session.AuthObject.DynamicURLModifier_Basic = "/api/v1/";
-            session.AuthObject.DynamicURLModifier_Keyed = string.Format("/api/v2/odata/{0}/", session.Company);
+            session.AuthObject.DynamicUrlModifierBasic = "/api/v1/";
+            session.AuthObject.DynamicUrlModifierKeyed = string.Format("/api/v2/odata/{0}/", session.Company);
         }
 
         /// <summary>
@@ -360,7 +360,7 @@ namespace Keri.Epicor
         /// </summary>
         /// <param name="obj">The object to format.</param>
         /// <returns>A formatted string, or empty if <paramref name="obj"/> is null.</returns>
-        public static string FormatJObjectResults(JObject obj)
+        internal static string FormatJObjectResults(JObject obj)
         {
             if (obj == null)
                 return string.Empty;

@@ -14,13 +14,13 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             return new SmtpSettings
             {
-                host = "relay.internal.example",
-                from = "reports@example.test",
-                port = 587,
-                enableSsl = true,
-                username = "svc_reports",
-                password = "not-a-real-secret",
-                developerEmail = "dev@example.test"
+                Host = "relay.internal.example",
+                From = "reports@example.test",
+                Port = 587,
+                EnableSsl = true,
+                Username = "svc_reports",
+                Password = "not-a-real-secret",
+                DeveloperEmail = "dev@example.test"
             };
         }
 
@@ -39,7 +39,7 @@ namespace KineticRESTIntegrator.Tests.Files
 
             Emailer.ResolveSmtp(caller, "other-relay.example");
 
-            Assert.Equal("relay.internal.example", caller.host);
+            Assert.Equal("relay.internal.example", caller.Host);
         }
 
         [Fact]
@@ -47,7 +47,7 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             SmtpSettings resolved = Emailer.ResolveSmtp(Configured(), "other-relay.example");
 
-            Assert.Equal("other-relay.example", resolved.host);
+            Assert.Equal("other-relay.example", resolved.Host);
         }
 
         [Fact]
@@ -58,8 +58,8 @@ namespace KineticRESTIntegrator.Tests.Files
             SmtpSettings first = Emailer.ResolveSmtp(caller, "one-off.example");
             SmtpSettings second = Emailer.ResolveSmtp(caller, null);
 
-            Assert.Equal("one-off.example", first.host);
-            Assert.Equal("relay.internal.example", second.host);
+            Assert.Equal("one-off.example", first.Host);
+            Assert.Equal("relay.internal.example", second.Host);
         }
 
         // -----------------------------------------------------------------
@@ -79,13 +79,13 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             SmtpSettings resolved = Emailer.ResolveSmtp(Configured(), null);
 
-            Assert.Equal("relay.internal.example", resolved.host);
-            Assert.Equal("reports@example.test", resolved.from);
-            Assert.Equal(587, resolved.port);
-            Assert.True(resolved.enableSsl);
-            Assert.Equal("svc_reports", resolved.username);
-            Assert.Equal("not-a-real-secret", resolved.password);
-            Assert.Equal("dev@example.test", resolved.developerEmail);
+            Assert.Equal("relay.internal.example", resolved.Host);
+            Assert.Equal("reports@example.test", resolved.From);
+            Assert.Equal(587, resolved.Port);
+            Assert.True(resolved.EnableSsl);
+            Assert.Equal("svc_reports", resolved.Username);
+            Assert.Equal("not-a-real-secret", resolved.Password);
+            Assert.Equal("dev@example.test", resolved.DeveloperEmail);
         }
 
         [Theory]
@@ -95,7 +95,7 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             SmtpSettings resolved = Emailer.ResolveSmtp(Configured(), hostOverride);
 
-            Assert.Equal("relay.internal.example", resolved.host);
+            Assert.Equal("relay.internal.example", resolved.Host);
         }
 
         [Fact]
@@ -103,10 +103,10 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             SmtpSettings resolved = Emailer.ResolveSmtp(null, null);
 
-            Assert.Null(resolved.host);
-            Assert.Equal(25, resolved.port);
-            Assert.False(resolved.enableSsl);
-            Assert.Equal(string.Empty, resolved.username);
+            Assert.Null(resolved.Host);
+            Assert.Equal(25, resolved.Port);
+            Assert.False(resolved.EnableSsl);
+            Assert.Equal(string.Empty, resolved.Username);
         }
 
         [Fact]
@@ -114,7 +114,7 @@ namespace KineticRESTIntegrator.Tests.Files
         {
             SmtpSettings resolved = Emailer.ResolveSmtp(null, "relay.example");
 
-            Assert.Equal("relay.example", resolved.host);
+            Assert.Equal("relay.example", resolved.Host);
         }
     }
 }
