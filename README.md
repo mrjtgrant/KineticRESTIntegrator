@@ -94,6 +94,33 @@ The sample projects (`KeriDemo`, `KeriPocs`) target `net48`, `KeriConfigurator` 
 
 ---
 
+## Install
+
+The packages are on [nuget.org](https://www.nuget.org/profiles/mrjtgrant). Add the ones you need — `Keri.Epicor` brings `Keri.RestTransport` with it.
+
+```
+dotnet add package Keri.Epicor --prerelease
+dotnet add package Keri.Files --prerelease    # Excel / CSV output
+dotnet add package Keri.Mail --prerelease     # SMTP delivery
+```
+
+The current release is a **release candidate**, so the `--prerelease` flag is required — NuGet will not resolve a prerelease without it. In Visual Studio's NuGet UI, tick **Include prerelease**. When 1.0.0 ships, the flag is no longer needed.
+
+| Package | What it gives you |
+|---|---|
+| [`Keri.Epicor`](https://www.nuget.org/packages/Keri.Epicor) | The BO services, BAQs, Epicor Functions, DTOs, and the `EpicorClient` facade. |
+| [`Keri.RestTransport`](https://www.nuget.org/packages/Keri.RestTransport) | The REST client underneath. Comes in with `Keri.Epicor`; reference it directly to call a non-Epicor API. |
+| [`Keri.Files`](https://www.nuget.org/packages/Keri.Files) | Excel and CSV rendering, and writing them to disk. |
+| [`Keri.Mail`](https://www.nuget.org/packages/Keri.Mail) | SMTP delivery of a built report or an existing file. |
+
+Every package targets .NET Framework 4.6.1+ (4.6.2+ for `Keri.Mail`), .NET Standard 2.0 and .NET 8.0, so NuGet picks the right build for your project. Nothing else is needed — the packages read no configuration of their own; you build a session in code and pass it in. See [Using the SDK](#using-the-sdk) for the first call, and [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md) for supplying credentials.
+
+Debug symbols ship as `.snupkg` packages, so stepping into Keri's source from your debugger works once you enable the NuGet symbol server.
+
+**Cloning this repo instead?** The Quick start below builds the solution and its sample projects from source. That's for working *on* Keri, or for running the demo and POCs against your own server — you don't need it to use the packages.
+
+---
+
 ## Quick start
 
 ### Prerequisites
@@ -355,7 +382,9 @@ For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EP
 
 ## Integrating Keri into a consumer project
 
-Keri does not publish to NuGet. Consumers reference Keri's DLLs directly from a local `lib/` folder. Which DLLs you need depends on what you use: `Keri.Epicor.dll` and `Keri.RestTransport.dll` for the ERP surface, `Keri.Files.dll` if you produce spreadsheets or CSVs, and `Keri.Mail.dll` only if you send them — plus Keri's transitive dependencies, which Keri's build output ships alongside its own DLLs.
+**Normally, reference the NuGet packages** — see [Install](#install). NuGet resolves the right build for your target framework and restores the dependency tree for you.
+
+The rest of this section is for the case where NuGet is not an option: a BPM or Epicor Function assembly that you copy onto the server, or a build without access to nuget.org. There, consumers reference Keri's DLLs directly from a local `lib/` folder. Which DLLs you need depends on what you use: `Keri.Epicor.dll` and `Keri.RestTransport.dll` for the ERP surface, `Keri.Files.dll` if you produce spreadsheets or CSVs, and `Keri.Mail.dll` only if you send them — plus Keri's transitive dependencies, which Keri's build output ships alongside its own DLLs.
 
 In your consumer project's `.csproj`:
 
@@ -388,7 +417,7 @@ When you build the consumer, MSBuild copies the referenced DLLs into the consume
 
 ## Dependency management
 
-Keri ships its full dependency tree alongside its own DLLs. The consumer references Keri; Keri brings in `Newtonsoft.Json`, `ClosedXML`, `MailKit`, and everything else those packages need. The consumer does not need to know what's in the tree.
+With a `PackageReference`, NuGet handles this: Keri's packages declare their dependencies and restore brings them in at the versions Keri was built against. The section below is about the DLL-copying case, where Keri ships its full dependency tree alongside its own DLLs. The consumer references Keri; Keri brings in `Newtonsoft.Json`, `ClosedXML`, `MailKit`, and everything else those packages need. The consumer does not need to know what's in the tree.
 
 This makes consumer setup trivial — reference the DLLs you use, done — at the cost of locking the consumer to whatever versions Keri ships. If the consumer adds its own NuGet reference to a package Keri also uses, the two versions compete at build time. The NuGet-resolved version usually wins for the consumer's bin folder, and Keri's calls into that package then fail at runtime with a `MissingMethodException`, `FileLoadException`, or `TypeLoadException` referencing the package.
 
