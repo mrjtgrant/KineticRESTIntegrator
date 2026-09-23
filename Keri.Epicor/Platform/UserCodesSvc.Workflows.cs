@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -48,17 +49,25 @@ namespace Keri.Epicor
                 useLongDesc = true;
             }
 
+            var steps = new List<string>();
+            steps.Add($"Read the codes for type '{codeTypeID}'");
+
             var codes = await GetByIDAsync(codeTypeID, ct).ConfigureAwait(false);
             if (codes.IsFailure)
                 return OperationResult<string>.Failure(
-                    codes.ErrorMessage, codes.StatusCode, codes.ResourcePath, codes.RawResponse);
+                    codes.ErrorMessage, codes.StatusCode, codes.ResourcePath, codes.RawResponse)
+                    .WithSteps(steps).Step("FAILED: the code type could not be read");
 
             var match = codes.Value.FirstOrDefault(c => c.CodeID == codeID);
             string value = match == null
                 ? null
                 : (useLongDesc ? match.LongDesc : match.CodeDesc);
 
-            return OperationResult<string>.Success(value);
+            steps.Add(match == null
+                ? $"No code '{codeID}' in type '{codeTypeID}'"
+                : $"Matched code '{codeID}', returning the {(useLongDesc ? "long" : "short")} description");
+
+            return OperationResult<string>.Success(value).WithSteps(steps);
         }
     }
 }

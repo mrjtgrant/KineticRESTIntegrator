@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -48,16 +49,23 @@ namespace Keri.Epicor
             // GetNewProjectAsync is now public and returns OperationResult —
             // propagate transport/Epicor failures up immediately, re-typed to
             // the orchestrator's typed return.
+            var steps = new List<string>();
+            steps.Add("Get a new Project row");
+
             var newProject = await GetNewProjectAsync(ct).ConfigureAwait(false);
             if (newProject.IsFailure)
                 return MarkUncommitted(OperationResult<Project>.Failure(
                     newProject.ErrorMessage, newProject.StatusCode,
-                    newProject.ResourcePath, newProject.RawResponse));
+                    newProject.ResourcePath, newProject.RawResponse))
+                    .WithSteps(steps).Step("FAILED: GetNewProject");
             JObject ds = newProject.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
             // is surfaced via ds["ErrorMessage"] when Epicor reports one.
+            steps.Add($"Set the project ID to '{ProjectID}'");
             ds = await OnChangeProjectIDAsync(ds, ProjectID, ct).ConfigureAwait(false);
+
+            steps.Add($"Set the start date to {StartDate:d}");
             ds = await OnChangeStartDateAsync(ds, StartDate, ct).ConfigureAwait(false);
 
             // A duplicate or malformed ProjectID leaves an error shape with no
@@ -67,12 +75,14 @@ namespace Keri.Epicor
                 : ds["ds"]["Project"] as JArray;
             if (projectRows == null || projectRows.Count == 0)
                 return MarkUncommitted(StepFailure<Project>(
-                    ds, "OnChangeProjectID/OnChangeStartDate", "a ds.Project row"));
+                    ds, "OnChangeProjectID/OnChangeStartDate", "a ds.Project row"))
+                    .WithSteps(steps).Step("FAILED: no Project row came back — the ProjectID may already exist");
 
             JObject projectRow = projectRows[0] as JObject;
             if (projectRow == null)
                 return MarkUncommitted(StepFailure<Project>(
-                    ds, "OnChangeProjectID", "a ds.Project row object"));
+                    ds, "OnChangeProjectID", "a ds.Project row object"))
+                    .WithSteps(steps).Step("FAILED: the Project row was not an object");
 
             projectRow["Description"] = Description;
 
@@ -80,11 +90,15 @@ namespace Keri.Epicor
             // failure (re-typed), then extract the typed Project from the
             // saved dataset.
             // Update is the commit boundary for this orchestrator.
+            steps.Add("Stamp the description");
+            steps.Add("COMMIT: Update");
+
             var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
             if (updated.IsFailure)
                 return ClassifyCommit(OperationResult<Project>.Failure(
                     updated.ErrorMessage, updated.StatusCode,
-                    updated.ResourcePath, updated.RawResponse));
+                    updated.ResourcePath, updated.RawResponse))
+                    .WithSteps(steps).Step("FAILED: Update");
 
             // ExtractDto returns default(T) when the table is missing, which
             // would hand the caller a null Project inside a success.
@@ -93,9 +107,11 @@ namespace Keri.Epicor
                 // Update succeeded, so a project was created — this failure is
                 // past the commit. Indeterminate, not Uncommitted.
                 return MarkIndeterminate(StepFailure<Project>(
-                    updated.Value, "Update", "a ds.Project row in the saved dataset"));
+                    updated.Value, "Update", "a ds.Project row in the saved dataset"))
+                    .WithSteps(steps).Step("FAILED after the commit: the saved dataset has no Project row");
 
-            return OperationResult<Project>.Success(created);
+            return OperationResult<Project>.Success(created)
+                .WithSteps(steps).Step($"Project '{ProjectID}' created");
         }
     }
 }

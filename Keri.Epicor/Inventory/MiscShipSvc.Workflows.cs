@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -31,15 +32,21 @@ namespace Keri.Epicor
         {
             // GetNewMscShpDtAsync is now public and returns OperationResult —
             // propagate transport/Epicor failures up immediately.
+            var steps = new List<string>();
+            steps.Add($"Get a new MscShpDt row for pack {line.PackNum}");
+
             var newLine = await GetNewMscShpDtAsync(line.PackNum, ct).ConfigureAwait(false);
             if (newLine.IsFailure)
-                return newLine;
+                return newLine.WithSteps(steps).Step("FAILED: GetNewMscShpDt");
             JObject ds = newLine.Value;
 
             // OnChange* mutators are internal process steps — raw JObject in,
             // raw JObject out. Errors surface via ds["ErrorMessage"] when
             // Epicor reports one.
+            steps.Add($"Set the part number to '{line.PartNum}'");
             ds = await OnChangePartNumAsync(ds, line.PartNum, ct).ConfigureAwait(false);
+
+            steps.Add($"Set the quantity to {line.Quantity}");
             ds = await OnChangeQuantityAsync(ds, line.Quantity, ct).ConfigureAwait(false);
 
             ds["ds"]["MscShpDt"][0]["LineDesc"] = line.LineDesc;
@@ -47,7 +54,11 @@ namespace Keri.Epicor
 
             // UpdateAsync is now public and returns OperationResult — its
             // value is the orchestrator's terminal value, so return directly.
-            return await UpdateAsync(ds, ct).ConfigureAwait(false);
+            steps.Add("Stamp LineDesc and ShipComment");
+            steps.Add("COMMIT: Update");
+
+            var saved = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            return saved.WithSteps(steps).Step(saved.IsSuccess ? "Line added" : "FAILED: Update");
         }
     }
 }

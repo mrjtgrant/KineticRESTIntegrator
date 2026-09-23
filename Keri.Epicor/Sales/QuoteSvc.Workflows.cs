@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -43,18 +44,23 @@ namespace Keri.Epicor
         {
             // GetNewQuoteHedAsync is now public and returns OperationResult —
             // propagate transport/Epicor failures up immediately.
+            var steps = new List<string>();
+            steps.Add("Get a new QuoteHed row");
+
             var newQuote = await GetNewQuoteHedAsync(ct).ConfigureAwait(false);
             if (newQuote.IsFailure)
-                return MarkUncommitted(newQuote);
+                return MarkUncommitted(newQuote).WithSteps(steps).Step("FAILED: GetNewQuoteHed");
             JObject ds = newQuote.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
             // is surfaced via ds["ErrorMessage"] when Epicor reports one.
+            steps.Add($"Set the customer to '{quote.CustomerCustID}'");
             ds = await QuoteHedCustomerCustIDAfterChangeAsync(ds, quote.CustomerCustID, ct).ConfigureAwait(false);
 
             // Pass the caller's ship-by / need-by dates through for validation.
             // Each is validated only if non-null; for a typical new quote both
             // are null and there is nothing to validate.
+            steps.Add("Validate the ship-by and need-by dates");
             ds = await ValidateShippingDateBeforeUpdateAsync(
                 ds, quote.ShipByDate, quote.NeedByDate, ct).ConfigureAwait(false);
 
@@ -67,12 +73,14 @@ namespace Keri.Epicor
                 return MarkUncommitted(StepFailure<JObject>(
                     ds,
                     "QuoteHedCustomerCustIDAfterChange/ValidateShippingDateBeforeUpdate",
-                    "a ds.QuoteHed row"));
+                    "a ds.QuoteHed row"))
+                    .WithSteps(steps).Step("FAILED: no QuoteHed row came back — check the customer and the dates");
 
             JObject hedRow = hedRows[0] as JObject;
             if (hedRow == null)
                 return MarkUncommitted(StepFailure<JObject>(
-                    ds, "QuoteHedCustomerCustIDAfterChange", "a ds.QuoteHed row object"));
+                    ds, "QuoteHedCustomerCustIDAfterChange", "a ds.QuoteHed row object"))
+                    .WithSteps(steps).Step("FAILED: the QuoteHed row was not an object");
 
             hedRow["PONum"] = quote.PONum;
             hedRow["OTSAddress1"] = quote.OTSAddress1;
@@ -85,9 +93,12 @@ namespace Keri.Epicor
             // failure; on success, build the orchestrator's custom result
             // shape ({QuoteNum, QuoteObj}) from the saved dataset.
             // Update is the commit boundary for this orchestrator.
+            steps.Add("Stamp the PO number and one-time ship-to address");
+            steps.Add("COMMIT: Update");
+
             var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
             if (updated.IsFailure)
-                return ClassifyCommit(updated);
+                return ClassifyCommit(updated).WithSteps(steps).Step("FAILED: Update");
 
             JObject saved = updated.Value;
 
@@ -103,14 +114,16 @@ namespace Keri.Epicor
                 // the far side of the commit. Indeterminate, not Uncommitted:
                 // retrying would create a second quote.
                 return MarkIndeterminate(StepFailure<JObject>(
-                    saved, "Update", "QuoteNum on the saved ds.QuoteHed row"));
+                    saved, "Update", "QuoteNum on the saved ds.QuoteHed row"))
+                    .WithSteps(steps).Step("FAILED after the commit: the saved dataset has no QuoteNum");
 
             JObject result = new JObject {
                 new JProperty("QuoteNum", quoteNum.ToString()),
                 new JProperty("QuoteObj", saved)
             };
 
-            return OperationResult<JObject>.Success(result);
+            return OperationResult<JObject>.Success(result)
+                .WithSteps(steps).Step($"Quote {quoteNum} created");
         }
     }
 }

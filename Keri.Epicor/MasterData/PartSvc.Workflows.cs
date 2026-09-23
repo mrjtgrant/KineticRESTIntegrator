@@ -61,23 +61,34 @@ namespace Keri.Epicor
             CancellationToken ct = default)
         {
             // Fetch a fresh part-revision template via the public BO wrapper.
+            var steps = new List<string>();
+            steps.Add($"Get a new PartRev template for part '{partNum}'");
+
             var newRev = await GetNewPartRevAsync(partNum, ct).ConfigureAwait(false);
             if (newRev.IsFailure)
-                return newRev;
+                return newRev.WithSteps(steps).Step("FAILED: GetNewPartRev");
             JObject ds = newRev.Value;
 
             // Stamp the caller's revision number and alternate method onto
             // the active row of the returned template.
             int? activeRowIndex = GetActiveRowIndex(JArray.FromObject(ds["ds"]["PartRev"]));
-            if (activeRowIndex != null)
+            if (activeRowIndex == null)
             {
+                steps.Add("No added or updated PartRev row to stamp — sending the template as returned");
+            }
+            else
+            {
+                steps.Add($"Stamp revision '{revisionNum}' onto the active PartRev row");
                 ds["ds"]["PartRev"][activeRowIndex]["RevisionNum"] = revisionNum;
                 ds["ds"]["PartRev"][activeRowIndex]["RevShortDesc"] = revisionNum;
                 ds["ds"]["PartRev"][activeRowIndex]["AltMethod"] = altMethod;
             }
 
             // Persist via the public Update wrapper.
-            return await UpdateAsync(ds, ct).ConfigureAwait(false);
+            steps.Add("COMMIT: Update");
+
+            var saved = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            return saved.WithSteps(steps).Step(saved.IsSuccess ? "Revision added" : "FAILED: Update");
         }
     }
 }

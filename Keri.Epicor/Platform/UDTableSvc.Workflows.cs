@@ -65,14 +65,21 @@ namespace Keri.Epicor
         {
             if (row == null) throw new ArgumentNullException(nameof(row));
 
+            var steps = new List<string>();
+
             // Delete is destructive and routed through DeleteByID: a "D" through
             // Update does not take on UD tables. Requires an explicit table.
             if (mode == Dtos.RowMod.Delete)
             {
                 string deleteTable = ResolveTableForDelete(UDTable, nameof(UDTable));
-                return await DeleteByIDAsync(
+                steps.Add($"COMMIT: DeleteByID on '{deleteTable}'");
+
+                var deletedRow = await DeleteByIDAsync(
                     row.Key1, row.Key2, row.Key3, row.Key4, row.Key5,
                     deleteTable, ct).ConfigureAwait(false);
+
+                return deletedRow.WithSteps(steps)
+                    .Step(deletedRow.IsSuccess ? "Row deleted" : "FAILED: DeleteByID");
             }
 
             string table = ResolveTable(UDTable);
@@ -87,31 +94,38 @@ namespace Keri.Epicor
             if (mode == Dtos.RowMod.Add)
             {
                 add = true;
+                steps.Add($"Get a new row template from '{table}'");
                 baseResult = await GetaNewDatasetAsync(table, ct).ConfigureAwait(false);
             }
             else if (mode == Dtos.RowMod.Update)
             {
                 add = false;
+                steps.Add($"Read the existing row from '{table}'");
                 baseResult = await GetByIDDatasetAsync(row, table, ct).ConfigureAwait(false);
             }
             else // Automatic: update if the row exists, otherwise add.
             {
+                steps.Add($"Look for an existing row in '{table}'");
                 var existing = await GetByIDDatasetAsync(row, table, ct).ConfigureAwait(false);
-                if (existing.IsFailure) return existing;
+                if (existing.IsFailure)
+                    return existing.WithSteps(steps).Step("FAILED: the lookup");
 
                 if (HasRow(existing.Value, table))
                 {
                     add = false;
                     baseResult = existing;
+                    steps.Add("The row exists — updating it");
                 }
                 else
                 {
                     add = true;
+                    steps.Add("No such row — adding one");
                     baseResult = await GetaNewDatasetAsync(table, ct).ConfigureAwait(false);
                 }
             }
 
-            if (baseResult.IsFailure) return baseResult;
+            if (baseResult.IsFailure)
+                return baseResult.WithSteps(steps).Step("FAILED: the base dataset could not be read");
 
             JObject ds = baseResult.Value;
             JArray rows = ds["ds"]?[table] as JArray;
@@ -119,7 +133,8 @@ namespace Keri.Epicor
                 return OperationResult<JObject>.Failure(
                     String.Format("{0} for {1} returned no row to populate.",
                         add ? "GetaNew" : "GetByID", table),
-                    baseResult.StatusCode, baseResult.ResourcePath, baseResult.RawResponse);
+                    baseResult.StatusCode, baseResult.ResourcePath, baseResult.RawResponse)
+                    .WithSteps(steps).Step("FAILED: the base dataset has no row to populate");
 
             JObject targetRow = (JObject)rows[0];
 
@@ -140,9 +155,15 @@ namespace Keri.Epicor
             // read off the row.
             targetRow["RowMod"] = add ? "A" : "U";
 
+            steps.Add($"Copy the row's set columns onto the {(add ? "new" : "existing")} row");
+            steps.Add($"COMMIT: Update on '{table}' with RowMod '{(add ? "A" : "U")}'");
+
             string svc = String.Format("Ice.BO.{0}Svc/Update", table);
             JObject response = await RestCallAsync(svc, ds, ct).ConfigureAwait(false);
-            return response.ToOperationResult(r => r);
+
+            var saved = response.ToOperationResult(r => r);
+            return saved.WithSteps(steps)
+                .Step(saved.IsSuccess ? (add ? "Row added" : "Row updated") : "FAILED: Update");
         }
 
         // True when the normalized dataset carries at least one row for the table.
@@ -253,10 +274,16 @@ namespace Keri.Epicor
                     "pass confirmTruncate: true to proceed.",
                     nameof(confirmTruncate));
 
+            var steps = new List<string>();
+            steps.Add($"Read every row in '{table}' (up to 5000)");
+
             var all = await QueryAsync(null, table, 5000, ct).ConfigureAwait(false);
             if (all.IsFailure)
                 return OperationResult<int>.Failure(
-                    all.ErrorMessage, all.StatusCode, all.ResourcePath, all.RawResponse);
+                    all.ErrorMessage, all.StatusCode, all.ResourcePath, all.RawResponse)
+                    .WithSteps(steps).Step("FAILED: the rows could not be read");
+
+            steps.Add($"COMMIT: deleting {all.Value.Count} row(s), one call each");
 
             int deleted = 0;
             foreach (var ud in all.Value)
@@ -274,12 +301,15 @@ namespace Keri.Epicor
                         String.Format(
                             "Truncate of '{0}' stopped after {1} row(s) deleted: {2}",
                             table, deleted, removed.ErrorMessage),
-                        removed.StatusCode, removed.ResourcePath, removed.RawResponse);
+                        removed.StatusCode, removed.ResourcePath, removed.RawResponse)
+                        .WithSteps(steps)
+                        .Step($"FAILED part-way: {deleted} row(s) were deleted and cannot be undone");
 
                 deleted++;
             }
 
-            return OperationResult<int>.Success(deleted);
+            return OperationResult<int>.Success(deleted)
+                .WithSteps(steps).Step($"{deleted} row(s) deleted");
         }
     }
 }

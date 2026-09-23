@@ -92,15 +92,20 @@ namespace Keri.Epicor
 
             // GetNewInventoryTransferAsync is now a public OperationResult-returning
             // method — propagate transport/Epicor failures up immediately.
+            var steps = new List<string>();
+            steps.Add($"Start a transfer of {invTrans.TransferQty} x '{invTrans.PartNum}' from '{invTrans.FromBinNum}' to '{invTrans.ToBinNum}'");
+
             var newTransfer = await GetNewInventoryTransferAsync(invTrans, ct).ConfigureAwait(false);
             if (newTransfer.IsFailure)
-                return MarkUncommitted(newTransfer);
+                return MarkUncommitted(newTransfer)
+                    .WithSteps(steps).Step("FAILED: GetNewInventoryTransfer");
             JObject ds = newTransfer.Value;
 
             // Internal process steps below return raw JObject. Each read of the
             // returned dataset is guarded: a failed step returns an error shape
             // with no rows, and reaching into it unguarded would throw away the
             // ErrorMessage that explains the failure.
+            steps.Add("Validate the part number");
             ds = await ValidatePartNumAsync(ds, invTrans, ct).ConfigureAwait(false);
 
             JToken trackFlag = ds == null ? null : ds["ds"] == null ? null
@@ -109,15 +114,18 @@ namespace Keri.Epicor
                 : ds["ds"]["InvTrans"][0]["TrackSerialnumbers"];
             if (trackFlag == null)
                 return MarkUncommitted(StepFailure<JObject>(
-                    ds, "ValidatePartNum", "TrackSerialnumbers on the ds.InvTrans row"));
+                    ds, "ValidatePartNum", "TrackSerialnumbers on the ds.InvTrans row"))
+                    .WithSteps(steps).Step("FAILED: ValidatePartNum returned no usable InvTrans row");
 
             bool trackSerialNumbers = Convert.ToBoolean(trackFlag);
 
             if (trackSerialNumbers)
             {
+                steps.Add("The part is serial-tracked — selecting serial numbers");
                 var tracked = await TrackSerialNumberAsync(ds, invTrans, ct).ConfigureAwait(false);
                 if (tracked.IsFailure)
-                    return MarkUncommitted(tracked);
+                    return MarkUncommitted(tracked)
+                        .WithSteps(steps).Step("FAILED: serial-number selection");
 
                 JObject trackedSerialNums = tracked.Value;
 
@@ -128,10 +136,12 @@ namespace Keri.Epicor
                 JToken missing = trackedSerialNums["MissingSerialNumbers"];
                 if (missing == null)
                     return MarkUncommitted(StepFailure<JObject>(
-                        trackedSerialNums, "ProcessSelectedSerialNumbers", "MissingSerialNumbers"));
+                        trackedSerialNums, "ProcessSelectedSerialNumbers", "MissingSerialNumbers"))
+                        .WithSteps(steps).Step("FAILED: no MissingSerialNumbers in the response");
 
                 if (missing.ToString().Length > 0)
-                    return OperationResult<JObject>.Success(trackedSerialNums);
+                    return OperationResult<JObject>.Success(trackedSerialNums)
+                        .WithSteps(steps).Step("Stopped before any move: serial numbers are missing");
 
                 // Serial tracking requires exactly one serial number per item.
                 invTrans.TransferQty = 1;
@@ -143,27 +153,36 @@ namespace Keri.Epicor
                     return MarkUncommitted(StepFailure<JObject>(
                         trackedSerialNums,
                         "ProcessSelectedSerialNumbers",
-                        "ds1.SelectedSerialNumbers"));
+                        "ds1.SelectedSerialNumbers"))
+                        .WithSteps(steps).Step("FAILED: no SelectedSerialNumbers in the response");
 
                 JArray selectedSerialNumbers = JArray.FromObject(selected);
                 if (selectedSerialNumbers.Count == 0)
                     return MarkUncommitted(StepFailure<JObject>(
                         trackedSerialNums,
                         "ProcessSelectedSerialNumbers",
-                        "at least one selected serial number"));
+                        "at least one selected serial number"))
+                        .WithSteps(steps).Step("FAILED: no serial number was selected");
 
                 selectedSerialNumbers[0]["RowMod"] = "A";
 
                 ds["ds"]["SelectedSerialNumbers"] = selectedSerialNumbers;
             }
 
+            steps.Add($"Set the transfer quantity to {invTrans.TransferQty}");
             ds = await ChangeTransferQtyRowModAsync(ds, invTrans, ct).ConfigureAwait(false);
 
             if (invTrans.FromBinNum != "Main")
+            {
+                steps.Add($"Set the from-bin to '{invTrans.FromBinNum}'");
                 ds = await ChangeFromBinRowModAsync(ds, invTrans, ct).ConfigureAwait(false);
+            }
 
             if (invTrans.ToBinNum != "Main")
+            {
+                steps.Add($"Set the to-bin to '{invTrans.ToBinNum}'");
                 ds = await ChangeToBinRowModAsync(ds, invTrans, ct).ConfigureAwait(false);
+            }
 
             // An Epicor error at this point is a failure, not a success carrying
             // an error. Note this guard only ever sees the most recent step —
@@ -172,36 +191,45 @@ namespace Keri.Epicor
             // one checkpoint to catch all of them.
             if (ds != null && ds["ErrorMessage"] != null)
                 return MarkUncommitted(
-                    StepFailure<JObject>(ds, "The bin/quantity change steps"));
+                    StepFailure<JObject>(ds, "The bin/quantity change steps"))
+                    .WithSteps(steps).Step("FAILED: a bin or quantity change was rejected");
 
+            steps.Add("Run the master bin tests");
             ds = await MasterInventoryBinTestsAsync(ds, invTrans, ct).ConfigureAwait(false);
 
             JToken neqQtyAction = ds == null ? null : ds["pcNeqQtyAction"];
             if (neqQtyAction == null)
                 return MarkUncommitted(
-                    StepFailure<JObject>(ds, "MasterInventoryBinTests", "pcNeqQtyAction"));
+                    StepFailure<JObject>(ds, "MasterInventoryBinTests", "pcNeqQtyAction"))
+                    .WithSteps(steps).Step("FAILED: the bin tests returned no pcNeqQtyAction");
 
             // Master bin tests can block the transfer — surface that dataset
             // as-is so the caller can read pcNeqQtyMessage. This is a business
             // rejection, not an error.
             if (neqQtyAction.ToString().ToLower() == "stop")
-                return OperationResult<JObject>.Success(ds);
+                return OperationResult<JObject>.Success(ds)
+                    .WithSteps(steps).Step("Stopped before any move: the bin tests said stop — read pcNeqQtyMessage");
 
+            steps.Add("Pre-commit the transfer");
             ds = await PreCommitTransferAsync(ds, ct).ConfigureAwait(false);
 
             // Pre-commit is the last point at which nothing has been written.
             // Stop here rather than committing on a dataset Epicor rejected.
             if (ds == null || ds["ErrorMessage"] != null)
                 // Pre-commit is still preparation — nothing has moved yet.
-                return MarkUncommitted(StepFailure<JObject>(ds, "PreCommitTransfer"));
+                return MarkUncommitted(StepFailure<JObject>(ds, "PreCommitTransfer"))
+                    .WithSteps(steps).Step("FAILED at pre-commit: nothing has moved");
 
+            steps.Add("COMMIT: CommitTransferAndUpdateHistory");
             ds = await CommitTransferAndUpdateHistoryAsync(ds, ct).ConfigureAwait(false);
 
             // The terminal call and the commit boundary: nothing downstream
             // exists to trip on a bad shape, so evaluate it explicitly instead
             // of asserting success, then classify which side of the write a
             // failure landed on.
-            return ClassifyCommit(ds.ToOperationResult(r => r));
+            var moved = ClassifyCommit(ds.ToOperationResult(r => r));
+            return moved.WithSteps(steps)
+                .Step(moved.IsSuccess ? "Stock moved" : "FAILED at the commit");
         }
 
         /// <summary>

@@ -44,17 +44,22 @@ namespace Keri.Epicor
             string[] srcparse = firstMtl.PartNum.Split(' ');
             string sourcepart = srcparse[0];
 
+            var steps = new List<string>();
+            steps.Add($"Read the source BOM for part '{sourcepart}'");
+
             var bom = await BomSearchSvc
                 .GetDatasetForTreeWithPartValidationAsync(sourcepart, ct)
                 .ConfigureAwait(false);
             if (bom.IsFailure)
                 return OperationResult<JObject>.Failure(
-                    bom.ErrorMessage, bom.StatusCode, bom.ResourcePath, bom.RawResponse);
+                    bom.ErrorMessage, bom.StatusCode, bom.ResourcePath, bom.RawResponse)
+                    .WithSteps(steps).Step("FAILED: the source BOM could not be read");
 
+            steps.Add($"Get a new ECOOpr row in group '{firstMtl.GroupID}'");
             var newOprResult = await GetNewECOOprAsync(
                 firstMtl.GroupID, firstMtl.PartNum, firstMtl.RevisionNum, ct).ConfigureAwait(false);
             if (newOprResult.IsFailure)
-                return newOprResult;
+                return newOprResult.WithSteps(steps).Step("FAILED: GetNewECOOpr");
             JObject ds = newOprResult.Value;
 
             JArray newOprs = new JArray();
@@ -84,7 +89,12 @@ namespace Keri.Epicor
 
             ds["ds"]["ECOOpr"] = newOprs;
 
-            return await UpdateAsync(ds, ct).ConfigureAwait(false);
+            steps.Add($"Copy {newOprs.Count} operation(s) from the source BOM");
+            steps.Add("COMMIT: Update");
+
+            var savedOprs = await UpdateAsync(ds, ct).ConfigureAwait(false);
+            return savedOprs.WithSteps(steps)
+                .Step(savedOprs.IsSuccess ? "Operations added" : "FAILED: Update");
         }
 
         /// <summary>
@@ -147,16 +157,21 @@ namespace Keri.Epicor
             var firstMtl = mtls.First();
 
             // Look up the group. If it does not exist, generate it.
+            var steps = new List<string>();
+            steps.Add($"Look for ECO group '{firstMtl.GroupID}'");
+
             var groupResult = await GetByIDAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
             JObject ds;
             if (groupResult.IsFailure)
             {
+                steps.Add("COMMIT: the group does not exist — creating it");
                 // Group does not exist — try to create it.
                 // GenerateGroup writes — it is a commit in its own right, so a
                 // failure here is classified rather than assumed uncommitted.
                 var generated = await GenerateGroupAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
                 if (generated.IsFailure)
-                    return ClassifyCommit(generated);
+                    return ClassifyCommit(generated)
+                        .WithSteps(steps).Step("FAILED: the group could not be created");
                 ds = generated.Value;
             }
             else
@@ -167,12 +182,15 @@ namespace Keri.Epicor
             // Check out the parent part to the group. CheckOutAsync is an
             // internal process step — its raw response is not inspected here;
             // failure to lock will surface on the subsequent calls.
+            steps.Add($"Check out part '{firstMtl.PartNum}' rev '{firstMtl.RevisionNum}' to the group");
             await CheckOutAsync(
                 firstMtl.GroupID, firstMtl.PartNum, firstMtl.RevisionNum, ct).ConfigureAwait(false);
 
+            steps.Add("Read the group and revision");
             var groupAndRev = await GetECOGroupAndECORevAsync(firstMtl.GroupID, ct).ConfigureAwait(false);
             if (groupAndRev.IsFailure)
-                return MarkUncommitted(groupAndRev);
+                return MarkUncommitted(groupAndRev)
+                    .WithSteps(steps).Step("FAILED: the group and revision could not be read");
             ds = groupAndRev.Value;
 
             // Holds the first failure seen while populating rows. Replaces a
@@ -205,6 +223,7 @@ namespace Keri.Epicor
                     // We have the group locked — record the error, stop adding,
                     // and proceed to unlock so we do not leave the group locked.
                     failure = newMtlResult;
+                    steps.Add($"FAILED while adding material '{mtl.MtlPartNum}' — stopping and unlocking the group");
                     break;
                 }
                 ds = newMtlResult.Value;
@@ -269,10 +288,15 @@ namespace Keri.Epicor
             // GenerateGroup step above. Retrying is safe: the flow adopts an
             // existing group rather than creating a second one.
             if (failure != null)
-                return MarkUncommitted(failure);
+                return MarkUncommitted(failure).WithSteps(steps);
 
             // Update is the commit boundary for the materials.
-            return ClassifyCommit(await UpdateAsync(ds, ct).ConfigureAwait(false));
+            steps.Add($"Populate {mtls.Count} material row(s)");
+            steps.Add("COMMIT: Update");
+
+            var savedMtls = ClassifyCommit(await UpdateAsync(ds, ct).ConfigureAwait(false));
+            return savedMtls.WithSteps(steps)
+                .Step(savedMtls.IsSuccess ? "Materials added" : "FAILED: Update");
         }
 
         /// <summary>
