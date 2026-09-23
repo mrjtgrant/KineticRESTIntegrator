@@ -92,9 +92,7 @@
        to test it would widen the shipping API; driving it through SendReport
        would mean attempting a real send, which the suite will not do. -->
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>KineticRESTIntegrator.Tests</_Parameter1>
-    </AssemblyAttribute>
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" Key="$(KeriPublicKey)" />
   </ItemGroup>
 
   <!-- Reference assemblies for the .NET Framework targets. Without this, the

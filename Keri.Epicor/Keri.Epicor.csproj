@@ -78,7 +78,7 @@
        (notably UDTableMapping<T>) without making them part of the
        public API. Mirrors the same configuration in Keri.RestTransport.csproj. -->
   <ItemGroup>
-    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" />
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" Key="$(KeriPublicKey)" />
   </ItemGroup>
 
   <!-- Microsoft.CSharp is required on .NET Framework to enable `dynamic`

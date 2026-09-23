@@ -1,0 +1,36 @@
+<Project>
+
+  <!-- Applies to every project in the repository. MSBuild imports the nearest
+       Directory.Build.props above each project automatically; no project needs
+       to reference it.
+
+       STRONG NAMING. A strong-named assembly can only reference other
+       strong-named assemblies. Unsigned, Keri is unusable by any consumer whose
+       own build signs its output — which some enterprise and ERP-adjacent
+       pipelines do by default. All four packages are signed together for the
+       same reason: a signed assembly cannot reference an unsigned sibling.
+
+       This is an identity mechanism, not a security one. A signature can be
+       stripped and replaced by anyone, and .NET does not treat it as a trust
+       boundary; it exists so the runtime can tell one Keri.Epicor from another.
+       The key is therefore committed to the repository, so that any contributor
+       — and CI — can build it. Do not treat Keri.snk as a secret, and do not
+       reuse it for anything that is one.
+
+       Adding or removing a strong name changes assembly identity and breaks
+       binding for every existing consumer, which is why this landed before
+       1.0.0 rather than after. -->
+
+  <!-- The public half of Keri.snk, needed by every InternalsVisibleTo
+       declaration in a signed assembly (CS1726). Derived from the key with
+       System.Reflection.StrongNameKeyPair; regenerate it the same way if the
+       key is ever replaced, and remember that replacing the key changes
+       assembly identity for every consumer. -->
+
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+    <KeriPublicKey>00240000048000001401000006020000002400005253413100080000010001007188a5771d277fc26b63fdf6c10197daea688d912768066a9479731f508315861cf03b325a69247d6c8af7741ada5ead2842a8148107d0352c2aab4032894661f8084eb828b6b3d6c3e324a1d3d12adddb254f936ef94b14552878b34b2100d55d1ab4014929b78d7c41d9d51c1629430d99a2519d14658e62a367cccd4b054494880a60023e8b0656ce2018b5ad60197fb3d7cbabc6d57f02f7e4bd7bcad0bdf1711a161c33944666cc434efb5fc89148201d315bfea830cdd05e5db9933643ba6d760baeb428e0658e930d75771c88b7769772a4e90a1e7630b0e61499b7b28f12caa3f75961c7008cbe5f5c899b6bda0fafe77f4287d06b0331a2c4c2d2c3</KeriPublicKey>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)Keri.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+
+</Project>

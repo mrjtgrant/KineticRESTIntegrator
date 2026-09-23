@@ -102,12 +102,8 @@
        the construction API public purely to cross an assembly boundary inside
        one product would widen the shipping surface for no consumer benefit. -->
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>Keri.Mail</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>KineticRESTIntegrator.Tests</_Parameter1>
-    </AssemblyAttribute>
+    <InternalsVisibleTo Include="Keri.Mail" Key="$(KeriPublicKey)" />
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" Key="$(KeriPublicKey)" />
   </ItemGroup>
 
   <!-- Reference assemblies for the .NET Framework targets. Without this, the

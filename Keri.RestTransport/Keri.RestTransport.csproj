@@ -65,7 +65,7 @@
 
   <!-- Expose internal members (e.g. ResolveApiKeyHeaderName) to the test project. -->
   <ItemGroup>
-    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" />
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" Key="$(KeriPublicKey)" />
   </ItemGroup>
 
   <!-- System.Net.Http is a built-in assembly on .NET Framework but is not
