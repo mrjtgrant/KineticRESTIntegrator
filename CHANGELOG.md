@@ -17,6 +17,19 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ---
 
+## Unreleased
+
+### Added
+
+- **An `HttpClient` can be supplied.** `new EpicorClient(session, httpClient)`, and the same overload on `RestConnect`, `EpicorSvc` and every service. Pass one from `IHttpClientFactory`, or one carrying your own handlers for retry, logging, a proxy or a client certificate. Keri never disposes a client you supply, and sets no headers or timeout on it — so it can be shared with the rest of your application, and a fake handler can stand in for the server in your tests. The existing constructors are unchanged and still create and dispose a client of their own.
+- **Retry on transient failures**, configured by `RestSessionKey.Retry` (a `RetryPolicy`). Defaults: 3 attempts, exponential backoff from 200ms with jitter, capped at 5s, honoring a `Retry-After` header. A read is retried on 408, 429, 500, 502, 503 and 504, and on a network failure or timeout. **A write is retried only on 429**, where the server refused it without processing — never after a timeout, because a timed-out write may already have committed, which is what `FailureStage.Indeterminate` exists to report. `RetryWrites` extends writes to the other transient statuses; nothing extends them to timeouts. `Attempts = 1` disables retrying.
+
+### Changed
+
+- **One `HttpClient` per `EpicorClient`, instead of one per service.** Each service constructed its own, so a facade that touched five services held five connection pools to the same server. The facade now creates one and hands it to every service it builds, and disposes it with itself.
+- **Credentials go on each request** rather than on the client's default headers. Nothing changes on the wire. It is what makes one client safe to share — and to accept from a caller — and it means a refreshed `BearerToken` takes effect on the next call, where before it could not take effect at all.
+- A supplied client's own `Timeout` governs; `RestSessionKey.Timeout` applies to clients Keri creates.
+
 ## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.1 — 2026-09-22
 
 The first release candidate, and the first release published to nuget.org. All four packages move to one version together: a stable package cannot depend on a prerelease one, so they are released as a set and will version independently again afterwards.

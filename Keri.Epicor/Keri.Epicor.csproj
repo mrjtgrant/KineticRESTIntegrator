@@ -87,6 +87,14 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 
+  <!-- System.Net.Http is a built-in assembly on .NET Framework but is not
+       auto-referenced by the SDK — needs an explicit Reference. The services
+       take an HttpClient overload. On .NET 6+, HttpClient is part of the BCL
+       and auto-referenced; no Reference needed. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Keri.RestTransport\Keri.RestTransport.csproj" />
   </ItemGroup>

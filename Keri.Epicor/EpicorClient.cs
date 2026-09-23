@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Keri.RestTransport;
 using Keri.Epicor.Dtos;
+using System.Net.Http;
 
 namespace Keri.Epicor
 {
@@ -53,6 +54,9 @@ namespace Keri.Epicor
 
         // Backing fields for lazy-constructed services.
         // A service is constructed on first property access and reused thereafter.
+        private readonly HttpClient _httpClient;
+        private readonly bool _ownsHttpClient;
+
         private BAQSvc _baq;
         private MenuSvc _menu;
         private UserCodesSvc _userCodes;
@@ -86,9 +90,40 @@ namespace Keri.Epicor
         /// A fully-configured <see cref="EpicorRestSessionKey"/> with company,
         /// environment URL, and authentication.
         /// </param>
-        public EpicorClient(EpicorRestSessionKey session)
+        public EpicorClient(EpicorRestSessionKey session) : this(session, null) { }
+
+        /// <summary>
+        /// Constructs the facade over an <see cref="HttpClient"/> you supply — one
+        /// from <c>IHttpClientFactory</c>, or one carrying your own handlers for
+        /// retry, logging or a proxy.
+        /// </summary>
+        /// <remarks>
+        /// A client you pass in is never disposed by this class and never has
+        /// headers or a timeout set on it: credentials go on each request, so the
+        /// client stays free of this session's state and can be shared with the
+        /// rest of your application. Passing null behaves like the
+        /// single-argument constructor, which creates one client for this facade
+        /// and disposes it with the facade.
+        /// </remarks>
+        /// <param name="session">The Epicor session every service will use.</param>
+        /// <param name="httpClient">The client to send on, or null to create one.</param>
+        public EpicorClient(EpicorRestSessionKey session, HttpClient httpClient)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
+
+            // One client for the whole facade, and therefore one connection pool,
+            // shared by every service constructed below. Each service used to
+            // create its own, so a client touching five services held five.
+            if (httpClient == null)
+            {
+                _httpClient = new HttpClient { Timeout = session.Timeout };
+                _ownsHttpClient = true;
+            }
+            else
+            {
+                _httpClient = httpClient;
+                _ownsHttpClient = false;
+            }
         }
 
         /// <summary>
@@ -148,19 +183,19 @@ namespace Keri.Epicor
         /// <summary>Run Business Activity Queries.</summary>
         public BAQSvc BAQ
         {
-            get { ThrowIfDisposed(); return _baq ?? (_baq = new BAQSvc(_session)); }
+            get { ThrowIfDisposed(); return _baq ?? (_baq = new BAQSvc(_session, _httpClient)); }
         }
 
         /// <summary>Read Epicor menu structure.</summary>
         public MenuSvc Menu
         {
-            get { ThrowIfDisposed(); return _menu ?? (_menu = new MenuSvc(_session)); }
+            get { ThrowIfDisposed(); return _menu ?? (_menu = new MenuSvc(_session, _httpClient)); }
         }
 
         /// <summary>Read user-defined code tables.</summary>
         public UserCodesSvc UserCodes
         {
-            get { ThrowIfDisposed(); return _userCodes ?? (_userCodes = new UserCodesSvc(_session)); }
+            get { ThrowIfDisposed(); return _userCodes ?? (_userCodes = new UserCodesSvc(_session, _httpClient)); }
         }
 
         /// <summary>
@@ -169,25 +204,25 @@ namespace Keri.Epicor
         /// </summary>
         public GenxDataSvc GenxData
         {
-            get { ThrowIfDisposed(); return _genxData ?? (_genxData = new GenxDataSvc(_session)); }
+            get { ThrowIfDisposed(); return _genxData ?? (_genxData = new GenxDataSvc(_session, _httpClient)); }
         }
 
         /// <summary>Generic UD-table service — read and write rows across any UD table (UD01–UD30).</summary>
         public UDTableSvc UDTable
         {
-            get { ThrowIfDisposed(); return _udTable ?? (_udTable = new UDTableSvc(_session)); }
+            get { ThrowIfDisposed(); return _udTable ?? (_udTable = new UDTableSvc(_session, _httpClient)); }
         }
 
         /// <summary>Call Epicor Functions.</summary>
         public FunctionSvc Function
         {
-            get { ThrowIfDisposed(); return _function ?? (_function = new FunctionSvc(_session)); }
+            get { ThrowIfDisposed(); return _function ?? (_function = new FunctionSvc(_session, _httpClient)); }
         }
 
         /// <summary>Project header lookup and creation.</summary>
         public ProjectSvc Project
         {
-            get { ThrowIfDisposed(); return _project ?? (_project = new ProjectSvc(_session)); }
+            get { ThrowIfDisposed(); return _project ?? (_project = new ProjectSvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -197,25 +232,25 @@ namespace Keri.Epicor
         /// <summary>Customer record lookup.</summary>
         public CustomerSvc Customer
         {
-            get { ThrowIfDisposed(); return _customer ?? (_customer = new CustomerSvc(_session)); }
+            get { ThrowIfDisposed(); return _customer ?? (_customer = new CustomerSvc(_session, _httpClient)); }
         }
 
         /// <summary>Vendor (supplier) record lookup.</summary>
         public VendorSvc Vendor
         {
-            get { ThrowIfDisposed(); return _vendor ?? (_vendor = new VendorSvc(_session)); }
+            get { ThrowIfDisposed(); return _vendor ?? (_vendor = new VendorSvc(_session, _httpClient)); }
         }
 
         /// <summary>Part master operations and attachments.</summary>
         public PartSvc Part
         {
-            get { ThrowIfDisposed(); return _part ?? (_part = new PartSvc(_session)); }
+            get { ThrowIfDisposed(); return _part ?? (_part = new PartSvc(_session, _httpClient)); }
         }
 
         /// <summary>Sales rep lookup.</summary>
         public SalesRepSvc SalesRep
         {
-            get { ThrowIfDisposed(); return _salesRep ?? (_salesRep = new SalesRepSvc(_session)); }
+            get { ThrowIfDisposed(); return _salesRep ?? (_salesRep = new SalesRepSvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -225,13 +260,13 @@ namespace Keri.Epicor
         /// <summary>Payment-method lookup.</summary>
         public PayMethodSvc PayMethod
         {
-            get { ThrowIfDisposed(); return _payMethod ?? (_payMethod = new PayMethodSvc(_session)); }
+            get { ThrowIfDisposed(); return _payMethod ?? (_payMethod = new PayMethodSvc(_session, _httpClient)); }
         }
 
         /// <summary>AR payment entry lookup.</summary>
         public PaymentEntrySvc PaymentEntry
         {
-            get { ThrowIfDisposed(); return _paymentEntry ?? (_paymentEntry = new PaymentEntrySvc(_session)); }
+            get { ThrowIfDisposed(); return _paymentEntry ?? (_paymentEntry = new PaymentEntrySvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -241,25 +276,25 @@ namespace Keri.Epicor
         /// <summary>Serial-number lookup.</summary>
         public SerialNoSvc SerialNo
         {
-            get { ThrowIfDisposed(); return _serialNo ?? (_serialNo = new SerialNoSvc(_session)); }
+            get { ThrowIfDisposed(); return _serialNo ?? (_serialNo = new SerialNoSvc(_session, _httpClient)); }
         }
 
         /// <summary>Misc shipment header / detail.</summary>
         public MiscShipSvc MiscShip
         {
-            get { ThrowIfDisposed(); return _miscShip ?? (_miscShip = new MiscShipSvc(_session)); }
+            get { ThrowIfDisposed(); return _miscShip ?? (_miscShip = new MiscShipSvc(_session, _httpClient)); }
         }
 
         /// <summary>Selected serial number assignment (used by inventory transfers).</summary>
         public SelectedSerialNumbersSvc SelectedSerialNumbers
         {
-            get { ThrowIfDisposed(); return _selectedSerialNumbers ?? (_selectedSerialNumbers = new SelectedSerialNumbersSvc(_session)); }
+            get { ThrowIfDisposed(); return _selectedSerialNumbers ?? (_selectedSerialNumbers = new SelectedSerialNumbersSvc(_session, _httpClient)); }
         }
 
         /// <summary>Inventory transfer between bins, with serial-tracking support.</summary>
         public InvTransferSvc InvTransfer
         {
-            get { ThrowIfDisposed(); return _invTransfer ?? (_invTransfer = new InvTransferSvc(_session)); }
+            get { ThrowIfDisposed(); return _invTransfer ?? (_invTransfer = new InvTransferSvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -269,13 +304,13 @@ namespace Keri.Epicor
         /// <summary>BOM tree retrieval and lookup.</summary>
         public BomSearchSvc BomSearch
         {
-            get { ThrowIfDisposed(); return _bomSearch ?? (_bomSearch = new BomSearchSvc(_session)); }
+            get { ThrowIfDisposed(); return _bomSearch ?? (_bomSearch = new BomSearchSvc(_session, _httpClient)); }
         }
 
         /// <summary>ECO group management — check-out, add materials, approve.</summary>
         public EngWorkBenchSvc EngWorkBench
         {
-            get { ThrowIfDisposed(); return _engWorkBench ?? (_engWorkBench = new EngWorkBenchSvc(_session)); }
+            get { ThrowIfDisposed(); return _engWorkBench ?? (_engWorkBench = new EngWorkBenchSvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -285,7 +320,7 @@ namespace Keri.Epicor
         /// <summary>Manufacturing job header reads and creation.</summary>
         public JobEntrySvc JobEntry
         {
-            get { ThrowIfDisposed(); return _jobEntry ?? (_jobEntry = new JobEntrySvc(_session)); }
+            get { ThrowIfDisposed(); return _jobEntry ?? (_jobEntry = new JobEntrySvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -295,13 +330,13 @@ namespace Keri.Epicor
         /// <summary>Purchase order header / line / release reads and creation.</summary>
         public POSvc PO
         {
-            get { ThrowIfDisposed(); return _po ?? (_po = new POSvc(_session)); }
+            get { ThrowIfDisposed(); return _po ?? (_po = new POSvc(_session, _httpClient)); }
         }
 
         /// <summary>Purchase-order receipt header / line / attachment reads and creation.</summary>
         public ReceiptSvc Receipt
         {
-            get { ThrowIfDisposed(); return _receipt ?? (_receipt = new ReceiptSvc(_session)); }
+            get { ThrowIfDisposed(); return _receipt ?? (_receipt = new ReceiptSvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -311,13 +346,13 @@ namespace Keri.Epicor
         /// <summary>Quote header creation and lookup.</summary>
         public QuoteSvc Quote
         {
-            get { ThrowIfDisposed(); return _quote ?? (_quote = new QuoteSvc(_session)); }
+            get { ThrowIfDisposed(); return _quote ?? (_quote = new QuoteSvc(_session, _httpClient)); }
         }
 
         /// <summary>Sales order header / line creation and lookup.</summary>
         public SalesOrderSvc SalesOrder
         {
-            get { ThrowIfDisposed(); return _salesOrder ?? (_salesOrder = new SalesOrderSvc(_session)); }
+            get { ThrowIfDisposed(); return _salesOrder ?? (_salesOrder = new SalesOrderSvc(_session, _httpClient)); }
         }
 
         // ---------------------------------------------------------------------
@@ -366,6 +401,10 @@ namespace Keri.Epicor
             _receipt?.Dispose();
             _quote?.Dispose();
             _salesOrder?.Dispose();
+
+            // The services share this facade's client and never dispose it, so it
+            // is closed here — and only when this facade created it.
+            if (_ownsHttpClient) _httpClient?.Dispose();
 
             _disposed = true;
         }

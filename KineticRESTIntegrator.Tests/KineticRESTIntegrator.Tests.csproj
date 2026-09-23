@@ -58,4 +58,12 @@
     <ProjectReference Include="..\Keri.Mail\Keri.Mail.csproj" />
   </ItemGroup>
 
+  <!-- System.Net.Http is built into .NET Framework but is not auto-referenced
+       by the SDK. The transport tests construct HttpClient and
+       HttpRequestMessage directly, so the net48 target needs it spelled out;
+       on net8.0 it is part of the BCL. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
 </Project>

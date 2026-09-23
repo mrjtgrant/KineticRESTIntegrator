@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Keri.RestTransport;
 using Keri.Epicor.Dtos;
+using System.Net.Http;
 
 namespace Keri.Epicor
 {
@@ -34,6 +35,11 @@ namespace Keri.Epicor
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="session">A fully-configured session.</param>
         public MiscShipSvc(EpicorRestSessionKey session) : base(session) { }
+
+        /// <summary>Construct over an <see cref="HttpClient"/> you supply and own.</summary>
+        /// <param name="session">A fully-configured session.</param>
+        /// <param name="client">The client to send on. Never disposed by Keri.</param>
+        public MiscShipSvc(EpicorRestSessionKey session, HttpClient client) : base(session, client) { }
 
         // ---------------------------------------------------------------
         // Public API — generic primitives

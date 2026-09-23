@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Keri.RestTransport;
 using Keri.Epicor.Dtos;
+using System.Net.Http;
 
 namespace Keri.Epicor
 {
@@ -124,7 +125,17 @@ namespace Keri.Epicor
         /// the v1 / v2 URL modifiers on the session's auth object before use.
         /// </summary>
         /// <param name="session">A fully-configured session.</param>
-        public EpicorSvc(EpicorRestSessionKey session) : base(session)
+        public EpicorSvc(EpicorRestSessionKey session) : this(session, null) { }
+
+        /// <summary>
+        /// Construct with a session and an <see cref="HttpClient"/> you supply —
+        /// from <c>IHttpClientFactory</c>, or one carrying your own handlers.
+        /// Keri never disposes a client you pass in. <see cref="EpicorClient"/>
+        /// uses this to give every service it builds one shared client.
+        /// </summary>
+        /// <param name="session">A fully-configured session.</param>
+        /// <param name="client">The client to send on, or null to create one.</param>
+        public EpicorSvc(EpicorRestSessionKey session, HttpClient client) : base(session, client)
         {
             session.AuthObject.DynamicUrlModifierBasic = "/api/v1/";
             session.AuthObject.DynamicUrlModifierKeyed = string.Format("/api/v2/odata/{0}/", session.Company);

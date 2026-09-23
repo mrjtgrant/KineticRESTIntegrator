@@ -29,5 +29,12 @@ namespace Keri.RestTransport
         /// default is intentionally finite.
         /// </summary>
         public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// How a failed call is retried. The default policy retries reads on a
+        /// transient failure and leaves writes alone; set
+        /// <c>Attempts = 1</c> to disable retrying.
+        /// </summary>
+        public RetryPolicy Retry { get; set; } = new RetryPolicy();
     }
 }

@@ -20,10 +20,43 @@ namespace Keri.RestTransport
     /// </summary>
     public class RestConnect : IDisposable
     {
-        /// <summary>Constructs the transport for a given session.</summary>
-        public RestConnect(RestSessionKey SessionKey)
+        /// <summary>
+        /// Constructs the transport for a given session, with an
+        /// <see cref="HttpClient"/> of its own that it disposes.
+        /// </summary>
+        public RestConnect(RestSessionKey SessionKey) : this(SessionKey, null) { }
+
+        /// <summary>
+        /// Constructs the transport over an <see cref="HttpClient"/> you supply —
+        /// one from <c>IHttpClientFactory</c>, or one carrying your own handlers
+        /// for retry, logging or a proxy.
+        /// </summary>
+        /// <remarks>
+        /// A supplied client is never disposed by Keri, and Keri sets no headers
+        /// or timeout on it: credentials go on each request, so the client stays
+        /// free of this session's state and can be shared with the rest of your
+        /// application. Its own <see cref="HttpClient.Timeout"/> governs rather
+        /// than <see cref="RestSessionKey.Timeout"/>. Passing null behaves like
+        /// the single-argument constructor.
+        /// </remarks>
+        /// <param name="SessionKey">The session to call with.</param>
+        /// <param name="client">The client to send on, or null to create one.</param>
+        public RestConnect(RestSessionKey SessionKey, HttpClient client)
         {
-            RestInit(SessionKey);
+            _sesh = SessionKey;
+
+            if (client == null)
+            {
+                // No BaseAddress: RestCallAsync builds a full absolute URL via
+                // BuildResourceUrl, so HttpClient has nothing to resolve against.
+                _client = new HttpClient { Timeout = SessionKey.Timeout };
+                _ownsClient = true;
+            }
+            else
+            {
+                _client = client;
+                _ownsClient = false;
+            }
         }
 
         /// <summary>URL-encodes a string using standard .NET encoding rules.</summary>
@@ -35,53 +68,55 @@ namespace Keri.RestTransport
         /// <summary>The session this transport was initialized with.</summary>
         protected RestSessionKey sesh { get { return _sesh; } }
 
-        private RestSessionKey _sesh;
+        private readonly RestSessionKey _sesh;
 
         private HttpClient _client;
+        private readonly bool _ownsClient;
         private bool _disposed;
 
+        /// <summary>The client this transport sends on. Internal, for tests.</summary>
+        internal HttpClient HttpClient { get { return _client; } }
+
+        /// <summary>True when this instance created the client and will dispose it.</summary>
+        internal bool OwnsHttpClient { get { return _ownsClient; } }
+
         /// <summary>
-        /// Configures the transport for a given session. Called from the
-        /// constructor, and only from there — re-running it would replace the
-        /// HttpClient without disposing the one in flight.
+        /// Puts this session's credentials on one request: a bearer token when
+        /// there is one, otherwise Basic, plus the API key when present.
         /// </summary>
-        private void RestInit(RestSessionKey seshkey)
+        /// <remarks>
+        /// Per request rather than on the client's default headers, so the client
+        /// carries no session state. That is what makes one client safe to share
+        /// across services, and it lets a refreshed bearer token take effect on
+        /// the next call.
+        /// </remarks>
+        internal static void ApplyAuth(HttpRequestMessage request, RestSessionKey session)
         {
-            _sesh = seshkey;
+            RestAuthenticationObject auth = session?.AuthObject;
+            if (auth == null) return;
 
-            // No BaseAddress: RestCallAsync builds a full absolute URL via
-            // BuildResourceUrl, so HttpClient has nothing to resolve against.
-            _client = new HttpClient
+            // Bearer wins over Basic: both use the Authorization header, so they
+            // cannot coexist.
+            if (!string.IsNullOrEmpty(auth.BearerToken))
             {
-                Timeout = sesh.Timeout
-            };
-
-            // Authorization header: Bearer token wins over Basic. The two
-            // cannot coexist (same header), so a bearer token, when present,
-            // takes the Authorization header and Basic credentials are skipped.
-            if (!string.IsNullOrEmpty(sesh.AuthObject.BearerToken))
-            {
-                _client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", sesh.AuthObject.BearerToken);
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("Bearer", auth.BearerToken);
             }
-            else if (!string.IsNullOrEmpty(sesh.AuthObject.Username) &&
-                     !string.IsNullOrEmpty(sesh.AuthObject.Password))
+            else if (!string.IsNullOrEmpty(auth.Username) &&
+                     !string.IsNullOrEmpty(auth.Password))
             {
-                var raw = $"{sesh.AuthObject.Username}:{sesh.AuthObject.Password}";
+                var raw = $"{auth.Username}:{auth.Password}";
                 var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
-                _client.DefaultRequestHeaders.Authorization =
+                request.Headers.Authorization =
                     new AuthenticationHeaderValue("Basic", creds);
             }
 
-            // Always set API key when present. The header name is
-            // configurable via RestAuthenticationObject.ApiKeyHeaderName
-            // (defaults to "X-API-Key" for Epicor v2 OData).
-            if (!string.IsNullOrEmpty(sesh.AuthObject.ApiKey))
+            // Always sent when present. The header name is configurable via
+            // RestAuthenticationObject.ApiKeyHeaderName (default "X-API-Key").
+            if (!string.IsNullOrEmpty(auth.ApiKey))
             {
-                _client.DefaultRequestHeaders.Add(
-                    ResolveApiKeyHeaderName(sesh.AuthObject), sesh.AuthObject.ApiKey);
+                request.Headers.Add(ResolveApiKeyHeaderName(auth), auth.ApiKey);
             }
-
         }
 
         /// <summary>
@@ -121,6 +156,8 @@ namespace Keri.RestTransport
         /// Executes the HTTP call against a fully-qualified resource URL and
         /// returns the parsed JSON response. GET if payload is null, POST otherwise.
         /// Errors are returned as a JObject with an ErrorMessage property — never thrown.
+        /// A transient failure is retried according to the session's
+        /// <see cref="RetryPolicy"/>.
         /// </summary>
         private async Task<JObject> RestTransactionAsync(
             string resource,
@@ -128,88 +165,233 @@ namespace Keri.RestTransport
             CancellationToken ct)
         {
             bool isGet = (payload == null);
+            RetryPolicy policy = sesh.Retry ?? new RetryPolicy { Attempts = 1 };
+            int attempts = policy.Attempts < 1 ? 1 : policy.Attempts;
 
-            using (var request = new HttpRequestMessage(isGet ? HttpMethod.Get : HttpMethod.Post, resource))
+            for (int attempt = 1; ; attempt++)
             {
-                if (!isGet)
+                // A request message cannot be sent twice, so each attempt builds
+                // its own — and picks up the session's credentials as they are now.
+                using (var request = new HttpRequestMessage(isGet ? HttpMethod.Get : HttpMethod.Post, resource))
                 {
-                    request.Content = new StringContent(
-                        JsonConvert.SerializeObject(payload),
-                        Encoding.UTF8,
-                        "application/json");
-                }
-
-                HttpResponseMessage response;
-                try
-                {
-                    response = await _client.SendAsync(request, ct).ConfigureAwait(false);
-                    // Diagnostic - inspect what actually went out:
-                    //foreach (var h in response.RequestMessage.Headers)  Console.WriteLine($"[DIAG] Sent header: {h.Key}: {string.Join(", ", h.Value)}");
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    // Caller cancelled — propagate.
-                    throw;
-                }
-                catch (TaskCanceledException ex)
-                {
-                    // With the OperationCanceledException-when-ct-cancelled catch above,
-                    // reaching here means a genuine timeout, not caller cancellation.
-                    // HttpClient surfaces timeouts as TaskCanceledException; the useful
-                    // detail is the configured timeout duration, not the (generic)
-                    // exception text. Append an inner TimeoutException only if present —
-                    // a plain "A task was canceled." inner adds noise, not signal.
-                    string detail = $"Request timed out after {sesh.Timeout.TotalSeconds}s";
-                    if (ex.InnerException is TimeoutException inner)
-                        detail += $" ({inner.Message})";
-
-                    return new JObject(new JProperty("ErrorMessage", detail));
-                }
-                catch (HttpRequestException ex)
-                {
-                    // HttpClient wraps the real cause (DNS failure, connection refused,
-                    // TLS error) in InnerException — sometimes nested. The top-level
-                    // message is a generic "An error occurred while sending the request."
-                    // Walk the chain so the actual cause surfaces.
-                    string detail = ex.Message;
-                    var inner = ex.InnerException;
-                    while (inner != null)
+                    if (!isGet)
                     {
-                        detail += $" -> {inner.Message}";
-                        inner = inner.InnerException;
+                        request.Content = new StringContent(
+                            JsonConvert.SerializeObject(payload),
+                            Encoding.UTF8,
+                            "application/json");
                     }
-                    return new JObject(new JProperty("ErrorMessage",
-                        $"HTTP request failed: {detail}"));
-                }
 
-                using (response)
-                {
-                    string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    ApplyAuth(request, sesh);
 
-                    if (!response.IsSuccessStatusCode)
+                    HttpResponseMessage response;
+                    try
                     {
-                        var msg = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase} " +
-                                  $"calling {response.RequestMessage?.RequestUri}";
-                        if (!string.IsNullOrWhiteSpace(body))
-                            msg += $" — {body}";
-
-                        // Vendor-neutral error surface: keep the human-readable message,
-                        // and also carry the numeric status and the raw body verbatim as
-                        // structured fields. This layer does NOT parse provider-specific
-                        // error shapes — a caller (e.g. Keri.Epicor) reads httpResponseBody
-                        // to extract a clean message, error type, correlation id, etc.
-                        return new JObject
+                        response = await _client.SendAsync(request, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        // Caller cancelled — propagate.
+                        throw;
+                    }
+                    catch (TaskCanceledException ex)
+                    {
+                        // With the OperationCanceledException-when-ct-cancelled catch above,
+                        // reaching here means a genuine timeout, not caller cancellation.
+                        // HttpClient surfaces timeouts as TaskCanceledException; the useful
+                        // detail is the configured timeout duration, not the (generic)
+                        // exception text. Append an inner TimeoutException only if present —
+                        // a plain "A task was canceled." inner adds noise, not signal.
+                        //
+                        // A timed-out write is never retried: the server may have
+                        // applied it, and repeating it could duplicate the work.
+                        // A read is safe to repeat.
+                        if (isGet && attempt < attempts)
                         {
-                            ["ErrorMessage"]     = msg,
-                            ["statusCode"]       = (int)response.StatusCode,
-                            ["reasonPhrase"]     = response.ReasonPhrase,
-                            ["httpResponseBody"] = body ?? ""
-                        };
+                            await Task.Delay(NextDelay(attempt, policy, null, Jitter()), ct).ConfigureAwait(false);
+                            continue;
+                        }
+
+                        string detail = $"Request timed out after {_client.Timeout.TotalSeconds}s";
+                        if (ex.InnerException is TimeoutException inner)
+                            detail += $" ({inner.Message})";
+
+                        return new JObject(new JProperty("ErrorMessage", detail));
+                    }
+                    catch (HttpRequestException ex)
+                    {
+                        // HttpClient wraps the real cause (DNS failure, connection refused,
+                        // TLS error) in InnerException — sometimes nested. The top-level
+                        // message is a generic "An error occurred while sending the request."
+                        // Walk the chain so the actual cause surfaces.
+                        //
+                        // Retried for a read only: the request may or may not have
+                        // reached the server, which for a write is the ambiguous
+                        // case the caller has to decide about.
+                        if (isGet && attempt < attempts)
+                        {
+                            await Task.Delay(NextDelay(attempt, policy, null, Jitter()), ct).ConfigureAwait(false);
+                            continue;
+                        }
+
+                        string detail = ex.Message;
+                        var inner = ex.InnerException;
+                        while (inner != null)
+                        {
+                            detail += $" -> {inner.Message}";
+                            inner = inner.InnerException;
+                        }
+                        return new JObject(new JProperty("ErrorMessage",
+                            $"HTTP request failed: {detail}"));
                     }
 
-                    return ParseSuccessBody(body);
+                    using (response)
+                    {
+                        string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            if (attempt < attempts &&
+                                ShouldRetryStatus(isGet, (int)response.StatusCode, policy))
+                            {
+                                TimeSpan? wait = NextDelayOrStop(
+                                    attempt, policy, RetryAfterOf(response), Jitter());
+
+                                if (wait.HasValue)
+                                {
+                                    await Task.Delay(wait.Value, ct).ConfigureAwait(false);
+                                    continue;
+                                }
+                            }
+
+                            var msg = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase} " +
+                                      $"calling {response.RequestMessage?.RequestUri}";
+                            if (!string.IsNullOrWhiteSpace(body))
+                                msg += $" — {body}";
+
+                            // Vendor-neutral error surface: keep the human-readable message,
+                            // and also carry the numeric status and the raw body verbatim as
+                            // structured fields. This layer does NOT parse provider-specific
+                            // error shapes — a caller (e.g. Keri.Epicor) reads httpResponseBody
+                            // to extract a clean message, error type, correlation id, etc.
+                            return new JObject
+                            {
+                                ["ErrorMessage"]     = msg,
+                                ["statusCode"]       = (int)response.StatusCode,
+                                ["reasonPhrase"]     = response.ReasonPhrase,
+                                ["httpResponseBody"] = body ?? ""
+                            };
+                        }
+
+                        return ParseSuccessBody(body);
+                    }
                 }
             }
+        }
+
+        // -----------------------------------------------------------------
+        // Retry decisions — internal and side-effect free, so the tests can
+        // exercise them without a server.
+        // -----------------------------------------------------------------
+
+        private static readonly Random _random = new Random();
+
+        /// <summary>A jitter factor in [0,1), thread-safe.</summary>
+        private static double Jitter()
+        {
+            lock (_random) return _random.NextDouble();
+        }
+
+        /// <summary>
+        /// The HTTP statuses worth repeating a call for: a request timeout, a
+        /// throttle, and the server-side failures that are usually momentary.
+        /// </summary>
+        internal static bool IsTransientStatus(int status)
+        {
+            return status == 408    // Request Timeout
+                || status == 429    // Too Many Requests
+                || status == 500    // Internal Server Error
+                || status == 502    // Bad Gateway
+                || status == 503    // Service Unavailable
+                || status == 504;   // Gateway Timeout
+        }
+
+        /// <summary>
+        /// Whether a response with this status should be retried.
+        /// </summary>
+        /// <remarks>
+        /// A read is retried on any transient status. A write is retried only on
+        /// 429, where the server refused the request without processing it —
+        /// unless <see cref="RetryPolicy.RetryWrites"/> opts into the rest.
+        /// </remarks>
+        internal static bool ShouldRetryStatus(bool isGet, int status, RetryPolicy policy)
+        {
+            if (!IsTransientStatus(status)) return false;
+            if (isGet) return true;
+            if (status == 429) return true;
+            return policy != null && policy.RetryWrites;
+        }
+
+        /// <summary>
+        /// The <c>Retry-After</c> the response asked for, as a delay, or null.
+        /// Handles both forms: a number of seconds, and an HTTP date.
+        /// </summary>
+        internal static TimeSpan? RetryAfterOf(HttpResponseMessage response)
+        {
+            RetryConditionHeaderValue header = response?.Headers?.RetryAfter;
+            if (header == null) return null;
+
+            if (header.Delta.HasValue) return header.Delta.Value;
+
+            if (header.Date.HasValue)
+            {
+                TimeSpan until = header.Date.Value - DateTimeOffset.UtcNow;
+                return until > TimeSpan.Zero ? until : TimeSpan.Zero;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The wait before the next attempt, or null to stop retrying because the
+        /// server asked for longer than <see cref="RetryPolicy.MaxDelay"/> —
+        /// waiting that long inside a call is worse than returning the failure.
+        /// </summary>
+        internal static TimeSpan? NextDelayOrStop(int attempt, RetryPolicy policy, TimeSpan? retryAfter, double jitter)
+        {
+            if (retryAfter.HasValue && policy != null && policy.HonorRetryAfter)
+            {
+                return retryAfter.Value > policy.MaxDelay ? (TimeSpan?)null : retryAfter.Value;
+            }
+
+            return NextDelay(attempt, policy, retryAfter, jitter);
+        }
+
+        /// <summary>
+        /// Exponential backoff with jitter: the base delay doubled per attempt,
+        /// spread over ±20% so concurrent callers do not retry in lockstep, and
+        /// capped at <see cref="RetryPolicy.MaxDelay"/>.
+        /// </summary>
+        internal static TimeSpan NextDelay(int attempt, RetryPolicy policy, TimeSpan? retryAfter, double jitter)
+        {
+            if (policy == null) policy = new RetryPolicy();
+
+            if (retryAfter.HasValue && policy.HonorRetryAfter)
+            {
+                return retryAfter.Value > policy.MaxDelay ? policy.MaxDelay : retryAfter.Value;
+            }
+
+            double baseMs = policy.BaseDelay.TotalMilliseconds;
+            if (baseMs <= 0) return TimeSpan.Zero;
+
+            // attempt 1 -> base, 2 -> 2x, 3 -> 4x …
+            double grown = baseMs * Math.Pow(2, Math.Max(0, attempt - 1));
+
+            // ±20%: jitter of 0 gives 0.8x, 1 gives 1.2x.
+            double jittered = grown * (0.8 + (0.4 * jitter));
+
+            double capped = Math.Min(jittered, policy.MaxDelay.TotalMilliseconds);
+            return TimeSpan.FromMilliseconds(capped);
         }
 
         /// <summary>
@@ -318,7 +500,9 @@ namespace Keri.RestTransport
             if (_disposed) return;
             if (disposing)
             {
-                _client?.Dispose();
+                // A client the caller supplied is theirs — shared with the rest of
+                // their application, and disposing it would break them.
+                if (_ownsClient) _client?.Dispose();
                 _client = null;
             }
             _disposed = true;

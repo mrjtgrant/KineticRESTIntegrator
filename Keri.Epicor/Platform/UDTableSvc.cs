@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Keri.RestTransport;
 using Keri.Epicor.Dtos;
+using System.Net.Http;
 
 namespace Keri.Epicor
 {
@@ -24,6 +25,11 @@ namespace Keri.Epicor
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="session">A fully-configured session.</param>
         public UDTableSvc(EpicorRestSessionKey session) : base(session) { }
+
+        /// <summary>Construct over an <see cref="HttpClient"/> you supply and own.</summary>
+        /// <param name="session">A fully-configured session.</param>
+        /// <param name="client">The client to send on. Never disposed by Keri.</param>
+        public UDTableSvc(EpicorRestSessionKey session, HttpClient client) : base(session, client) { }
 
         /// <summary>
         /// The UD table every method on this service targets when its
