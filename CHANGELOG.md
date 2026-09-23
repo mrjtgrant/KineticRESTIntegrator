@@ -25,6 +25,12 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 - **`OperationResult<T>.Steps`** — what an orchestrator did on the way to a result, in order, and on a failure the step that stopped it. The trail travels with the result, so it survives being returned, logged, or handed to you by someone reporting a problem, including from inside a BPM where there is nowhere to log. Empty for single service calls, which `ResourcePath` and `ErrorMessage` already describe. Every orchestrator records it.
 - **Typed `GetByIDAsync<T>` overloads** on `Customer`, `Part`, `Vendor`, `SalesOrder`, `Quote`, `PO`, `Receipt`, `JobEntry`, `Project` and `EngWorkBench`. The same single call as the untyped overload, returning the header row as your type instead of the dataset — for reading a record rather than editing one. The whole dataset is still on `RawResponse`; no row for that key is a success with a null `Value`; a failure carries through with its message, status, error type and correlation id unchanged. The untyped overload is unchanged and remains the one to use for a `GetByID` → mutate → `Update` round trip, which Epicor requires the whole dataset for.
 
+### Changed
+
+- **All four assemblies are now strong-named.** A strong-named assembly can only reference other strong-named assemblies without a compiler warning, so an unsigned Keri meant a warning — or, for a consumer building with `TreatWarningsAsErrors`, a build failure — in any application that signs its own output. The key lives in the repository as `Keri.snk` and is applied to every project by `Directory.Build.props`. It is not a secret: strong naming in .NET is an identity mechanism, not a security one, and committing the key is what lets contributors and CI build the solution.
+
+  **Migration:** signing changes assembly identity. Rebuild against the new packages rather than dropping the assemblies in place, and update any binding redirect written against the unsigned identity. Nothing else about the API changes.
+
 ## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.2 — 2026-09-23
 
 The second release candidate. Everything here is additive: rc.1 code compiles unchanged against rc.2.
