@@ -19,7 +19,7 @@ namespace Keri.Epicor.Dtos
     /// customer, dates, PO number, status flags, and order totals.
     /// </para>
     /// <para>
-    /// <see cref="SalesOrderSvc.GetByIDAsync"/> returns the full dataset as a
+    /// <see cref="SalesOrderSvc.GetByIDAsync(int, System.Threading.CancellationToken)"/> returns the full dataset as a
     /// raw <c>JObject</c> rather than this DTO, because an order is its whole
     /// multi-table dataset. Use this DTO to materialize the header row off
     /// <c>RawResponse</c>, and use it directly as the element type of

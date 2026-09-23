@@ -9,7 +9,7 @@ namespace KeriPocs
 {
     /// <summary>
     /// <b>Read-only.</b> Lists open jobs, walks the wide multi-table dataset
-    /// returned by <see cref="JobEntrySvc.GetByIDAsync"/>, then pulls the
+    /// returned by <see cref="JobEntrySvc.GetByIDAsync(string, System.Threading.CancellationToken)"/>, then pulls the
     /// material lines for one of those jobs through
     /// <see cref="JobEntrySvc.JobMtlsAsync"/>.
     /// </summary>
@@ -25,7 +25,7 @@ namespace KeriPocs
     ///     column set populated.
     ///   </description></item>
     ///   <item><description>
-    ///     <see cref="JobEntrySvc.GetByIDAsync"/> — pulls the full job
+    ///     <see cref="JobEntrySvc.GetByIDAsync(string, System.Threading.CancellationToken)"/> — pulls the full job
     ///     dataset for the first open job as a raw <c>JObject</c>: the
     ///     <c>JobHead</c> header plus the related tables (<c>JobAsmbl</c>,
     ///     <c>JobOper</c>, <c>JobMtl</c>, <c>JobProd</c>, <c>JobPart</c>,

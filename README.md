@@ -371,6 +371,28 @@ The `OperationResult` also carries:
 - `CorrelationId` — Epicor's per-call id, for matching a failure to a server-side log entry
 - `FailureStage` — on a failure from a multi-step orchestrator, which side of the commit it landed on: `Uncommitted` means nothing was written and the call can be retried as-is; `Indeterminate` means a commit was attempted and a record may exist, so establish what exists before retrying. Null on success, and null on any method without a commit boundary. See [EXAMPLES_EPICOR.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#deciding-whether-a-failed-orchestrator-is-safe-to-retry)
 
+### Datasets and DTOs — which one you get, and why
+
+Keri types the edges and leaves the middle alone. That is a deliberate design, not an unfinished one:
+
+- **Reads give you DTOs.** List reads (`PartsAsync`, `CustomersAsync`, …) return typed rows, and every `GetByIDAsync` has a generic overload that hands back the header row instead of the dataset:
+
+  ```csharp
+  var result = await epicorClient.Customer.GetByIDAsync<Customer>("CUST001");
+  if (result.IsSuccess && result.Value != null)
+      Console.WriteLine(result.Value.Name);
+  ```
+
+  It is the same single call as the untyped overload — Epicor still returns the whole dataset, and the whole dataset is still on `RawResponse`. When Epicor has no row for that key, the result is a *success* with a null `Value`: the call worked, there was nothing to find.
+
+- **Outcomes give you DTOs.** An orchestrator that creates something hands back what it created, typed.
+
+- **Edits stay datasets.** A change posted back to Epicor is `GetByID` → mutate → `Update`, and Epicor requires the *entire* dataset returned to it — every table, every row, including the ones you never touched. A DTO of the header row cannot stand in for that, and a wrapper that pretended otherwise would silently drop the rest. So the untyped `GetByIDAsync` and `UpdateAsync` take and return `JObject`, and that is the right currency for an edit.
+
+The short version: **datasets stay datasets; DTOs are for reads and outcomes.** Reach for the generic overload when you are reading a record. Reach for the untyped one when you are about to change it.
+
+The generic overload accepts any type whose properties are named after the table's columns — the bundled DTO, or your own narrower class with just the fields you care about. It is available on `Customer`, `Part`, `Vendor`, `SalesOrder`, `Quote`, `PO`, `Receipt`, `JobEntry`, `Project`, and `EngWorkBench`.
+
 ### Naming conventions
 
 A few conventions hold across the SDK:
@@ -641,7 +663,7 @@ The SDK has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->380<!--/TESTS--> tests, run on both `net48` and `net8.0`.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->389<!--/TESTS--> tests, run on both `net48` and `net8.0`.
 
 Test Explorer in Visual Studio also discovers and runs them.
 

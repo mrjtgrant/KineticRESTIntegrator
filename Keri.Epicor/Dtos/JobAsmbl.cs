@@ -13,7 +13,7 @@ namespace Keri.Epicor.Dtos
     /// <para>
     /// Used by <see cref="JobEntrySvc.JobAsmblsAsync"/> and as the element
     /// type when materializing assembly rows off
-    /// <see cref="JobEntrySvc.GetByIDAsync"/>'s <c>JobAsmbl</c> table.
+    /// <see cref="JobEntrySvc.GetByIDAsync(string, System.Threading.CancellationToken)"/>'s <c>JobAsmbl</c> table.
     /// </para>
     /// <para>
     /// <c>JobAsmbl</c> in Epicor has roughly 230 columns, dominated by

@@ -28,7 +28,7 @@ namespace Keri.Epicor
     /// Epicor's, matched here per the SDK's name-tracking convention),
     /// <see cref="PODetailsAsync"/> for line rows, and
     /// <see cref="PORelsAsync"/> for release rows. The wide multi-table
-    /// dataset is returned by <see cref="GetByIDAsync"/>. New-row template
+    /// dataset is returned by <see cref="GetByIDAsync(int, System.Threading.CancellationToken)"/>. New-row template
     /// fetching uses <see cref="GetNewPOHeaderAsync"/>,
     /// <see cref="GetNewPODetailAsync"/>, and <see cref="GetNewPORelAsync"/>.
     /// </para>
@@ -260,6 +260,51 @@ namespace Keri.Epicor
         }
 
         /// <summary>
+        /// Retrieves a purchase order by ID and hands back its <c>POHeader</c> row as
+        /// <typeparamref name="T"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The same one call as
+        /// <see cref="GetByIDAsync(int, CancellationToken)"/> — Epicor still returns the whole
+        /// dataset — but the result carries the header row instead of the
+        /// dataset, for the common case of reading a record rather than editing
+        /// one. The full dataset is still on
+        /// <see cref="OperationResult{T}.RawResponse"/>. When Epicor returns no
+        /// such row the result is a success with a null <c>Value</c>.
+        /// </para>
+        /// <para>
+        /// Use the untyped overload when you intend to change the record and
+        /// post it back: Epicor's <c>Update</c> expects the whole dataset
+        /// returned to it, and a projected row cannot stand in for one.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">
+        /// A type whose properties are named after the <c>POHeader</c> columns —
+        /// the bundled <see cref="Keri.Epicor.Dtos.POHeader"/>, or your own.
+        /// </typeparam>
+        /// <param name="poNum">The purchase order number to retrieve.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// The <c>POHeader</c> row as <typeparamref name="T"/>, or a null
+        /// <c>Value</c> when there is no such row.
+        /// </returns>
+        /// <example>
+        /// <code>
+        /// var result = await client.PO.GetByIDAsync&lt;POHeader&gt;(7890);
+        /// if (result.IsSuccess &amp;&amp; result.Value != null)
+        ///     Console.WriteLine(result.Value.VendorNum);
+        /// </code>
+        /// </example>
+        public async Task<OperationResult<T>> GetByIDAsync<T>(
+            int poNum,
+            CancellationToken ct = default) where T : class
+        {
+            return AsPrimaryRow<T>(
+                await GetByIDAsync(poNum, ct).ConfigureAwait(false), "POHeader");
+        }
+
+        /// <summary>
         /// Gets a fresh, empty PO-header dataset. Calls
         /// <c>Erp.BO.POSvc/GetNewPOHeader</c> in Epicor.
         /// </summary>
@@ -345,7 +390,7 @@ namespace Keri.Epicor
         /// </summary>
         /// <remarks>
         /// The <paramref name="ds"/> is the full multi-table dataset
-        /// in the same shape returned by <see cref="GetByIDAsync"/>. The
+        /// in the same shape returned by <see cref="GetByIDAsync(int, System.Threading.CancellationToken)"/>. The
         /// caller mutates rows in the dataset — setting <c>RowMod = "U"</c>
         /// on changed rows and <c>RowMod = "A"</c> on new rows — and posts
         /// the result here. Epicor applies the changes, runs business

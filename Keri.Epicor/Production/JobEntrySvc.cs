@@ -27,7 +27,7 @@ namespace Keri.Epicor
     /// (Epicor's entity set on this service is <c>JobEntries</c>, not
     /// <c>JobHeads</c>), <see cref="JobAsmblsAsync"/>, <see cref="JobMtlsAsync"/>,
     /// and <see cref="JobPartsAsync"/>. The wide multi-table dataset is
-    /// returned by <see cref="GetByIDAsync"/>. New-row template fetching
+    /// returned by <see cref="GetByIDAsync(string, System.Threading.CancellationToken)"/>. New-row template fetching
     /// uses <see cref="GetNewJobHeadAsync"/>; auto-numbering uses
     /// <see cref="GetNextJobNumAsync"/>.
     /// </para>
@@ -294,6 +294,51 @@ namespace Keri.Epicor
         }
 
         /// <summary>
+        /// Retrieves a job by ID and hands back its <c>JobHead</c> row as
+        /// <typeparamref name="T"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The same one call as
+        /// <see cref="GetByIDAsync(string, CancellationToken)"/> — Epicor still returns the whole
+        /// dataset — but the result carries the header row instead of the
+        /// dataset, for the common case of reading a record rather than editing
+        /// one. The full dataset is still on
+        /// <see cref="OperationResult{T}.RawResponse"/>. When Epicor returns no
+        /// such row the result is a success with a null <c>Value</c>.
+        /// </para>
+        /// <para>
+        /// Use the untyped overload when you intend to change the record and
+        /// post it back: Epicor's <c>Update</c> expects the whole dataset
+        /// returned to it, and a projected row cannot stand in for one.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">
+        /// A type whose properties are named after the <c>JobHead</c> columns —
+        /// the bundled <see cref="Keri.Epicor.Dtos.JobHead"/>, or your own.
+        /// </typeparam>
+        /// <param name="jobNum">The job number to retrieve.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// The <c>JobHead</c> row as <typeparamref name="T"/>, or a null
+        /// <c>Value</c> when there is no such row.
+        /// </returns>
+        /// <example>
+        /// <code>
+        /// var result = await client.JobEntry.GetByIDAsync&lt;JobHead&gt;("J00123");
+        /// if (result.IsSuccess &amp;&amp; result.Value != null)
+        ///     Console.WriteLine(result.Value.PartNum);
+        /// </code>
+        /// </example>
+        public async Task<OperationResult<T>> GetByIDAsync<T>(
+            string jobNum,
+            CancellationToken ct = default) where T : class
+        {
+            return AsPrimaryRow<T>(
+                await GetByIDAsync(jobNum, ct).ConfigureAwait(false), "JobHead");
+        }
+
+        /// <summary>
         /// Gets a fresh, empty job-header dataset for a caller-supplied job
         /// number. Calls <c>Erp.BO.JobEntrySvc/GetNewJobHead</c> in Epicor.
         /// </summary>
@@ -372,7 +417,7 @@ namespace Keri.Epicor
         /// </summary>
         /// <remarks>
         /// The <paramref name="ds"/> is the full multi-table dataset
-        /// in the same shape returned by <see cref="GetByIDAsync"/>. The
+        /// in the same shape returned by <see cref="GetByIDAsync(string, System.Threading.CancellationToken)"/>. The
         /// caller mutates rows in the dataset — setting <c>RowMod = "U"</c>
         /// on changed rows and <c>RowMod = "A"</c> on new rows — and posts
         /// the result here. Epicor applies the changes, runs business

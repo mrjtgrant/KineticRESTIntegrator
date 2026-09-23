@@ -14,7 +14,7 @@ namespace Keri.Epicor.Dtos
     /// <para>
     /// Used by <see cref="JobEntrySvc.JobPartsAsync"/> and as the element
     /// type when materializing the <c>JobPart</c> table off
-    /// <see cref="JobEntrySvc.GetByIDAsync"/>'s response. There's typically
+    /// <see cref="JobEntrySvc.GetByIDAsync(string, System.Threading.CancellationToken)"/>'s response. There's typically
     /// one row per job (one per co-part for jobs producing multiple
     /// outputs).
     /// </para>

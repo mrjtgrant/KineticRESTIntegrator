@@ -12,7 +12,7 @@ namespace Keri.Epicor.Dtos
     /// <para>
     /// Used by <see cref="POSvc.PODetailsAsync"/> and as the element type
     /// when materializing line rows off
-    /// <see cref="POSvc.GetByIDAsync"/>'s <c>PODetail</c> table.
+    /// <see cref="POSvc.GetByIDAsync(int, System.Threading.CancellationToken)"/>'s <c>PODetail</c> table.
     /// </para>
     /// <para>
     /// <b>Column naming note:</b> Epicor's <c>PODetail</c> table exposes

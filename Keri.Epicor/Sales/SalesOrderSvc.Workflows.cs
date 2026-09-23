@@ -20,7 +20,7 @@ namespace Keri.Epicor
         /// Composes two calls: queries
         /// <c>Erp.BO.SalesOrderSvc/SalesOrders</c> with a PO-number filter to
         /// find the matching <c>OrderNum</c>, then fetches the full multi-table
-        /// dataset via <see cref="GetByIDAsync"/>.
+        /// dataset via <see cref="GetByIDAsync(int, System.Threading.CancellationToken)"/>.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -35,7 +35,7 @@ namespace Keri.Epicor
         ///   </description></item>
         ///   <item><description>
         ///   <b>Exactly one match</b> — the full dataset for that order, via
-        ///   <see cref="GetByIDAsync"/>.
+        ///   <see cref="GetByIDAsync(int, System.Threading.CancellationToken)"/>.
         ///   </description></item>
         ///   <item><description>
         ///   <b>More than one match</b> — a failure with a 409 status naming the

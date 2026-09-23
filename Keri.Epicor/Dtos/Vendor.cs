@@ -20,7 +20,7 @@ namespace Keri.Epicor.Dtos
     /// standard user-defined samples.
     /// </para>
     /// <para>
-    /// <see cref="VendorSvc.GetByIDAsync"/> returns the full dataset as a
+    /// <see cref="VendorSvc.GetByIDAsync(int, System.Threading.CancellationToken)"/> returns the full dataset as a
     /// raw <c>JObject</c> rather than this DTO, because a vendor record
     /// <i>is</i> its whole multi-table dataset. Use this DTO to materialize
     /// the header row off <c>RawResponse</c>, and use it directly as the

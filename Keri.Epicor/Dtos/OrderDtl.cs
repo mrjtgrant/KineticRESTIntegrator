@@ -18,7 +18,7 @@ namespace Keri.Epicor.Dtos
     /// pricing, dates, and status.
     /// </para>
     /// <para>
-    /// <see cref="SalesOrderSvc.GetByIDAsync"/> returns the full order dataset
+    /// <see cref="SalesOrderSvc.GetByIDAsync(int, System.Threading.CancellationToken)"/> returns the full order dataset
     /// as a raw <c>JObject</c>; use this DTO to materialize individual line
     /// rows off <c>RawResponse</c>.
     /// </para>

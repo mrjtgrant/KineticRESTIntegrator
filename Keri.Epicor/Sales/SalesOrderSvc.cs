@@ -132,6 +132,51 @@ namespace Keri.Epicor
         }
 
         /// <summary>
+        /// Retrieves a sales order by ID and hands back its <c>OrderHed</c> row as
+        /// <typeparamref name="T"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The same one call as
+        /// <see cref="GetByIDAsync(int, CancellationToken)"/> — Epicor still returns the whole
+        /// dataset — but the result carries the header row instead of the
+        /// dataset, for the common case of reading a record rather than editing
+        /// one. The full dataset is still on
+        /// <see cref="OperationResult{T}.RawResponse"/>. When Epicor returns no
+        /// such row the result is a success with a null <c>Value</c>.
+        /// </para>
+        /// <para>
+        /// Use the untyped overload when you intend to change the record and
+        /// post it back: Epicor's <c>Update</c> expects the whole dataset
+        /// returned to it, and a projected row cannot stand in for one.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">
+        /// A type whose properties are named after the <c>OrderHed</c> columns —
+        /// the bundled <see cref="Keri.Epicor.Dtos.OrderHed"/>, or your own.
+        /// </typeparam>
+        /// <param name="orderNum">The order number to retrieve.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// The <c>OrderHed</c> row as <typeparamref name="T"/>, or a null
+        /// <c>Value</c> when there is no such row.
+        /// </returns>
+        /// <example>
+        /// <code>
+        /// var result = await client.SalesOrder.GetByIDAsync&lt;OrderHed&gt;(123456);
+        /// if (result.IsSuccess &amp;&amp; result.Value != null)
+        ///     Console.WriteLine(result.Value.CustNum);
+        /// </code>
+        /// </example>
+        public async Task<OperationResult<T>> GetByIDAsync<T>(
+            int orderNum,
+            CancellationToken ct = default) where T : class
+        {
+            return AsPrimaryRow<T>(
+                await GetByIDAsync(orderNum, ct).ConfigureAwait(false), "OrderHed");
+        }
+
+        /// <summary>
         /// Gets a fresh, empty order-header dataset. Calls
         /// <c>Erp.BO.SalesOrderSvc/GetNewOrderHed</c> in Epicor.
         /// </summary>

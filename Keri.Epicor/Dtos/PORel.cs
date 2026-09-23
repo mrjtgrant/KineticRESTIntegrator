@@ -12,7 +12,7 @@ namespace Keri.Epicor.Dtos
     /// <remarks>
     /// <para>
     /// Used by <see cref="POSvc.PORelsAsync"/> and as the element type when
-    /// materializing release rows off <see cref="POSvc.GetByIDAsync"/>'s
+    /// materializing release rows off <see cref="POSvc.GetByIDAsync(int, System.Threading.CancellationToken)"/>'s
     /// <c>PORel</c> table. A PO line may have one or many releases; each
     /// release carries its own due date, quantity, and destination
     /// warehouse, and is the unit that gets received against.
