@@ -42,10 +42,10 @@ That snippet is the whole shape: construct a client from a session, await an asy
 
 | Project | Version |
 |---|---|
-| `Keri.Epicor` | <!--VER:Keri.Epicor-->1.0.0-rc.1<!--/VER--> |
-| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.1<!--/VER--> |
-| `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.1<!--/VER--> |
-| `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.1<!--/VER--> |
+| `Keri.Epicor` | <!--VER:Keri.Epicor-->1.0.0-rc.2<!--/VER--> |
+| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.2<!--/VER--> |
+| `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.2<!--/VER--> |
+| `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.2<!--/VER--> |
 
 The repo's own tooling is versioned separately and is not published:
 
@@ -172,6 +172,30 @@ using (var client = new EpicorClient(session))
 That is the whole integration. The packages read no configuration of their own — no config file, no environment variables, no ambient state — so wherever your credentials live today, read them your way and pass them in. Environment variables above, `IConfiguration` or a secrets vault or a credential store just as easily; [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md) has worked examples. [Using the SDK](#using-the-sdk) covers what every call returns and how failures report which side of the commit boundary they landed on.
 
 **Want to watch it work against your own data before writing anything?** The repo ships three runnable companion projects that do exactly that — see [Trying it out with the companion projects](#trying-it-out-with-the-companion-projects).
+
+### Connections and transient failures
+
+An `EpicorClient` holds one `HttpClient`, shared by every service it builds, and disposes it with itself. You need do nothing about this.
+
+If your application already manages its own clients — `IHttpClientFactory`, a handler that adds logging, a corporate proxy, a client certificate — hand one in. Keri uses it, leaves it alone, and never disposes it:
+
+```csharp
+using (var client = new EpicorClient(session, httpClientFactory.CreateClient("epicor")))
+{
+    // …
+}
+```
+
+Credentials travel on each request rather than on the client, so a client you supply carries none of this session's state and can be shared with anything else in your application. It also means replacing `session.AuthObject.BearerToken` takes effect on the next call, which matters when a token expires mid-run.
+
+**Transient failures are retried.** By default: three attempts, exponential backoff from 200ms with jitter, capped at 5 seconds, honoring a `Retry-After` header. A read is retried on 408, 429, 500, 502, 503 and 504, and on a network failure or timeout.
+
+**A write is retried only on 429**, where the server refused it outright. Never after a timeout — a write that timed out may have committed, and repeating it could duplicate the work. That is exactly the case `FailureStage.Indeterminate` reports, so your code can decide. Tune or disable it on the session:
+
+```csharp
+session.Retry = new RetryPolicy { Attempts = 5, BaseDelay = TimeSpan.FromMilliseconds(500) };
+session.Retry = new RetryPolicy { Attempts = 1 };   // off
+```
 
 ---
 

@@ -17,7 +17,12 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ---
 
-## Unreleased
+## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.2 — 2026-09-23
+
+The second release candidate. Everything here is additive: rc.1 code compiles unchanged against rc.2.
+
+One `HttpClient` now serves a whole `EpicorClient` rather than one per service, you can supply your own, and transient failures are retried — with writes deliberately held back.
+
 
 ### Added
 
