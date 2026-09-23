@@ -36,5 +36,17 @@ namespace Keri.RestTransport
         /// <c>Attempts = 1</c> to disable retrying.
         /// </summary>
         public RetryPolicy Retry { get; set; } = new RetryPolicy();
+
+        /// <summary>
+        /// Called as each HTTP attempt completes, with what was called, what came
+        /// back, how long it took, and whether a retry follows. Null by default —
+        /// nothing is traced unless you ask for it.
+        /// </summary>
+        /// <remarks>
+        /// Keri takes no logging dependency; wire this to your logger in a line.
+        /// The handler runs inline on the calling thread, so keep it quick, and
+        /// an exception thrown by it is swallowed rather than failing the call.
+        /// </remarks>
+        public Action<KeriTraceEvent> OnTrace { get; set; }
     }
 }

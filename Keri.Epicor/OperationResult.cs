@@ -21,6 +21,46 @@ namespace Keri.Epicor
     /// <typeparam name="T">The success-payload type.</typeparam>
     public class OperationResult<T>
     {
+        private List<string> _steps;
+
+        /// <summary>
+        /// What an orchestrator did on the way to this result, in order — the
+        /// calls it made and the guards it passed — and, on a failure, the step
+        /// that stopped it.
+        /// </summary>
+        /// <remarks>
+        /// Empty for a single service call: a one-call result is already
+        /// described by <see cref="ResourcePath"/> and <see cref="ErrorMessage"/>.
+        /// The trail travels with the result, so it survives being returned,
+        /// logged, or handed to you by someone reporting a problem — including
+        /// inside a BPM, where there is nowhere to log. For live logging of the
+        /// HTTP calls themselves, set <c>RestSessionKey.OnTrace</c>.
+        /// </remarks>
+        public IReadOnlyList<string> Steps
+        {
+            get { return _steps == null ? (IReadOnlyList<string>)new string[0] : _steps.AsReadOnly(); }
+        }
+
+        /// <summary>Records one step on this result.</summary>
+        internal OperationResult<T> Step(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return this;
+            if (_steps == null) _steps = new List<string>();
+            _steps.Add(text);
+            return this;
+        }
+
+        /// <summary>
+        /// Copies an orchestrator's trail onto the result it is about to return,
+        /// so the steps that led to a failure travel with it.
+        /// </summary>
+        internal OperationResult<T> WithSteps(IEnumerable<string> steps)
+        {
+            if (steps == null) return this;
+            foreach (string step in steps) Step(step);
+            return this;
+        }
+
         /// <summary>True when the operation succeeded.</summary>
         public bool IsSuccess { get; internal set; }
 

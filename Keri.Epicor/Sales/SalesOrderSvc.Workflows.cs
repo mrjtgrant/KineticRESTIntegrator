@@ -66,6 +66,9 @@ namespace Keri.Epicor
             // top: 2 rather than 1 — one row over the limit is all it takes to
             // tell "exactly one match" from "more than one", and refusing to
             // guess is the whole point of the count.
+            var steps = new List<string>();
+            steps.Add($"Look up OrderNum for PONum '{PONum}'");
+
             var lookup = await SalesOrdersAsync(
                 filters: new List<string> {
                     String.Format("PONum eq '{0}'", EscapeODataLiteral(PONum)) },
@@ -76,14 +79,16 @@ namespace Keri.Epicor
             if (lookup.IsFailure)
                 return OperationResult<JObject>.Failure(
                     lookup.ErrorMessage, lookup.StatusCode,
-                    lookup.ResourcePath, lookup.RawResponse);
+                    lookup.ResourcePath, lookup.RawResponse)
+                    .WithSteps(steps).Step("FAILED: the lookup query");
 
             List<OrderHed> matches = lookup.Value ?? new List<OrderHed>();
 
             if (matches.Count == 0)
                 return OperationResult<JObject>.Failure(
                     String.Format("PONum '{0}' does not match any sales order", PONum),
-                    404, lookup.ResourcePath, lookup.RawResponse);
+                    404, lookup.ResourcePath, lookup.RawResponse)
+                    .WithSteps(steps).Step("FAILED: no order carries that PONum");
 
             if (matches.Count > 1)
                 return OperationResult<JObject>.Failure(
@@ -91,11 +96,16 @@ namespace Keri.Epicor
                         "PONum '{0}' matches more than one sales order (at least {1} and {2}). " +
                         "Use SalesOrdersAsync to list them and choose.",
                         PONum, matches[0].OrderNum, matches[1].OrderNum),
-                    409, lookup.ResourcePath, lookup.RawResponse);
+                    409, lookup.ResourcePath, lookup.RawResponse)
+                    .WithSteps(steps).Step("FAILED: more than one order carries that PONum");
 
             // Step 2: fetch the full multi-table dataset by the one OrderNum
             // this PO resolved to.
-            return await GetByIDAsync(matches[0].OrderNum, ct).ConfigureAwait(false);
+            steps.Add($"PONum '{PONum}' resolved to order {matches[0].OrderNum}");
+            steps.Add("Read the full order dataset");
+
+            var order = await GetByIDAsync(matches[0].OrderNum, ct).ConfigureAwait(false);
+            return order.WithSteps(steps);
         }
 
         /// <summary>
@@ -138,13 +148,17 @@ namespace Keri.Epicor
         {
             // GetNewOrderDtlAsync is now public and returns OperationResult —
             // propagate transport/Epicor failures up immediately.
+            var steps = new List<string>();
+            steps.Add($"Get a new OrderDtl row for order {orderNum}");
+
             var newDtl = await GetNewOrderDtlAsync(orderNum, ct).ConfigureAwait(false);
             if (newDtl.IsFailure)
-                return MarkUncommitted(newDtl);
+                return MarkUncommitted(newDtl).WithSteps(steps).Step("FAILED: GetNewOrderDtl");
             JObject ds = newDtl.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
             // is surfaced via ds["ErrorMessage"] when Epicor reports one.
+            steps.Add($"Set the part number to '{partNum}'");
             ds = await ChangePartNumMasterAsync(ds, partNum, ct).ConfigureAwait(false);
 
             // ChangePartNumMaster returns the mutated dataset on success and an
@@ -157,18 +171,21 @@ namespace Keri.Epicor
             JArray dtlRows = ds?["ds"]?["OrderDtl"] as JArray;
             if (dtlRows == null || dtlRows.Count == 0)
                 return MarkUncommitted(
-                    StepFailure<JObject>(ds, "ChangePartNumMaster", "a ds.OrderDtl row"));
+                    StepFailure<JObject>(ds, "ChangePartNumMaster", "a ds.OrderDtl row"))
+                    .WithSteps(steps).Step("FAILED: ChangePartNumMaster returned no OrderDtl row");
 
             JObject dtlRow = dtlRows[0] as JObject;
             JToken custNumToken = dtlRow == null ? null : dtlRow["CustNum"];
             JToken orderQtyToken = dtlRow == null ? null : dtlRow["OrderQty"];
             if (custNumToken == null || orderQtyToken == null)
                 return MarkUncommitted(StepFailure<JObject>(
-                    ds, "ChangePartNumMaster", "CustNum and OrderQty on the ds.OrderDtl row"));
+                    ds, "ChangePartNumMaster", "CustNum and OrderQty on the ds.OrderDtl row"))
+                    .WithSteps(steps).Step("FAILED: the OrderDtl row is missing CustNum or OrderQty");
 
             string custNum = custNumToken.ToString();
             int orderQty = Convert.ToInt32(orderQtyToken);
 
+            steps.Add($"Set the selling quantity to {orderQty}");
             ds = await ChangeSellingQtyMasterAsync(ds, partNum, orderQty, ct).ConfigureAwait(false);
 
             // ChangeSellingQtyMaster returns a "parameters envelope" shape —
@@ -178,14 +195,18 @@ namespace Keri.Epicor
             JToken qtyParams = ds == null ? null : ds["parameters"];
             if (qtyParams == null)
                 return MarkUncommitted(
-                    StepFailure<JObject>(ds, "ChangeSellingQtyMaster", "a parameters envelope"));
+                    StepFailure<JObject>(ds, "ChangeSellingQtyMaster", "a parameters envelope"))
+                    .WithSteps(steps).Step("FAILED: ChangeSellingQtyMaster returned no parameters envelope");
 
             ds = JObject.FromObject(qtyParams);
 
             // MasterUpdate is the commit boundary — classify its result so the
             // caller can tell a rejected line from a lost response.
-            return ClassifyCommit(await MasterUpdateAsync(
+            steps.Add("COMMIT: MasterUpdate (OrderDtl)");
+            var added = ClassifyCommit(await MasterUpdateAsync(
                 ds, custNum, orderNum, "OrderDtl", ct).ConfigureAwait(false));
+
+            return added.WithSteps(steps).Step(added.IsSuccess ? "Line added" : "FAILED: MasterUpdate");
         }
 
         /// <summary>
@@ -257,14 +278,20 @@ namespace Keri.Epicor
             // propagate transport/Epicor failures up immediately. Everything
             // before MasterUpdate writes nothing, so its failures are marked
             // Uncommitted and are safe for the caller to retry as-is.
+            var steps = new List<string>();
+            steps.Add("Get a new OrderHed row");
+
             var newHed = await GetNewOrderHedAsync(ct).ConfigureAwait(false);
             if (newHed.IsFailure)
-                return MarkUncommitted(newHed);
+                return MarkUncommitted(newHed).WithSteps(steps).Step("FAILED: GetNewOrderHed");
             JObject ds = newHed.Value;
 
             // Internal process steps below return raw JObject; ErrorMessage
             // is surfaced via ds["ErrorMessage"] when Epicor reports one.
+            steps.Add($"Set the customer to '{CustID}'");
             ds = await ChangeOrderHedCustomerCustIDAsync(ds, CustID, 0, ct).ConfigureAwait(false);
+
+            steps.Add("Resolve the sold-to contact");
             ds = await ChangeSoldToContactAsync(ds, ct).ConfigureAwait(false);
 
             // Same guard as AddOrderLineAsync: an unknown CustID, or a customer
@@ -273,13 +300,15 @@ namespace Keri.Epicor
             JArray hedRows = ds?["ds"]?["OrderHed"] as JArray;
             if (hedRows == null || hedRows.Count == 0)
                 return MarkUncommitted(StepFailure<JObject>(
-                    ds, "ChangeOrderHedCustomerCustID/ChangeSoldToContact", "a ds.OrderHed row"));
+                    ds, "ChangeOrderHedCustomerCustID/ChangeSoldToContact", "a ds.OrderHed row"))
+                    .WithSteps(steps).Step("FAILED: no OrderHed row came back — check the CustID and its sold-to contact");
 
             JObject hedRow = hedRows[0] as JObject;
             JToken custNumToken = hedRow == null ? null : hedRow["CustNum"];
             if (custNumToken == null)
                 return MarkUncommitted(StepFailure<JObject>(
-                    ds, "ChangeOrderHedCustomerCustID", "CustNum on the ds.OrderHed row"));
+                    ds, "ChangeOrderHedCustomerCustID", "CustNum on the ds.OrderHed row"))
+                    .WithSteps(steps).Step("FAILED: the OrderHed row is missing CustNum");
 
             hedRow["PONum"] = PONum ?? "";
             hedRow["RequestDate"] = NeedByDate;
@@ -291,8 +320,13 @@ namespace Keri.Epicor
             // that writes. Classify its result so the caller can tell a rejected
             // order (nothing written, retry freely) from a lost response (an
             // order may exist; check before retrying).
-            return ClassifyCommit(await MasterUpdateAsync(
+            steps.Add("Stamp PONum, RequestDate and NeedByDate");
+            steps.Add("COMMIT: MasterUpdate (OrderHed)");
+
+            var created = ClassifyCommit(await MasterUpdateAsync(
                 ds, custNum, 0, "OrderHed", ct).ConfigureAwait(false));
+
+            return created.WithSteps(steps).Step(created.IsSuccess ? "Order created" : "FAILED: MasterUpdate");
         }
     }
 }

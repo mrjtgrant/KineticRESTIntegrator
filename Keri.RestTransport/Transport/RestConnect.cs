@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -174,6 +175,7 @@ namespace Keri.RestTransport
                 // its own — and picks up the session's credentials as they are now.
                 using (var request = new HttpRequestMessage(isGet ? HttpMethod.Get : HttpMethod.Post, resource))
                 {
+                    var clock = Stopwatch.StartNew();
                     if (!isGet)
                     {
                         request.Content = new StringContent(
@@ -206,15 +208,18 @@ namespace Keri.RestTransport
                         // A timed-out write is never retried: the server may have
                         // applied it, and repeating it could duplicate the work.
                         // A read is safe to repeat.
-                        if (isGet && attempt < attempts)
+                        string detail = $"Request timed out after {_client.Timeout.TotalSeconds}s";
+                        if (ex.InnerException is TimeoutException inner)
+                            detail += $" ({inner.Message})";
+
+                        bool retrying = isGet && attempt < attempts;
+                        Trace(isGet, resource, null, clock, attempt, retrying, detail);
+
+                        if (retrying)
                         {
                             await Task.Delay(NextDelay(attempt, policy, null, Jitter()), ct).ConfigureAwait(false);
                             continue;
                         }
-
-                        string detail = $"Request timed out after {_client.Timeout.TotalSeconds}s";
-                        if (ex.InnerException is TimeoutException inner)
-                            detail += $" ({inner.Message})";
 
                         return new JObject(new JProperty("ErrorMessage", detail));
                     }
@@ -228,12 +233,6 @@ namespace Keri.RestTransport
                         // Retried for a read only: the request may or may not have
                         // reached the server, which for a write is the ambiguous
                         // case the caller has to decide about.
-                        if (isGet && attempt < attempts)
-                        {
-                            await Task.Delay(NextDelay(attempt, policy, null, Jitter()), ct).ConfigureAwait(false);
-                            continue;
-                        }
-
                         string detail = ex.Message;
                         var inner = ex.InnerException;
                         while (inner != null)
@@ -241,6 +240,16 @@ namespace Keri.RestTransport
                             detail += $" -> {inner.Message}";
                             inner = inner.InnerException;
                         }
+
+                        bool retrying = isGet && attempt < attempts;
+                        Trace(isGet, resource, null, clock, attempt, retrying, detail);
+
+                        if (retrying)
+                        {
+                            await Task.Delay(NextDelay(attempt, policy, null, Jitter()), ct).ConfigureAwait(false);
+                            continue;
+                        }
+
                         return new JObject(new JProperty("ErrorMessage",
                             $"HTTP request failed: {detail}"));
                     }
@@ -251,17 +260,22 @@ namespace Keri.RestTransport
 
                         if (!response.IsSuccessStatusCode)
                         {
+                            TimeSpan? wait = null;
                             if (attempt < attempts &&
                                 ShouldRetryStatus(isGet, (int)response.StatusCode, policy))
                             {
-                                TimeSpan? wait = NextDelayOrStop(
+                                wait = NextDelayOrStop(
                                     attempt, policy, RetryAfterOf(response), Jitter());
+                            }
 
-                                if (wait.HasValue)
-                                {
-                                    await Task.Delay(wait.Value, ct).ConfigureAwait(false);
-                                    continue;
-                                }
+                            Trace(isGet, resource, (int)response.StatusCode, clock, attempt,
+                                  wait.HasValue,
+                                  $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+
+                            if (wait.HasValue)
+                            {
+                                await Task.Delay(wait.Value, ct).ConfigureAwait(false);
+                                continue;
                             }
 
                             var msg = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase} " +
@@ -283,6 +297,8 @@ namespace Keri.RestTransport
                             };
                         }
 
+                        Trace(isGet, resource, (int)response.StatusCode, clock, attempt, false, null);
+
                         return ParseSuccessBody(body);
                     }
                 }
@@ -293,6 +309,39 @@ namespace Keri.RestTransport
         // Retry decisions — internal and side-effect free, so the tests can
         // exercise them without a server.
         // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Reports one finished attempt to the session's trace handler, if it has
+        /// one. A handler that throws is ignored: tracing must never be the
+        /// reason a call fails.
+        /// </summary>
+        private void Trace(bool isGet, string url, int? status, Stopwatch clock,
+                           int attempt, bool willRetry, string error)
+        {
+            Action<KeriTraceEvent> handler = _sesh?.OnTrace;
+            if (handler == null) return;
+
+            clock.Stop();
+
+            try
+            {
+                handler(new KeriTraceEvent
+                {
+                    Timestamp           = DateTimeOffset.UtcNow,
+                    Method              = isGet ? "GET" : "POST",
+                    Url                 = url,
+                    StatusCode          = status,
+                    ElapsedMilliseconds = clock.ElapsedMilliseconds,
+                    Attempt             = attempt,
+                    WillRetry           = willRetry,
+                    ErrorMessage        = error
+                });
+            }
+            catch
+            {
+                // A broken trace handler is the caller's problem, not this call's.
+            }
+        }
 
         private static readonly Random _random = new Random();
 

@@ -17,6 +17,13 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ---
 
+## Unreleased
+
+### Added
+
+- **A trace hook on the session.** `RestSessionKey.OnTrace` is called as each HTTP attempt completes with a `KeriTraceEvent`: method, URL, status, elapsed milliseconds, attempt number, whether a retry follows, and the error when there was one. Null by default, so nothing is traced unless you ask. Keri takes no logging dependency — wiring it to `ILogger`, Serilog or `Console.WriteLine` is one line of your code. A handler that throws is ignored rather than failing the call.
+- **`OperationResult<T>.Steps`** — what an orchestrator did on the way to a result, in order, and on a failure the step that stopped it. The trail travels with the result, so it survives being returned, logged, or handed to you by someone reporting a problem, including from inside a BPM where there is nowhere to log. Empty for single service calls, which `ResourcePath` and `ErrorMessage` already describe. `SalesOrderSvc`'s orchestrators record it; the rest follow.
+
 ## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.2 — 2026-09-23
 
 The second release candidate. Everything here is additive: rc.1 code compiles unchanged against rc.2.
