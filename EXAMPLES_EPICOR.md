@@ -321,9 +321,15 @@ with the dataset as the carrier.
 
 ```csharp
 // 1. ChangePartUnitPrice returns a modified dataset, wrapped under
-//    "parameters" — unwrap it.
+//    "parameters" — unwrap it. No envelope means Epicor declined the
+//    change, so stop and carry its message rather than threading a
+//    dataset it never produced.
 JObject changed = await RestCallAsync(svc, ds, ct).ConfigureAwait(false);
-JObject payload = JObject.FromObject(changed["parameters"]);
+JToken changedParams = changed == null ? null : changed["parameters"];
+if (changedParams == null)
+    return StepFailure<JObject>(changed, "ChangePartUnitPrice", "a parameters envelope");
+
+JObject payload = JObject.FromObject(changedParams);
 
 // 2. CheckPartChanges takes that dataset and returns advisory messages.
 var check = await CheckPartChangesAsync(payload, ct).ConfigureAwait(false);

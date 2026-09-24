@@ -340,9 +340,10 @@ namespace Keri.Epicor
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the <c>UpdateExt</c>
-        /// response, with the advisory messages attached. If the
-        /// <c>CheckPartChanges</c> step fails, the failure is propagated
-        /// rather than the price change being persisted blindly.
+        /// response, with the advisory messages attached. If either the price
+        /// change or the <c>CheckPartChanges</c> step fails, that failure is
+        /// returned — carrying Epicor's message — rather than the change being
+        /// persisted blindly.
         /// </returns>
         public async Task<OperationResult<JObject>> ChangePartUnitPriceAsync(
             JObject ds,
@@ -351,9 +352,19 @@ namespace Keri.Epicor
             string svc = "Erp.BO.PartSvc/ChangePartUnitPrice";
             JObject changed = await RestCallAsync(svc, ds, ct).ConfigureAwait(false);
 
-            // ChangePartUnitPrice wraps its dataset under "parameters" —
-            // unwrap to the real dataset that will flow to UpdateExt.
-            JObject payload = JObject.FromObject(changed["parameters"]);
+            // ChangePartUnitPrice wraps its dataset under "parameters", so its
+            // absence means Epicor declined the change — an unknown part, a
+            // permissions refusal, a transport failure — and the message saying
+            // why is in the response itself. Stopping here is deliberate: the
+            // chain must not continue on a dataset Epicor never produced. What
+            // changed is how it stops. JObject.FromObject(null) threw away the
+            // explanation along with the response; StepFailure carries both.
+            JToken changedParams = changed == null ? null : changed["parameters"];
+            if (changedParams == null)
+                return StepFailure<JObject>(
+                    changed, "ChangePartUnitPrice", "a parameters envelope");
+
+            JObject payload = JObject.FromObject(changedParams);
 
             // Ask Epicor for advisory messages about this change. This call
             // returns only message strings, not a dataset — so its result is
