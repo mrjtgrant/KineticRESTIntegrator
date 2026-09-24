@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Keri.Epicor;
 using KeriConfigurator;
@@ -15,11 +15,16 @@ namespace KeriPocs
     /// server.
     /// </para>
     /// <para>
-    /// <b>Write POCs are GATED.</b> The UDTable upsert and SalesOrder create
-    /// only execute when the <c>KERI_POC_ALLOW_WRITES</c> environment
-    /// variable is set to <c>true</c>, <c>1</c>, <c>yes</c>, or <c>on</c>.
-    /// Otherwise they run in dry-run mode: they build the call, print the
-    /// exact payload they would send, and stop. See <see cref="PocConfig"/>.
+    /// <b>Nothing is written without two separate yeses.</b> The
+    /// <c>KERI_POC_ALLOW_WRITES</c> environment variable must be set to
+    /// <c>true</c>, <c>1</c>, <c>yes</c> or <c>on</c>, <i>and</i> each write is
+    /// confirmed at the moment it happens, after the POC has named the records
+    /// it would create and said whether they can be removed again. Declining
+    /// leaves the rest of the run intact. See <see cref="PocConfig"/>.
+    /// </para>
+    /// <para>
+    /// With writes off, the write POCs still print what they would send, so an
+    /// unarmed run is a complete description of an armed one.
     /// </para>
     /// <para>
     /// Connection configuration comes from the shared <c>App.config</c> owned by
@@ -35,9 +40,11 @@ namespace KeriPocs
             // Print the write-gate state up front so the user is never
             // surprised by what does or doesn't happen below.
             Console.WriteLine();
-            Console.WriteLine($"  Write gate (KERI_POC_ALLOW_WRITES): {(PocConfig.AllowWrites ? "ARMED" : "off (dry-run)")}");
-            if (!PocConfig.AllowWrites)
-                Console.WriteLine("  -> Write POCs will build payloads and stop before sending.");
+            Console.WriteLine($"  Write gate (KERI_POC_ALLOW_WRITES): {(PocConfig.AllowWrites ? "ARMED" : "off")}");
+            if (PocConfig.AllowWrites)
+                Console.WriteLine("  -> You will still be asked before each write, and told what it creates.");
+            else
+                Console.WriteLine("  -> Write POCs will describe what they would create and stop.");
 
             try
             {

@@ -34,6 +34,14 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ### Changed
 
+- **The POCs ask before they write, and clean up after themselves where they can.** `KERI_POC_ALLOW_WRITES` was the only thing standing between running the examples and a record in Epicor. It is read once at startup, so someone who set it to watch a sales order get created had also armed every other write POC in the project — including any added later — and it stays set for the rest of their shell session. It answers "this program may write," which is not "write this, now."
+
+  Each write is now confirmed at the moment it happens, after the POC names the records it will create, the company, the endpoint, and what becomes of them afterwards. The environment variable still gates the prompts; it no longer replaces them. Declining leaves the rest of the run intact, and a redirected stdin counts as declining rather than as consent, so a scripted run never writes even when armed.
+
+  **`UDTablePoc` now offers to delete the row it created**, after pausing so you can look at it. Its `Key2` carries a timestamp, so each armed run wrote a *new* row rather than replacing the last one, and they accumulated. This also gives `UDTableSvc.DeleteByIDAsync` — the only delete Keri wraps — its first coverage anywhere. The row is never removed unasked, and never as a side effect of something else failing: on any path where the answer could not be obtained, the keys are printed and the row is left alone.
+
+  `KeriDemo` already worked this way, stating what it would write before writing it and offering to remove its rows afterwards. The POCs held a weaker standard than the demo shipped alongside them.
+
 - **`CreateOrderAsync` guards its commit like the other two creators.** If `MasterUpdate` reports success but the echoed dataset carries no `OrderNum`, the result is now a failure marked `Indeterminate` rather than a success the caller cannot read an order out of. All three `Create*` orchestrators are non-idempotent, so the case that matters is a caller seeing success, finding nothing usable, and retrying — which would create a second order. `CreateQuoteAsync` and `CreateProjectAsync` have guarded this since 0.7.0; `CreateOrderAsync` did not.
 
   A genuinely rejected commit — a credit hold, a validation failure — is unaffected: it still reports Epicor's message, `ErrorType` and `CorrelationId`, and is classified by `ClassifyCommit` before the guard is reached.

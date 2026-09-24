@@ -240,16 +240,32 @@ If you need to test something that *requires* a live server, write it as a POC i
 
 ## POCs
 
-`KeriPocs` holds runnable examples that hit a live Epicor server. Read operations are always safe; **write operations are gated** by the `KERI_POC_ALLOW_WRITES` environment variable and run as dry-runs by default.
+`KeriPocs` holds runnable examples that hit a live Epicor server. Read operations are always safe. **Nothing is written without two separate yeses:** the `KERI_POC_ALLOW_WRITES` environment variable must be set, *and* the write must be confirmed at the moment it happens.
 
-If you add a new POC that performs writes:
+Those two answer different questions. The variable says "this program may write," which someone sets once and then forgets for the rest of their shell session — on its own it would arm every write POC in the project, including ones added after they set it. The confirmation says "write *this*, now," and is the one that carries informed consent.
 
-- Build the call arguments unconditionally so the user can see what would be sent
-- Print the payload that would go over the wire
-- Check `PocConfig.AllowWrites` before executing the write itself
-- Use `PocConfig.PrintDryRunBanner(endpoint)` (off path) and `PocConfig.PrintLiveWriteBanner(endpoint)` (on path) for visual consistency with the existing POCs
+If you add a POC that writes, call `PocConfig.ConfirmWrite` and do nothing unless it returns true:
 
-The convention exists so a contributor or user running the POCs against a real environment never accidentally mutates Epicor.
+```csharp
+bool proceed = PocConfig.ConfirmWrite(
+    $"Create a sales order in company {client.Session.Company}.",
+    new[] { $"Customer  : {customerID}", $"PO number : {poNumber}" },
+    "Erp.BO.SalesOrderSvc/MasterUpdate  (via the CreateOrderAsync orchestrator)",
+    "The order remains on your server. Keri wraps no delete for sales orders.");
+
+if (!proceed) return;
+```
+
+Four things to get right:
+
+- **One call per record the operator would recognise**, not per SDK call and certainly not per HTTP request. A sales order with its lines is one thing to agree to. The unit is what appears in Epicor, not what appears in the call stack.
+- **Say what happens afterwards**, in the fourth argument, because that is what decides the answer. Either the POC will offer to remove it — as `UDTablePoc` does, the only one that can, since `UDTableSvc.DeleteByIDAsync` is the one delete Keri wraps — or it stays, and you say so.
+- **Build the arguments unconditionally.** `ConfirmWrite` prints them whether or not writes are armed, so an unarmed run is a complete description of an armed one.
+- **Never clean up on your own initiative.** If you create something removable, ask afterwards with `PocConfig.AskYesNo`. An unexpected failure is the worst moment to start deleting rows on someone's behalf — print the keys and leave them alone.
+
+A redirected stdin is treated as "no" rather than as consent, so the POCs are safe to run from a script even with writes armed.
+
+`KeriDemo` has held to this standard from the start — it states the table and row count before writing, asks, and offers to remove its rows afterwards with a `finally` that honours a "keep" answer so a late crash cannot delete behind the operator's back. The POCs were brought up to it.
 
 ---
 

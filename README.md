@@ -489,12 +489,14 @@ For per-service detail, the `KeriPocs` project has five labeled scenarios (UserC
 dotnet run --project KeriPocs
 ```
 
-Reads run safely against your configured environment. Write operations (UDTable upsert, SalesOrder create) are **gated** — they dry-run by default, printing the exact payload they *would* send. To arm writes for a session:
+Reads run safely against your configured environment. The two writes (UDTable upsert, SalesOrder create) are **gated twice**: they need `KERI_POC_ALLOW_WRITES` set, and then each one asks before it runs, naming the records it will create and saying whether they can be removed again. With the variable unset they print what they would send and stop, so an unarmed run shows you everything an armed one would do.
 
 ```
 set KERI_POC_ALLOW_WRITES=true
 dotnet run --project KeriPocs
 ```
+
+Setting the variable arms the prompts; it does not skip them. Answering no to one leaves the rest of the run intact, and a redirected stdin counts as no — a scripted run never writes. The UD row is offered back for deletion once you have had a chance to look at it; the sales order stays, because Keri wraps no delete for sales orders.
 
 For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EPICOR.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md) — calling un-wrapped Epicor endpoints directly, writing UD-table rows, and the UD-row conventions. To use Keri's transport layer against a non-Epicor REST API, see [EXAMPLES_RESTAPI.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_RESTAPI.md).
 

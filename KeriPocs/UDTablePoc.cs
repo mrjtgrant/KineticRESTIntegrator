@@ -9,14 +9,14 @@ using Newtonsoft.Json.Linq;
 namespace KeriPocs
 {
     /// <summary>
-    /// <b>Read side is always-safe; write side is GATED by
-    /// <see cref="PocConfig.AllowWrites"/>.</b> Demonstrates reading UD
-    /// rows, using the column-legend helpers, and (only when armed)
-    /// upserting a UD row of your own.
+    /// <b>Read side is always-safe; the write is gated by
+    /// <see cref="PocConfig.ConfirmWrite"/>.</b> Demonstrates reading UD rows,
+    /// the column-legend helpers, upserting a row of your own, and removing it
+    /// again.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Three things this POC shows:
+    /// Four things this POC shows:
     /// </para>
     /// <list type="number">
     ///   <item><description>
@@ -29,11 +29,26 @@ namespace KeriPocs
     ///     re-keying its values via <see cref="UDRow.ToMappedValues"/>.
     ///   </description></item>
     ///   <item><description>
-    ///     The gated write path: how to construct a row and upsert via
-    ///     <see cref="UDTableSvc.UpdateAsync"/>. With writes disabled (default),
-    ///     the POC prints the exact payload it <i>would</i> send and stops.
+    ///     The confirmed write path: how to construct a row and upsert it via
+    ///     <c>SaveAsync</c>.
+    ///   </description></item>
+    ///   <item><description>
+    ///     <see cref="UDTableSvc.DeleteByIDAsync"/>, offered after you have had
+    ///     a chance to look at the row.
     ///   </description></item>
     /// </list>
+    /// <para>
+    /// <b>Why the cleanup matters here.</b> <c>Key2</c> carries a timestamp, so
+    /// each armed run writes a <i>new</i> row rather than replacing the last
+    /// one. Without the delete they accumulate. This is also the only POC that
+    /// can clean up after itself: <see cref="UDTableSvc.DeleteByIDAsync"/> is
+    /// the one delete Keri wraps.
+    /// </para>
+    /// <para>
+    /// The row is never removed without being asked, and never removed because
+    /// something else failed — if this POC cannot get an answer, it prints the
+    /// keys and leaves the row alone.
+    /// </para>
     /// </remarks>
     internal static class UDTablePoc
     {
@@ -43,14 +58,14 @@ namespace KeriPocs
         // per call.
         private const string DemoUDTable = "UD22";
 
-        // A unique-ish row category we'll use for the (gated) upsert. The
+        // A unique-ish row category we'll use for the (confirmed) upsert. The
         // Key1 convention groups rows by purpose so one UD table can host
         // many distinct logical row types — see UDRow.Key1.
         private const string DemoRowIndicator = "KERI_POC_DEMO";
 
         public static async Task RunAsync(EpicorClient client)
         {
-            PocBanner.Section("UDTable POC (read-only + GATED write)");
+            PocBanner.Section("UDTable POC (read-only + confirmed write)");
 
             // Point this client's UDTable at our demo table for the rest of the run.
             client.UDTable.UDTableDefault = DemoUDTable;
@@ -113,7 +128,7 @@ namespace KeriPocs
             var parsed = UDTableSvc.ParseColumnLegend(built);
             Console.WriteLine($"  Parsed:  {parsed.Count} entries — round-trip succeeded");
 
-            // ---- 3) Write — GATED -------------------------------------------
+            // ---- 3) Write — confirmed ---------------------------------------
             //
             // Construct the row we want to upsert. We do this regardless of
             // the gate so the user can see the exact payload that would go
@@ -132,20 +147,24 @@ namespace KeriPocs
                 // (DateTime.Now and true) — see UDRow.Date20 remarks.
             };
 
-            string endpoint = $"Ice.BO.{DemoUDTable}Svc/{DemoUDTable}s  (upsert)";
-
             Console.WriteLine();
             Console.WriteLine("Prepared UD row for upsert:");
             Console.WriteLine(JsonConvert.SerializeObject(rowToUpsert, Formatting.Indented));
 
-            if (!PocConfig.AllowWrites)
-            {
-                PocConfig.PrintDryRunBanner(endpoint);
-                return;
-            }
+            bool proceed = PocConfig.ConfirmWrite(
+                $"Create one row in {DemoUDTable}, company {client.Session.Company}.",
+                new[]
+                {
+                    $"Key1 : {rowToUpsert.Key1}",
+                    $"Key2 : {rowToUpsert.Key2}",
+                    "Contents: the legend built above, plus four example values."
+                },
+                $"Ice.BO.{DemoUDTable}Svc/{DemoUDTable}s  (upsert via SaveAsync)",
+                "You will be asked afterwards whether to delete the row or keep it. "
+                    + "Key2 carries a timestamp, so kept rows accumulate across runs.");
 
-            // Writes are armed — actually execute.
-            PocConfig.PrintLiveWriteBanner(endpoint);
+            if (!proceed) return;
+
             var upsert = await client.UDTable.SaveAsync(rowToUpsert).ConfigureAwait(false);
 
             if (upsert.IsFailure)
@@ -154,6 +173,12 @@ namespace KeriPocs
                 if (!string.IsNullOrEmpty(upsert.CorrelationId)) Console.WriteLine($"  CorrelationId: {upsert.CorrelationId}");
                 if (upsert.StatusCode.HasValue)
                     Console.WriteLine($"  HTTP {upsert.StatusCode}");
+
+                // Uncommitted means nothing was written and a retry is clean.
+                // Anything else leaves the question open, so name the keys.
+                if (upsert.FailureStage != FailureStage.Uncommitted)
+                    Console.WriteLine($"  A row may exist — check for Key1='{rowToUpsert.Key1}', "
+                                    + $"Key2='{rowToUpsert.Key2}' in {DemoUDTable}.");
                 return;
             }
 
@@ -164,6 +189,52 @@ namespace KeriPocs
             JToken firstRow = upsert.Value?["ds"]?[DemoUDTable]?[0];
             if (firstRow != null)
                 Console.WriteLine($"  Server returned Key2 = {firstRow["Key2"]}");
+
+            // ---- 4) Clean up — asked, never assumed -------------------------
+            //
+            // The row exists now. Offer to remove it, and whatever happens,
+            // make sure the keys are on screen before this method returns —
+            // a row nobody can name is a row nobody will find.
+
+            bool removed = false;
+            try
+            {
+                Console.WriteLine();
+                Console.WriteLine($"  The row is in {DemoUDTable} now. Go and look at it if you like —");
+                Console.WriteLine("  this will wait.");
+                Console.WriteLine();
+
+                if (PocConfig.AskYesNo("  Delete the row this POC just created?"))
+                {
+                    var del = await client.UDTable
+                        .DeleteByIDAsync(rowToUpsert.Key1, rowToUpsert.Key2, null, null, null, DemoUDTable)
+                        .ConfigureAwait(false);
+
+                    if (del.IsSuccess)
+                    {
+                        removed = true;
+                        Console.WriteLine($"  Deleted. {DemoUDTable} is as you found it.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"  Delete FAILED: {del.ErrorMessage}");
+                        if (!string.IsNullOrEmpty(del.CorrelationId)) Console.WriteLine($"  CorrelationId: {del.CorrelationId}");
+                    }
+                }
+            }
+            finally
+            {
+                // Reached on a decline, a failed delete, and on the way out of
+                // an exception. Never deletes on its own initiative — an
+                // unexpected failure is the worst moment to start removing
+                // rows on someone's behalf.
+                if (!removed)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine($"  Row left in place — {DemoUDTable}: "
+                                    + $"Key1='{rowToUpsert.Key1}', Key2='{rowToUpsert.Key2}'.");
+                }
+            }
         }
     }
 }

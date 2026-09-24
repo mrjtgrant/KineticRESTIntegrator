@@ -8,10 +8,10 @@ using Newtonsoft.Json.Linq;
 namespace KeriPocs
 {
     /// <summary>
-    /// <b>Read side is always-safe; write side is GATED by
-    /// <see cref="PocConfig.AllowWrites"/>.</b> Demonstrates the two
-    /// shapes a sales-order read can take, and (only when armed)
-    /// creating a new sales order.
+    /// <b>Read side is always-safe; the write is gated by
+    /// <see cref="PocConfig.ConfirmWrite"/>.</b> Demonstrates the two shapes a
+    /// sales-order read can take, and — only after you say yes — creating a new
+    /// sales order.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -38,11 +38,16 @@ namespace KeriPocs
     ///   </description></item>
     /// </list>
     /// <para>
-    /// The write path — <see cref="SalesOrderSvc.CreateOrderAsync"/> — is
-    /// gated. With <see cref="PocConfig.AllowWrites"/> off, the POC builds
-    /// the call arguments, prints exactly what it would send, and stops.
-    /// With it on, the POC <i>creates a real sales order in your pilot
-    /// company</i> and prints the new order number.
+    /// The write path — <see cref="SalesOrderSvc.CreateOrderAsync"/> — needs
+    /// <c>KERI_POC_ALLOW_WRITES</c> set <i>and</i> a yes at the prompt. Unarmed,
+    /// the POC still prints the customer, PO number and need-by date it would
+    /// send, so you can see what an armed run would do.
+    /// </para>
+    /// <para>
+    /// <b>The order it creates stays.</b> Keri wraps no delete for sales orders
+    /// — <c>UDTableSvc.DeleteByIDAsync</c> is the only delete in the public API
+    /// — so the prompt says so rather than implying the POC will tidy up after
+    /// itself.
     /// </para>
     /// </remarks>
     internal static class SalesOrderPoc
@@ -54,7 +59,7 @@ namespace KeriPocs
 
         public static async Task RunAsync(EpicorClient client)
         {
-            PocBanner.Section("SalesOrder POC (read-only + GATED create)");
+            PocBanner.Section("SalesOrder POC (read-only + confirmed create)");
 
             // ---- 1) Read: SalesOrdersAsync (OData entity-set wrapper) ------
             //
@@ -124,28 +129,29 @@ namespace KeriPocs
                 }
             }
 
-            // ---- 3) Write — GATED -------------------------------------------
+            // ---- 3) Write — confirmed ---------------------------------------
             //
-            // Construct the create call. We build the arguments either way so
-            // the user can see exactly what would be sent.
+            // ConfirmWrite prints the arguments whether or not writes are
+            // armed, so the unarmed path is still a description of what the
+            // armed one would do. It returns true only when writes are armed,
+            // someone is there to answer, and they said yes.
 
             DateTime needBy = DateTime.Today.AddDays(14);
-            string endpoint = "Erp.BO.SalesOrderSvc/MasterUpdate  (new order via CreateOrderAsync orchestrator)";
 
-            Console.WriteLine();
-            Console.WriteLine("Prepared sales-order create call:");
-            Console.WriteLine($"    CustID     = {DemoCustomerID}");
-            Console.WriteLine($"    NeedByDate = {needBy:yyyy-MM-dd}");
-            Console.WriteLine($"    PONum      = {DemoPONumber}");
+            bool proceed = PocConfig.ConfirmWrite(
+                $"Create a sales order in company {client.Session.Company}.",
+                new[]
+                {
+                    $"Customer  : {DemoCustomerID}",
+                    $"PO number : {DemoPONumber}",
+                    $"Need by   : {needBy:yyyy-MM-dd}"
+                },
+                "Erp.BO.SalesOrderSvc/MasterUpdate  (via the CreateOrderAsync orchestrator)",
+                "The order remains on your server. Keri wraps no delete for sales orders, "
+                    + "so removing it means doing so in Epicor.");
 
-            if (!PocConfig.AllowWrites)
-            {
-                PocConfig.PrintDryRunBanner(endpoint);
-                return;
-            }
+            if (!proceed) return;
 
-            // Writes are armed — actually execute.
-            PocConfig.PrintLiveWriteBanner(endpoint);
             var create = await client.SalesOrder
                 .CreateOrderAsync(DemoCustomerID, needBy, DemoPONumber)
                 .ConfigureAwait(false);
@@ -156,6 +162,13 @@ namespace KeriPocs
                 if (!string.IsNullOrEmpty(create.CorrelationId)) Console.WriteLine($"  CorrelationId: {create.CorrelationId}");
                 if (create.StatusCode.HasValue)
                     Console.WriteLine($"  HTTP {create.StatusCode}");
+
+                // CreateOrderAsync is not idempotent. On an Indeterminate
+                // failure the commit was attempted and an order may exist, so
+                // say so rather than letting the reader assume a clean no-op.
+                if (create.FailureStage == FailureStage.Indeterminate)
+                    Console.WriteLine("  The commit was attempted — check for a new order "
+                                    + $"under PO '{DemoPONumber}' before running this again.");
                 return;
             }
 
