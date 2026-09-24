@@ -136,8 +136,10 @@ namespace Keri.Epicor
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
         /// An <see cref="OperationResult{T}"/> wrapping the order dataset as
-        /// echoed back by Epicor's <c>MasterUpdate</c>. On failure,
-        /// <c>ErrorMessage</c> describes what went wrong.
+        /// echoed back by Epicor's <c>MasterUpdate</c>. To read the new order
+        /// number from it:
+        /// <c>result.Value.ExtractDto&lt;OrderHed&gt;("OrderHed").OrderNum</c>.
+        /// On failure, <c>ErrorMessage</c> describes what went wrong.
         /// </returns>
         public async Task<OperationResult<JObject>> AddOrderLineAsync(
             int orderNum,
@@ -323,8 +325,26 @@ namespace Keri.Epicor
 
             var created = ClassifyCommit(await MasterUpdateAsync(
                 ds, custNum, 0, "OrderHed", ct).ConfigureAwait(false));
+            if (created.IsFailure)
+                return created.WithSteps(steps).Step("FAILED: MasterUpdate");
 
-            return created.WithSteps(steps).Step(created.IsSuccess ? "Order created" : "FAILED: MasterUpdate");
+            // MasterUpdate reported success, so an order exists. A saved dataset
+            // with no OrderNum means Epicor returned a shape the caller cannot
+            // read the new order out of — and because this method is not
+            // idempotent, a blind retry would create a second order. That is
+            // Indeterminate, not Uncommitted. Matches the same guard in
+            // CreateQuoteAsync and CreateProjectAsync.
+            JToken savedOrderNum = created.Value == null ? null
+                : created.Value["ds"] == null ? null
+                : created.Value["ds"]["OrderHed"] == null ? null
+                : created.Value["ds"]["OrderHed"][0] == null ? null
+                : created.Value["ds"]["OrderHed"][0]["OrderNum"];
+            if (savedOrderNum == null)
+                return MarkIndeterminate(StepFailure<JObject>(
+                    created.Value, "MasterUpdate", "OrderNum on the saved ds.OrderHed row"))
+                    .WithSteps(steps).Step("FAILED after the commit: the saved dataset has no OrderNum");
+
+            return created.WithSteps(steps).Step($"Order {savedOrderNum} created");
         }
     }
 }

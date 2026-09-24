@@ -32,6 +32,10 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ### Changed
 
+- **`CreateOrderAsync` guards its commit like the other two creators.** If `MasterUpdate` reports success but the echoed dataset carries no `OrderNum`, the result is now a failure marked `Indeterminate` rather than a success the caller cannot read an order out of. All three `Create*` orchestrators are non-idempotent, so the case that matters is a caller seeing success, finding nothing usable, and retrying — which would create a second order. `CreateQuoteAsync` and `CreateProjectAsync` have guarded this since 0.7.0; `CreateOrderAsync` did not.
+
+  A genuinely rejected commit — a credit hold, a validation failure — is unaffected: it still reports Epicor's message, `ErrorType` and `CorrelationId`, and is classified by `ClassifyCommit` before the guard is reached.
+
 - **Every write returns the dataset Epicor returned.** `CreateProjectAsync` returned a `Project`; `CreateQuoteAsync` returned a hand-rolled `{QuoteNum, QuoteObj}` object with the number stringified. Both now return the saved dataset as a `JObject`, like `CreateOrderAsync` and every other write. Epicor hands back a multi-table document; projecting it to one row discards the rest, and picking one field to return means the method guessing which field you wanted. Use `ExtractDto<T>("QuoteHed")` or index the dataset to get what you need from it.
 
   Both keep their post-commit guard: if `Update` succeeds but the saved dataset has no `QuoteNum` or no `Project` row, the result is a failure marked `Indeterminate` — the record exists, so establish what was created before retrying.
