@@ -253,6 +253,16 @@ The convention exists so a contributor or user running the POCs against a real e
 
 ---
 
+## Testing a change against your own project
+
+Tests and POCs cover most of it, but sometimes you need the assemblies you just built sitting in another solution — a customization or an internal tool that consumes Keri — before anything reaches nuget.org. A `ProjectReference` only helps if that project is in this solution, and a local NuGet feed means bumping a version on every rebuild.
+
+`Keri.Epicor/Local.targets.template` handles that case. Copy it to `Keri.Epicor/Local.targets`, edit the `KeriCopyDest` paths to point at your consumer's `lib/` folders, and build in Release — the Keri assemblies and their dependencies land there after the build. `Keri.Epicor.csproj` imports the file only if it exists, so a clone without one builds exactly as before.
+
+Two things worth knowing. `Local.targets` is gitignored and must stay that way: it holds paths from your own machine, and [SECURITY.md](SECURITY.md) includes a `git ls-files` check for it among the pre-release verifications. And the build prints how many DLLs it copied — if that count is lower than you expect, a source path isn't resolving, because a glob that matches nothing expands to nothing without complaint. The template's own comments cover the rest, including which configurations trigger the copy.
+
+---
+
 ## Pull requests
 
 - One thing per PR. A bug fix, a feature, a doc update — not a mix.

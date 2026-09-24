@@ -2,69 +2,52 @@
 
   <!-- =============================================================================
        Local.targets.template — copy this to Local.targets and edit the paths.
-       
+
+       WHEN YOU WANT THIS: you are developing against Keri's source and need the
+       freshly built assemblies in another local project before they are
+       published. If you only consume released versions, install the packages
+       from nuget.org instead — this file solves a different problem.
+
        SETUP:
-         1. Copy this file to Local.targets in the same folder (EpicorSvcs/).
+         1. Copy this file to Local.targets in the same folder (Keri.Epicor/).
          2. Edit the KeriCopyDest paths below to point at your consumer project
             lib/ folders.
-         3. Build the project in Release configuration — the DLLs copy
-            automatically.
-       
-       Local.targets is gitignored. Each developer maintains their own list of
-       consumer destinations without committing local paths to the repo.
-       
-       WHAT GETS COPIED — Keri's full runtime dependency closure (19 DLLs in
-       net8.0 builds, equivalent to what a published NuGet package would carry).
-       
-       Three layers:
-       
-       Keri's own libraries (3):
-         EpicorSvcs.dll
-         RESTServices.dll
-         FileHandling.dll
-       
-       Direct NuGet dependencies declared in Keri's csprojs (4):
-         Newtonsoft.Json.dll
-         System.Configuration.ConfigurationManager.dll
-         ClosedXML.dll
-         MailKit.dll
-       
-       Transitive dependencies (12), pulled in by the four above:
-         ClosedXML.Parser.dll, DocumentFormat.OpenXml.dll,
-         DocumentFormat.OpenXml.Framework.dll, ExcelNumberFormat.dll, RBush.dll,
-         SixLabors.Fonts.dll, System.IO.Packaging.dll, MimeKit.dll,
-         BouncyCastle.Cryptography.dll, System.Security.Cryptography.Pkcs.dll,
-         System.Diagnostics.EventLog.dll, System.Security.Cryptography.ProtectedData.dll
-       
-       HOW IT WORKS:
-       After a Release build of EpicorSvcs targeting net8.0, copy every *.dll from:
-         - $(TargetDir)                                  (EpicorSvcs's bin: itself + RESTServices + their deps)
-         - ..\FileHandling\bin\Release\net8.0\           (FileHandling's bin: itself + its deps)
-       
-       to each consumer project's lib/ folder. The wildcard *.dll filters out
-       .pdb, .deps.json, .runtimeconfig.json, App.config. Each consumer gets the
-       union of both source folders — the full dependency closure described above.
-       
-       Only Release / net8.0 triggers the copy. Debug builds and net48 builds
-       are silent. If your consumer projects target net48, change the
-       TargetFramework condition below.
-       
-       FILE LIFECYCLE NOTE:
-       Copy is "additive only" — if a NuGet dependency is removed from Keri,
-       its DLL will not be auto-deleted from consumer lib/ folders. Stale DLLs
-       must be cleaned up manually.
-       
-       For a full lib/ refresh after editing FileHandling, build the whole
-       solution in Release:
-           dotnet build KineticRESTIntegrator.sln -c Release
-       
-       The file is imported conditionally by EpicorSvcs.csproj via:
-       
+         3. Build the solution in Release — the DLLs copy automatically.
+
+       Local.targets is gitignored, so each developer keeps their own list of
+       destinations without committing local paths to the repo. Keri.Epicor.csproj
+       imports it conditionally:
+
            <Import Project="$(MSBuildThisFileDirectory)Local.targets"
                    Condition="Exists('$(MSBuildThisFileDirectory)Local.targets')" />
-       
-       so the public build is fine without this file — only developers who
-       have a Local.targets get the copy behavior.
+
+       The Exists() condition means a build without this file behaves normally.
+
+       WHAT GETS COPIED:
+       Every *.dll from three output folders — this project's, plus Keri.Files'
+       and Keri.Mail's. That yields the four Keri assemblies and whatever NuGet
+       dependencies each project's build placed beside them (Newtonsoft.Json,
+       ClosedXML and its graph, MailKit/MimeKit and theirs). The *.dll wildcard
+       filters out .pdb, .xml, .deps.json and .dll.config.
+
+       Drop the Keri.Files or Keri.Mail line if your consumer does not use them.
+
+       CHECK THE COUNT. The Message below reports how many DLLs were copied. If
+       that number is smaller than you expect, a source path is not resolving —
+       an unbuilt project, or a folder renamed since this file was written. A
+       glob that matches nothing expands to nothing silently, so the count is
+       the only signal you get. (This template previously named projects from
+       before the Keri rename and quietly copied three DLLs while describing
+       nineteen.)
+
+       Only Release / net8.0 triggers the copy. Debug and net48 builds are
+       silent; change the condition below if your consumers target net48.
+
+       FILE LIFECYCLE: the copy is additive. Removing a dependency from Keri does
+       not delete its DLL from a consumer's lib/ folder — clean those up by hand.
+
+       For a full refresh, build everything rather than one project:
+           dotnet build KineticRESTIntegrator.sln -c Release
        ============================================================================= -->
 
   <ItemGroup>
@@ -78,12 +61,13 @@
           Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net8.0'">
 
     <ItemGroup>
-      <!-- All DLLs from this project's output dir (EpicorSvcs + RESTServices + their deps) -->
+      <!-- This project's output: Keri.Epicor, Keri.RestTransport, and their deps. -->
       <KeriDll Include="$(TargetDir)*.dll" />
 
-      <!-- All DLLs from the sibling FileHandling output dir (FileHandling + its deps).
-           Silent no-op if FileHandling hasn't been built in Release yet. -->
-      <KeriDll Include="$(MSBuildThisFileDirectory)..\FileHandling\bin\Release\net8.0\*.dll" />
+      <!-- The sibling packages. Each resolves only if that project has been
+           built in Release/net8.0; see CHECK THE COUNT above. -->
+      <KeriDll Include="$(MSBuildThisFileDirectory)..\Keri.Files\bin\Release\net8.0\*.dll" />
+      <KeriDll Include="$(MSBuildThisFileDirectory)..\Keri.Mail\bin\Release\net8.0\*.dll" />
     </ItemGroup>
 
     <Copy SourceFiles="@(KeriDll)"
