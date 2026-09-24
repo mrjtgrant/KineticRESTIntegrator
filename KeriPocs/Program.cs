@@ -60,6 +60,11 @@ namespace KeriPocs
                     // Run each POC in turn. If one fails, log it and keep going
                     // - a connection issue with one service shouldn't prevent
                     // the others from demonstrating their behavior.
+                    //
+                    // The OData probe goes first on purpose: whether this
+                    // session honours query options decides how to read the
+                    // row counts every other read POC prints.
+                    await SafeRun("OData",     () => ODataProbePoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("UserCodes", () => UserCodesPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("Part",      () => PartPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("UDTable",       () => UDTablePoc.RunAsync(client)).ConfigureAwait(false);

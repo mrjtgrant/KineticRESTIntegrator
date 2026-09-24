@@ -21,6 +21,12 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ### Added
 
+- **An OData probe POC**, answering whether a given session honours the query options every entity-set read depends on. Epicor's v1 endpoints (`/api/v1/`) are not OData; its v2 endpoints are, and setting `ApiKey` is what selects them. On a v1 session the `$filter` and `$top` Keri puts on the URL are believed to be ignored — no error, just the full collection — which is the worst shape a defect can take: the call succeeds, the rows look like rows, and the wrongness surfaces somewhere downstream.
+
+  Two reads of `PayMethod`, one of the smallest reference tables in Epicor, so an ignored `$top` costs a handful of rows rather than a table scan. The first establishes the table is not empty; the second filters on a value that cannot exist. Nothing back means `$filter` worked. Anything back means it was dropped, and the POC says so and names what it affects. Filtering for an impossible value rather than a real one keeps the answer unambiguous and needs nothing configured per install.
+
+  The URLs come from `OnTrace`, so it reports what Keri actually sent rather than what it intended — which separates "Epicor ignored the option" from "Keri never included it." Only the path and query are printed, with the company segment of a v2 URL masked, so the output is safe to paste into an issue. It runs first, because its answer decides how to read the row counts every other read POC prints.
+
 - **A trace hook on the session.** `RestSessionKey.OnTrace` is called as each HTTP attempt completes with a `KeriTraceEvent`: method, URL, status, elapsed milliseconds, attempt number, whether a retry follows, and the error when there was one. Null by default, so nothing is traced unless you ask. Keri takes no logging dependency — wiring it to `ILogger`, Serilog or `Console.WriteLine` is one line of your code. A handler that throws is ignored rather than failing the call.
 - **`OperationResult<T>.Steps`** — what an orchestrator did on the way to a result, in order, and on a failure the step that stopped it. The trail travels with the result, so it survives being returned, logged, or handed to you by someone reporting a problem, including from inside a BPM where there is nowhere to log. Empty for single service calls, which `ResourcePath` and `ErrorMessage` already describe. Every orchestrator records it.
 

@@ -483,11 +483,13 @@ The fastest way to see Keri working is `KeriDemo` — an end-to-end sample where
 dotnet run --project KeriDemo
 ```
 
-For per-service detail, the `KeriPocs` project has five labeled scenarios (UserCodes, Part, UDTable, SalesOrder, MenuTree):
+For per-service detail, the `KeriPocs` project has eight labeled scenarios (OData, UserCodes, Part, UDTable, SalesOrder, JobEntry, MenuTree, Function):
 
 ```
 dotnet run --project KeriPocs
 ```
+
+The OData one runs first on purpose. It establishes whether your session honours `$filter` and `$top` at all — Epicor's v1 endpoints are not OData, and setting `ApiKey` is what selects the v2 shape — because that decides how to read the row counts every other read prints. It does this with two reads of one small reference table, the second filtered on a value that cannot exist: nothing back means the filter worked, anything back means it was dropped.
 
 Reads run safely against your configured environment. The two writes (UDTable upsert, SalesOrder create) are **gated twice**: they need `KERI_POC_ALLOW_WRITES` set, and then each one asks before it runs, naming the records it will create and saying whether they can be removed again. With the variable unset they print what they would send and stop, so an unarmed run shows you everything an armed one would do.
 
