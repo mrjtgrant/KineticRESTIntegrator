@@ -110,51 +110,6 @@ namespace Keri.Epicor
         }
 
         /// <summary>
-        /// Retrieves a customer by ID and hands back its <c>Customer</c> row as
-        /// <typeparamref name="T"/>.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// The same one call as
-        /// <see cref="GetByIDAsync(string, CancellationToken)"/> — Epicor still returns the whole
-        /// dataset — but the result carries the header row instead of the
-        /// dataset, for the common case of reading a record rather than editing
-        /// one. The full dataset is still on
-        /// <see cref="OperationResult{T}.RawResponse"/>. When Epicor returns no
-        /// such row the result is a success with a null <c>Value</c>.
-        /// </para>
-        /// <para>
-        /// Use the untyped overload when you intend to change the record and
-        /// post it back: Epicor's <c>Update</c> expects the whole dataset
-        /// returned to it, and a projected row cannot stand in for one.
-        /// </para>
-        /// </remarks>
-        /// <typeparam name="T">
-        /// A type whose properties are named after the <c>Customer</c> columns —
-        /// the bundled <see cref="Keri.Epicor.Dtos.Customer"/>, or your own.
-        /// </typeparam>
-        /// <param name="custID">The customer ID to retrieve (e.g. <c>"ACME01"</c>).</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// The <c>Customer</c> row as <typeparamref name="T"/>, or a null
-        /// <c>Value</c> when there is no such row.
-        /// </returns>
-        /// <example>
-        /// <code>
-        /// var result = await client.Customer.GetByIDAsync&lt;Customer&gt;("ACME01");
-        /// if (result.IsSuccess &amp;&amp; result.Value != null)
-        ///     Console.WriteLine(result.Value.Name);
-        /// </code>
-        /// </example>
-        public async Task<OperationResult<T>> GetByIDAsync<T>(
-            string custID,
-            CancellationToken ct = default) where T : class
-        {
-            return AsPrimaryRow<T>(
-                await GetByIDAsync(custID, ct).ConfigureAwait(false), "Customer");
-        }
-
-        /// <summary>
         /// Persists a customer dataset. Calls
         /// <c>Erp.BO.CustomerSvc/Update</c> in Epicor.
         /// </summary>

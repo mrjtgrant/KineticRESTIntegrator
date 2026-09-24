@@ -22,12 +22,14 @@ namespace Keri.Epicor
         /// <param name="quote">The quote details to create.</param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping a small result object:
-        /// <c>Value["QuoteNum"]</c> is the new quote number and
-        /// <c>Value["QuoteObj"]</c> is the full quote dataset as echoed back
-        /// by Epicor. On failure, <c>ErrorMessage</c> describes what went
-        /// wrong — including a process step that returned a shape this method
-        /// cannot continue from, with the response attached to
+        /// An <see cref="OperationResult{T}"/> wrapping the saved quote
+        /// dataset, exactly as Epicor's <c>Update</c> echoed it back. To read
+        /// the new quote number from it:
+        /// <c>(int)result.Value["ds"]["QuoteHed"][0]["QuoteNum"]</c>, or
+        /// <c>result.Value.ExtractDto&lt;QuoteHed&gt;("QuoteHed").QuoteNum</c>
+        /// for the whole header row. On failure, <c>ErrorMessage</c> describes
+        /// what went wrong — including a process step that returned a shape
+        /// this method cannot continue from, with the response attached to
         /// <c>RawResponse</c>.
         /// </returns>
         /// <remarks>
@@ -89,9 +91,6 @@ namespace Keri.Epicor
             hedRow["OTSZIP"] = quote.OTSZIP;
             hedRow["OTSCountryNum"] = quote.OTSCountryNum;
 
-            // UpdateAsync is now public and returns OperationResult. Propagate
-            // failure; on success, build the orchestrator's custom result
-            // shape ({QuoteNum, QuoteObj}) from the saved dataset.
             // Update is the commit boundary for this orchestrator.
             steps.Add("Stamp the PO number and one-time ship-to address");
             steps.Add("COMMIT: Update");
@@ -117,12 +116,7 @@ namespace Keri.Epicor
                     saved, "Update", "QuoteNum on the saved ds.QuoteHed row"))
                     .WithSteps(steps).Step("FAILED after the commit: the saved dataset has no QuoteNum");
 
-            JObject result = new JObject {
-                new JProperty("QuoteNum", quoteNum.ToString()),
-                new JProperty("QuoteObj", saved)
-            };
-
-            return OperationResult<JObject>.Success(result)
+            return updated
                 .WithSteps(steps).Step($"Quote {quoteNum} created");
         }
     }

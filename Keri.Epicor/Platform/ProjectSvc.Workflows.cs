@@ -26,8 +26,10 @@ namespace Keri.Epicor
         /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>
-        /// An <see cref="OperationResult{T}"/> wrapping the created
-        /// <see cref="Project"/> as echoed back by Epicor's <c>Update</c>.
+        /// An <see cref="OperationResult{T}"/> wrapping the saved project
+        /// dataset, exactly as Epicor's <c>Update</c> echoed it back. To read
+        /// the created row from it:
+        /// <c>result.Value.ExtractDto&lt;Project&gt;("Project")</c>.
         /// On failure, <c>ErrorMessage</c> describes what went wrong —
         /// including a process step that returned a shape this method cannot
         /// continue from, with the response attached to <c>RawResponse</c>.
@@ -40,21 +42,20 @@ namespace Keri.Epicor
         /// <see cref="Keri.Epicor.FailureStage.Indeterminate"/> means a project
         /// may exist — establish whether it does before retrying.
         /// </remarks>
-        public async Task<OperationResult<Project>> CreateProjectAsync(
+        public async Task<OperationResult<JObject>> CreateProjectAsync(
             string ProjectID,
             DateTime StartDate,
             string Description = "",
             CancellationToken ct = default)
         {
-            // GetNewProjectAsync is now public and returns OperationResult —
-            // propagate transport/Epicor failures up immediately, re-typed to
-            // the orchestrator's typed return.
+            // GetNewProjectAsync is public and returns OperationResult —
+            // propagate transport/Epicor failures up immediately.
             var steps = new List<string>();
             steps.Add("Get a new Project row");
 
             var newProject = await GetNewProjectAsync(ct).ConfigureAwait(false);
             if (newProject.IsFailure)
-                return MarkUncommitted(newProject.Retype<Project>())
+                return MarkUncommitted(newProject)
                     .WithSteps(steps).Step("FAILED: GetNewProject");
             JObject ds = newProject.Value;
 
@@ -72,41 +73,42 @@ namespace Keri.Epicor
                 ? null
                 : ds["ds"]["Project"] as JArray;
             if (projectRows == null || projectRows.Count == 0)
-                return MarkUncommitted(StepFailure<Project>(
+                return MarkUncommitted(StepFailure<JObject>(
                     ds, "OnChangeProjectID/OnChangeStartDate", "a ds.Project row"))
                     .WithSteps(steps).Step("FAILED: no Project row came back — the ProjectID may already exist");
 
             JObject projectRow = projectRows[0] as JObject;
             if (projectRow == null)
-                return MarkUncommitted(StepFailure<Project>(
+                return MarkUncommitted(StepFailure<JObject>(
                     ds, "OnChangeProjectID", "a ds.Project row object"))
                     .WithSteps(steps).Step("FAILED: the Project row was not an object");
 
             projectRow["Description"] = Description;
 
-            // UpdateAsync is now public and returns OperationResult. Propagate
-            // failure (re-typed), then extract the typed Project from the
-            // saved dataset.
             // Update is the commit boundary for this orchestrator.
             steps.Add("Stamp the description");
             steps.Add("COMMIT: Update");
 
             var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
             if (updated.IsFailure)
-                return ClassifyCommit(updated.Retype<Project>())
+                return ClassifyCommit(updated)
                     .WithSteps(steps).Step("FAILED: Update");
 
-            // ExtractDto returns default(T) when the table is missing, which
-            // would hand the caller a null Project inside a success.
-            Project created = updated.Value.ExtractDto<Project>("Project");
-            if (created == null)
+            // Update reported success, so a saved dataset with no Project row
+            // means Epicor returned a shape that violates its own contract.
+            // Report it rather than handing back a dataset the caller cannot
+            // read the new project out of.
+            JArray savedRows = updated.Value == null ? null
+                : updated.Value["ds"] == null ? null
+                : updated.Value["ds"]["Project"] as JArray;
+            if (savedRows == null || savedRows.Count == 0)
                 // Update succeeded, so a project was created — this failure is
                 // past the commit. Indeterminate, not Uncommitted.
-                return MarkIndeterminate(StepFailure<Project>(
+                return MarkIndeterminate(StepFailure<JObject>(
                     updated.Value, "Update", "a ds.Project row in the saved dataset"))
                     .WithSteps(steps).Step("FAILED after the commit: the saved dataset has no Project row");
 
-            return OperationResult<Project>.Success(created)
+            return updated
                 .WithSteps(steps).Step($"Project '{ProjectID}' created");
         }
     }

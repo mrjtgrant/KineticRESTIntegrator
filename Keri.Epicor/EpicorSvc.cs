@@ -336,58 +336,6 @@ namespace Keri.Epicor
         }
 
 
-        /// <summary>
-        /// Projects a dataset result onto the one row the caller asked for — the
-        /// first row of <paramref name="tableName"/> — without losing anything
-        /// the dataset result carried.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// This is the single place the typed <c>GetByIDAsync&lt;T&gt;</c>
-        /// overloads convert. A failure passes through with its message, status
-        /// code, resource path, raw response, error type, correlation id,
-        /// exception, and step trail intact, so a typed read reports a problem
-        /// exactly as the untyped one does. A success whose dataset has no such
-        /// row yields a success with a null <c>Value</c>: the call worked and
-        /// Epicor returned nothing for that key.
-        /// </para>
-        /// <para>
-        /// Nothing is thrown away — the whole dataset, related tables and all,
-        /// is still on <see cref="OperationResult{T}.RawResponse"/>. This only
-        /// picks the header row for a caller who wanted just that.
-        /// </para>
-        /// </remarks>
-        /// <typeparam name="T">The DTO type for the row.</typeparam>
-        /// <param name="dataset">The untyped result to project.</param>
-        /// <param name="tableName">
-        /// The Epicor table holding the row (e.g. <c>"Customer"</c>, <c>"OrderHed"</c>).
-        /// </param>
-        /// <returns>The projected row, or the carried-through failure.</returns>
-        internal static OperationResult<T> AsPrimaryRow<T>(
-            OperationResult<JObject> dataset,
-            string tableName) where T : class
-        {
-            if (dataset == null)
-                return OperationResult<T>.Failure("The call returned no result to project.");
-
-            if (dataset.IsFailure)
-                return dataset.Retype<T>();
-
-            try
-            {
-                T row = dataset.Value.ExtractDto<T>(tableName);
-                return OperationResult<T>
-                    .Success(row, dataset.Value, dataset.ResourcePath)
-                    .WithSteps(dataset.Steps);
-            }
-            catch (Exception ex)
-            {
-                // A DTO whose property types don't match the columns lands here
-                // rather than throwing out of an await.
-                return OperationResult<T>.Failure(ex, dataset.ResourcePath);
-            }
-        }
-
 
         /// <summary>
         /// Normalizes the three response shapes Epicor returns into a

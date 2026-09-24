@@ -23,7 +23,6 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 - **A trace hook on the session.** `RestSessionKey.OnTrace` is called as each HTTP attempt completes with a `KeriTraceEvent`: method, URL, status, elapsed milliseconds, attempt number, whether a retry follows, and the error when there was one. Null by default, so nothing is traced unless you ask. Keri takes no logging dependency — wiring it to `ILogger`, Serilog or `Console.WriteLine` is one line of your code. A handler that throws is ignored rather than failing the call.
 - **`OperationResult<T>.Steps`** — what an orchestrator did on the way to a result, in order, and on a failure the step that stopped it. The trail travels with the result, so it survives being returned, logged, or handed to you by someone reporting a problem, including from inside a BPM where there is nowhere to log. Empty for single service calls, which `ResourcePath` and `ErrorMessage` already describe. Every orchestrator records it.
-- **Typed `GetByIDAsync<T>` overloads** on `Customer`, `Part`, `Vendor`, `SalesOrder`, `Quote`, `PO`, `Receipt`, `JobEntry`, `Project` and `EngWorkBench`. The same single call as the untyped overload, returning the header row as your type instead of the dataset — for reading a record rather than editing one. The whole dataset is still on `RawResponse`; no row for that key is a success with a null `Value`; a failure carries through with its message, status, error type and correlation id unchanged. The untyped overload is unchanged and remains the one to use for a `GetByID` → mutate → `Update` round trip, which Epicor requires the whole dataset for.
 
 ### Fixed
 
@@ -32,6 +31,12 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
   Three places that look identical were left alone deliberately: the 404 and 409 from `GetByPONumAsync`, and `SaveAsync`'s "returned no row to populate". In each the underlying call *succeeded* and Keri is the one deciding the operation cannot continue, so there is no provider error to carry.
 
 ### Changed
+
+- **Every write returns the dataset Epicor returned.** `CreateProjectAsync` returned a `Project`; `CreateQuoteAsync` returned a hand-rolled `{QuoteNum, QuoteObj}` object with the number stringified. Both now return the saved dataset as a `JObject`, like `CreateOrderAsync` and every other write. Epicor hands back a multi-table document; projecting it to one row discards the rest, and picking one field to return means the method guessing which field you wanted. Use `ExtractDto<T>("QuoteHed")` or index the dataset to get what you need from it.
+
+  Both keep their post-commit guard: if `Update` succeeds but the saved dataset has no `QuoteNum` or no `Project` row, the result is a failure marked `Indeterminate` — the record exists, so establish what was created before retrying.
+
+  **Migration:** `CreateProjectAsync` callers reading `result.Value.ProjectID` become `result.Value.ExtractDto<Project>("Project")?.ProjectID`. `CreateQuoteAsync` callers reading `result.Value["QuoteNum"]` become `result.Value["ds"]["QuoteHed"][0]["QuoteNum"]`, now an integer rather than a string.
 
 - **All four assemblies are now strong-named.** A strong-named assembly can only reference other strong-named assemblies without a compiler warning, so an unsigned Keri meant a warning — or, for a consumer building with `TreatWarningsAsErrors`, a build failure — in any application that signs its own output. The key lives in the repository as `Keri.snk` and is applied to every project by `Directory.Build.props`. It is not a secret: strong naming in .NET is an identity mechanism, not a security one, and committing the key is what lets contributors and CI build the solution.
 

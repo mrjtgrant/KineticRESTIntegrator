@@ -284,55 +284,6 @@ namespace Keri.Epicor
         }
 
         /// <summary>
-        /// Retrieves a receipt by ID and hands back its <c>RcvHead</c> row as
-        /// <typeparamref name="T"/>.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// The same one call as
-        /// <see cref="GetByIDAsync(int, string, string, CancellationToken)"/> — Epicor still returns the whole
-        /// dataset — but the result carries the header row instead of the
-        /// dataset, for the common case of reading a record rather than editing
-        /// one. The full dataset is still on
-        /// <see cref="OperationResult{T}.RawResponse"/>. When Epicor returns no
-        /// such row the result is a success with a null <c>Value</c>.
-        /// </para>
-        /// <para>
-        /// Use the untyped overload when you intend to change the record and
-        /// post it back: Epicor's <c>Update</c> expects the whole dataset
-        /// returned to it, and a projected row cannot stand in for one.
-        /// </para>
-        /// </remarks>
-        /// <typeparam name="T">
-        /// A type whose properties are named after the <c>RcvHead</c> columns —
-        /// the bundled <see cref="Keri.Epicor.Dtos.RcvHead"/>, or your own.
-        /// </typeparam>
-        /// <param name="vendorNum">The vendor number on the receipt.</param>
-        /// <param name="purPoint">The purchase point, or an empty string when there is none.</param>
-        /// <param name="packSlip">The pack slip that identifies the receipt.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>
-        /// The <c>RcvHead</c> row as <typeparamref name="T"/>, or a null
-        /// <c>Value</c> when there is no such row.
-        /// </returns>
-        /// <example>
-        /// <code>
-        /// var result = await client.Receipt.GetByIDAsync&lt;RcvHead&gt;(1234, "", "PS-5001");
-        /// if (result.IsSuccess &amp;&amp; result.Value != null)
-        ///     Console.WriteLine(result.Value.ReceiptDate);
-        /// </code>
-        /// </example>
-        public async Task<OperationResult<T>> GetByIDAsync<T>(
-            int vendorNum,
-            string purPoint,
-            string packSlip,
-            CancellationToken ct = default) where T : class
-        {
-            return AsPrimaryRow<T>(
-                await GetByIDAsync(vendorNum, purPoint, packSlip, ct).ConfigureAwait(false), "RcvHead");
-        }
-
-        /// <summary>
         /// Gets a fresh, empty receipt-header dataset for a vendor and
         /// purchase point. Calls <c>Erp.BO.ReceiptSvc/GetNewRcvHead</c> in
         /// Epicor.

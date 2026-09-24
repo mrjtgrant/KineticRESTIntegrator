@@ -373,25 +373,29 @@ The `OperationResult` also carries:
 
 ### Datasets and DTOs — which one you get, and why
 
-Keri types the edges and leaves the middle alone. That is a deliberate design, not an unfinished one:
+Epicor gives you two different things depending on what you ask for, and Keri keeps that distinction rather than flattening it. Three rules, no exceptions:
 
-- **Reads give you DTOs.** List reads (`PartsAsync`, `CustomersAsync`, …) return typed rows, and every `GetByIDAsync` has a generic overload that hands back the header row instead of the dataset:
+- **An entity-set read returns typed rows.** `PartsAsync`, `CustomersAsync`, `POesAsync` and the rest query an OData entity set — a flat list of rows, no related tables, no `RowMod`. A DTO isn't a projection of that; it *is* the shape, so that is what you get.
 
-  ```csharp
-  var result = await epicorClient.Customer.GetByIDAsync<Customer>("CUST001");
-  if (result.IsSuccess && result.Value != null)
-      Console.WriteLine(result.Value.Name);
-  ```
+- **A Business Object read returns the dataset.** `GetByIDAsync` gives you the whole `ds` document — `Customer`, `CustCnt`, `CustomerAttch`, all of it — as a `JObject`, exactly as Epicor sent it. If you have written Epicor customizations you already know this shape; it is the one in the Swagger page and the one your BPMs see.
 
-  It is the same single call as the untyped overload — Epicor still returns the whole dataset, and the whole dataset is still on `RawResponse`. When Epicor has no row for that key, the result is a *success* with a null `Value`: the call worked, there was nothing to find.
+- **A write returns the dataset Epicor returned.** `CreateOrderAsync`, `CreateQuoteAsync`, `CreateProjectAsync`, `AddMtlsAsync`, `MoveInventoryAsync` and the rest hand back the saved dataset — every table, every row, including the ones the call never touched. Where a write has no dataset to return, it returns its own outcome instead: `TruncateAsync` gives you the number of rows deleted.
 
-- **Outcomes give you DTOs.** An orchestrator that creates something hands back what it created, typed.
+When you want a typed row out of a dataset, you ask for it explicitly:
 
-- **Edits stay datasets.** A change posted back to Epicor is `GetByID` → mutate → `Update`, and Epicor requires the *entire* dataset returned to it — every table, every row, including the ones you never touched. A DTO of the header row cannot stand in for that, and a wrapper that pretended otherwise would silently drop the rest. So the untyped `GetByIDAsync` and `UpdateAsync` take and return `JObject`, and that is the right currency for an edit.
+```csharp
+var created = await epicorClient.SalesOrder.CreateOrderAsync("CUST001", needByDate);
+if (created.IsSuccess)
+{
+    OrderHed header = created.Value.ExtractDto<OrderHed>("OrderHed");
+    if (header != null)
+        Console.WriteLine($"Created order {header.OrderNum}");
+}
+```
 
-The short version: **datasets stay datasets; DTOs are for reads and outcomes.** Reach for the generic overload when you are reading a record. Reach for the untyped one when you are about to change it.
+`ExtractDto<T>(tableName)` takes the first row of a table; `ExtractDtoList<T>(tableName)` takes all of them. Both are extension methods on `JObject`, so they work on anything carrying a `ds` envelope — a `GetByIDAsync` result, an `UpdateAsync` result, an orchestrator's return. `T` is any type whose properties are named after the table's columns: the bundled DTO, or your own narrower class with just the fields you care about. A missing or empty table gives you `null` rather than an exception.
 
-The generic overload accepts any type whose properties are named after the table's columns — the bundled DTO, or your own narrower class with just the fields you care about. It is available on `Customer`, `Part`, `Vendor`, `SalesOrder`, `Quote`, `PO`, `Receipt`, `JobEntry`, `Project`, and `EngWorkBench`.
+**Why there is no typed `GetByIDAsync<T>`.** It would look convenient and it would be a lie: a `GetByID` response is a multi-table document, and handing back one row from it is a projection that silently discards the rest. Hiding that inside a method that looks like a fetch is how people end up surprised. `ExtractDto<T>` does the same work in one more line, and that line says what it is doing. One dataset, one visible way to narrow it.
 
 ### Naming conventions
 
@@ -663,7 +667,7 @@ The SDK has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->396<!--/TESTS--> tests, run on both `net48` and `net8.0`.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->387<!--/TESTS--> tests, run on both `net48` and `net8.0`.
 
 Test Explorer in Visual Studio also discovers and runs them.
 
