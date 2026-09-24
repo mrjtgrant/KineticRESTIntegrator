@@ -77,9 +77,7 @@ namespace Keri.Epicor
                 ct: ct).ConfigureAwait(false);
 
             if (lookup.IsFailure)
-                return OperationResult<JObject>.Failure(
-                    lookup.ErrorMessage, lookup.StatusCode,
-                    lookup.ResourcePath, lookup.RawResponse)
+                return lookup.Retype<JObject>()
                     .WithSteps(steps).Step("FAILED: the lookup query");
 
             List<OrderHed> matches = lookup.Value ?? new List<OrderHed>();

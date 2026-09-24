@@ -405,8 +405,7 @@ namespace Keri.Epicor
             // captured for the caller, not fed back into the pipeline.
             var check = await CheckPartChangesAsync(payload, ct).ConfigureAwait(false);
             if (check.IsFailure)
-                return OperationResult<JObject>.Failure(
-                    check.ErrorMessage, check.StatusCode, check.ResourcePath, check.RawResponse);
+                return check.Retype<JObject>();
 
             string partChangedMessage = "";
             string partSNChangedMessage = "";

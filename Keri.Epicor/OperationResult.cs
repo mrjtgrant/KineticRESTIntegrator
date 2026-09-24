@@ -61,6 +61,58 @@ namespace Keri.Epicor
             return this;
         }
 
+        /// <summary>
+        /// Carries this failure across a change of payload type, keeping
+        /// everything it reported.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// An orchestrator whose return type differs from the call it delegates
+        /// to has to re-describe that call's failure, and re-describing it field
+        /// by field drops whatever the rewrite forgets.
+        /// <see cref="ErrorType"/> and <see cref="CorrelationId"/> were the
+        /// casualties — the two the documentation tells callers to branch on and
+        /// to quote to whoever reads the server log. This copies all of it:
+        /// message, status code, resource path, raw response, error type,
+        /// correlation id, exception, commit stage, and the step trail.
+        /// </para>
+        /// <para>
+        /// Pass <paramref name="message"/> when the caller is re-describing the
+        /// failure rather than relaying it — a truncate reporting how many rows
+        /// it had already deleted, for instance. Everything else still carries,
+        /// because the underlying cause has not changed.
+        /// </para>
+        /// <para>
+        /// This is for failures. A success has nothing to carry, so calling it on
+        /// one is a mistake in the caller and comes back as a failure saying so,
+        /// rather than as a silent empty error.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="TTo">The payload type the caller returns.</typeparam>
+        /// <param name="message">
+        /// Replaces the error message; omit to keep this result's own.
+        /// </param>
+        /// <returns>The same failure, typed as <typeparamref name="TTo"/>.</returns>
+        internal OperationResult<TTo> Retype<TTo>(string message = null)
+        {
+            if (IsSuccess)
+                return OperationResult<TTo>.Failure(
+                    "Retype was called on a successful result; there is no failure to carry.");
+
+            OperationResult<TTo> carried = OperationResult<TTo>.Failure(
+                message ?? this.ErrorMessage,
+                this.StatusCode,
+                this.ResourcePath,
+                this.RawResponse,
+                this.ErrorType,
+                this.CorrelationId);
+
+            carried.Exception     = this.Exception;
+            carried.FailureStage  = this.FailureStage;
+
+            return carried.WithSteps(this.Steps);
+        }
+
         /// <summary>True when the operation succeeded.</summary>
         public bool IsSuccess { get; internal set; }
 

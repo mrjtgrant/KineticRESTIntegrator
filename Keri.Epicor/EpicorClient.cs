@@ -169,11 +169,7 @@ namespace Keri.Epicor
 
             return probe.IsSuccess
                 ? OperationResult<bool>.Success(true, probe.RawResponse)
-                : OperationResult<bool>.Failure(
-                    probe.ErrorMessage,
-                    probe.StatusCode,
-                    probe.ResourcePath,
-                    probe.RawResponse);
+                : probe.Retype<bool>();
         }
 
         // ---------------------------------------------------------------------

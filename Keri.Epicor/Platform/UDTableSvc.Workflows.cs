@@ -279,8 +279,7 @@ namespace Keri.Epicor
 
             var all = await QueryAsync(null, table, 5000, ct).ConfigureAwait(false);
             if (all.IsFailure)
-                return OperationResult<int>.Failure(
-                    all.ErrorMessage, all.StatusCode, all.ResourcePath, all.RawResponse)
+                return all.Retype<int>()
                     .WithSteps(steps).Step("FAILED: the rows could not be read");
 
             steps.Add($"COMMIT: deleting {all.Value.Count} row(s), one call each");
@@ -297,11 +296,10 @@ namespace Keri.Epicor
                     table, ct).ConfigureAwait(false);
 
                 if (removed.IsFailure)
-                    return OperationResult<int>.Failure(
+                    return removed.Retype<int>(
                         String.Format(
                             "Truncate of '{0}' stopped after {1} row(s) deleted: {2}",
-                            table, deleted, removed.ErrorMessage),
-                        removed.StatusCode, removed.ResourcePath, removed.RawResponse)
+                            table, deleted, removed.ErrorMessage))
                         .WithSteps(steps)
                         .Step($"FAILED part-way: {deleted} row(s) were deleted and cannot be undone");
 

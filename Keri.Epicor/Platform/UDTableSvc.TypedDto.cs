@@ -169,8 +169,7 @@ namespace Keri.Epicor
                 keyRow.Key1, keyRow.Key2, keyRow.Key3, keyRow.Key4, keyRow.Key5,
                 UDTable, ct).ConfigureAwait(false);
             if (raw.IsFailure)
-                return OperationResult<T>.Failure(
-                    raw.ErrorMessage, raw.StatusCode, raw.ResourcePath, raw.RawResponse);
+                return raw.Retype<T>();
 
             if (raw.Value == null)
                 return OperationResult<T>.Success(default(T), raw.RawResponse);
@@ -237,8 +236,7 @@ namespace Keri.Epicor
             var raw = await QueryAsync(filterRow, UDTable, top, ct).ConfigureAwait(false);
 
             if (raw.IsFailure)
-                return OperationResult<List<T>>.Failure(
-                    raw.ErrorMessage, raw.StatusCode, raw.ResourcePath, raw.RawResponse);
+                return raw.Retype<List<T>>();
 
             var projected = new List<T>(raw.Value?.Count ?? 0);
             if (raw.Value != null)

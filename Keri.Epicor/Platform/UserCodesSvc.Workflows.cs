@@ -54,8 +54,7 @@ namespace Keri.Epicor
 
             var codes = await GetByIDAsync(codeTypeID, ct).ConfigureAwait(false);
             if (codes.IsFailure)
-                return OperationResult<string>.Failure(
-                    codes.ErrorMessage, codes.StatusCode, codes.ResourcePath, codes.RawResponse)
+                return codes.Retype<string>()
                     .WithSteps(steps).Step("FAILED: the code type could not be read");
 
             var match = codes.Value.FirstOrDefault(c => c.CodeID == codeID);

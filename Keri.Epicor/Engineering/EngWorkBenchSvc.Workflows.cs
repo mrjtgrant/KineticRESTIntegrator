@@ -51,8 +51,7 @@ namespace Keri.Epicor
                 .GetDatasetForTreeWithPartValidationAsync(sourcepart, ct)
                 .ConfigureAwait(false);
             if (bom.IsFailure)
-                return OperationResult<JObject>.Failure(
-                    bom.ErrorMessage, bom.StatusCode, bom.ResourcePath, bom.RawResponse)
+                return bom.Retype<JObject>()
                     .WithSteps(steps).Step("FAILED: the source BOM could not be read");
 
             steps.Add($"Get a new ECOOpr row in group '{firstMtl.GroupID}'");

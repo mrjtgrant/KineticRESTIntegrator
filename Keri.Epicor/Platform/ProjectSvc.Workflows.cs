@@ -54,9 +54,7 @@ namespace Keri.Epicor
 
             var newProject = await GetNewProjectAsync(ct).ConfigureAwait(false);
             if (newProject.IsFailure)
-                return MarkUncommitted(OperationResult<Project>.Failure(
-                    newProject.ErrorMessage, newProject.StatusCode,
-                    newProject.ResourcePath, newProject.RawResponse))
+                return MarkUncommitted(newProject.Retype<Project>())
                     .WithSteps(steps).Step("FAILED: GetNewProject");
             JObject ds = newProject.Value;
 
@@ -95,9 +93,7 @@ namespace Keri.Epicor
 
             var updated = await UpdateAsync(ds, ct).ConfigureAwait(false);
             if (updated.IsFailure)
-                return ClassifyCommit(OperationResult<Project>.Failure(
-                    updated.ErrorMessage, updated.StatusCode,
-                    updated.ResourcePath, updated.RawResponse))
+                return ClassifyCommit(updated.Retype<Project>())
                     .WithSteps(steps).Step("FAILED: Update");
 
             // ExtractDto returns default(T) when the table is missing, which

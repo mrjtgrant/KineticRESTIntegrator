@@ -371,17 +371,7 @@ namespace Keri.Epicor
                 return OperationResult<T>.Failure("The call returned no result to project.");
 
             if (dataset.IsFailure)
-            {
-                OperationResult<T> failed = OperationResult<T>.Failure(
-                    dataset.ErrorMessage,
-                    dataset.StatusCode,
-                    dataset.ResourcePath,
-                    dataset.RawResponse,
-                    dataset.ErrorType,
-                    dataset.CorrelationId);
-                failed.Exception = dataset.Exception;
-                return failed.WithSteps(dataset.Steps);
-            }
+                return dataset.Retype<T>();
 
             try
             {
