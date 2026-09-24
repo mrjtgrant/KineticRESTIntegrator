@@ -38,6 +38,10 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
   A genuinely rejected commit — a credit hold, a validation failure — is unaffected: it still reports Epicor's message, `ErrorType` and `CorrelationId`, and is classified by `ClassifyCommit` before the guard is reached.
 
+- **`EpicorRestSessionKey` moved from `Keri.Epicor.Dtos` to `Keri.Epicor`.** It is the session a caller constructs first, not a row shape, and filing it with the table DTOs meant a developer with only `using Keri.Epicor;` in scope saw nothing when they typed `new Epicor…` — and reasonably concluded the package was broken. Nothing else changed about the type.
+
+  **Migration:** add `using Keri.Epicor;`. Most code already has it for `EpicorClient` and `OperationResult<T>`, so in practice this is usually a no-op — of the 36 files in this repository that reference the type, 35 needed no change. You still need `using Keri.Epicor.Dtos;` for the row DTOs and `using Keri.RestTransport;` for `RestAuthenticationObject`; this makes the session discoverable, it does not reduce a working program to one `using`.
+
 - **Every write returns the dataset Epicor returned.** `CreateProjectAsync` returned a `Project`; `CreateQuoteAsync` returned a hand-rolled `{QuoteNum, QuoteObj}` object with the number stringified. Both now return the saved dataset as a `JObject`, like `CreateOrderAsync` and every other write. Epicor hands back a multi-table document; projecting it to one row discards the rest, and picking one field to return means the method guessing which field you wanted. Use `ExtractDto<T>("QuoteHed")` or index the dataset to get what you need from it.
 
   Both keep their post-commit guard: if `Update` succeeds but the saved dataset has no `QuoteNum` or no `Project` row, the result is a failure marked `Indeterminate` — the record exists, so establish what was created before retrying.

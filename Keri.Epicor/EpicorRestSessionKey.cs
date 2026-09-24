@@ -5,13 +5,19 @@ using System.Text;
 using System.Threading.Tasks;
 using Keri.RestTransport;
 
-namespace Keri.Epicor.Dtos
+namespace Keri.Epicor
 {
     /// <summary>
     /// Session settings for Epicor: the transport's <see cref="RestSessionKey"/>
     /// plus the Epicor company. Pass one to <see cref="EpicorClient"/> or to any
     /// service constructor.
     /// </summary>
+    /// <remarks>
+    /// Lives in <c>Keri.Epicor</c> rather than <c>Keri.Epicor.Dtos</c>: this is
+    /// the session a caller constructs first, not a row shape. Filing it with
+    /// the table DTOs meant a developer with only <c>using Keri.Epicor;</c> in
+    /// scope saw nothing when they typed <c>new Epicor…</c>.
+    /// </remarks>
     public class EpicorRestSessionKey : RestSessionKey
     {
         /// <summary>

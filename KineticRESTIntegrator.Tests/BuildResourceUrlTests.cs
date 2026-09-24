@@ -1,3 +1,4 @@
+using Keri.Epicor;
 using Keri.RestTransport;
 using Xunit;
 

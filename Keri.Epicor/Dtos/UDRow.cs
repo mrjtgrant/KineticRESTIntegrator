@@ -107,7 +107,7 @@ namespace Keri.Epicor.Dtos
         /// <para>
         /// Leave unset (the default — an empty string) and the empty default
         /// resolves to the session's
-        /// <see cref="Dtos.EpicorRestSessionKey.Company"/> at call time. The
+        /// <see cref="EpicorRestSessionKey.Company"/> at call time. The
         /// empty default does <b>not</b> mean "write an empty <c>Company</c>
         /// to Epicor" — it means "use the session's company." This matches
         /// the everyday single-company case, where the session and the row's

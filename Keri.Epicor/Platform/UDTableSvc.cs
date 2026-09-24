@@ -62,7 +62,7 @@ namespace Keri.Epicor
         /// <summary>
         /// Resolves the company for a UD-row write: the row's
         /// <see cref="UDRow.Company"/> if set, otherwise the session's
-        /// <see cref="Dtos.EpicorRestSessionKey.Company"/>.
+        /// <see cref="EpicorRestSessionKey.Company"/>.
         /// </summary>
         /// <remarks>
         /// Mirrors the per-call-wins-over-default pattern that
