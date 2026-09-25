@@ -101,7 +101,7 @@ namespace KeriPocs
 
             public List<DtoDiscovery.ColumnDoc> WouldDrop
             {
-                get { return Columns.Where(c => c.InDto && !c.Recommend).ToList(); }
+                get { return Columns.Where(c => c.InSchema && c.InDto && !c.Recommend).ToList(); }
             }
 
             public List<DtoDiscovery.ColumnDoc> WouldAdd
@@ -109,12 +109,25 @@ namespace KeriPocs
                 get { return Columns.Where(c => !c.InDto && c.Recommend).ToList(); }
             }
 
+            /// <summary>
+            /// Properties the DTO carries that this server's schema does not
+            /// declare. Not a proposed removal — there is nothing to weigh —
+            /// but the DTO is asking for a column that will not come back.
+            /// </summary>
+            public List<DtoDiscovery.ColumnDoc> NotInSchema
+            {
+                get { return Columns.Where(c => !c.InSchema).ToList(); }
+            }
+
             public List<DtoDiscovery.ColumnDoc> Unjudged
             {
                 get { return Columns.Where(c => !c.InDto && !c.Recommend && c.Described).ToList(); }
             }
 
-            public bool NeedsDecision { get { return WouldDrop.Count > 0 || WouldAdd.Count > 0; } }
+            public bool NeedsDecision
+            {
+                get { return WouldDrop.Count > 0 || WouldAdd.Count > 0 || NotInSchema.Count > 0; }
+            }
         }
 
         /// <summary>
@@ -206,6 +219,8 @@ namespace KeriPocs
 
             if (!full)
             {
+                WriteCsvs(results);
+
                 Console.WriteLine();
                 Console.WriteLine("  This was the demonstration: one entity, read-only, nothing judged.");
                 Console.WriteLine("  The discovery pass covers every entity-set read, checks each proposed");
@@ -217,6 +232,11 @@ namespace KeriPocs
             string repoRoot = DtoDiscovery.FindRepoRoot(outDir);
             DtoDiscovery.VetoReferencedRemovals(
                 results.SelectMany(r => r.WouldDrop).ToList(), repoRoot);
+            DtoDiscovery.NoteReferencesToMissingColumns(
+                results.SelectMany(r => r.NotInSchema).ToList(), repoRoot);
+
+            // Only now, with every proposal settled, does the CSV record it.
+            WriteCsvs(results);
 
             ReportFindings(results, outDir, repoRoot);
 
@@ -326,14 +346,22 @@ namespace KeriPocs
             // review starts.
             DtoDiscovery.MarkNewSinceLastRun(result.Columns, result.CsvPath);
             DtoDiscovery.Annotate(result.Columns, target.DtoColumns);
-            TryWrite(result.CsvPath, DtoDiscovery.RenderCsv(result.Columns, keepColumn: false));
+
+            // The CSV is written once every entity has been probed and the
+            // proposed removals have been checked against the source tree.
+            // Writing it here would record a recommendation the run then
+            // changes, and the CSV is the copy that outlives the console.
 
             int described = result.Columns.Count(c => c.Described);
             int modelled = result.Columns.Count(c => c.InDto);
 
+            // This line is printed while probing, before any removal has been
+            // checked against the source tree, so the removal count is what was
+            // proposed and not necessarily what survives. The summary at the end
+            // is the settled one.
             var notes = new List<string>();
             if (result.WouldAdd.Count > 0) notes.Add($"+{result.WouldAdd.Count} suggested");
-            if (result.WouldDrop.Count > 0) notes.Add($"-{result.WouldDrop.Count} suggested");
+            if (result.WouldDrop.Count > 0) notes.Add($"-{result.WouldDrop.Count} proposed");
 
             int fresh = result.Columns.Count(c => c.IsNew);
             if (fresh > 0) notes.Add($"{fresh} new since last run");
@@ -365,7 +393,17 @@ namespace KeriPocs
             Console.WriteLine("    Described   Epicor supplied prose for it");
             Console.WriteLine("    InDto       the Keri DTO models it today");
             Console.WriteLine("    Signal      modelled / drop suggested / add suggested / missing key /");
-            Console.WriteLine("                candidate / view field, with Why giving the reason");
+            Console.WriteLine("                candidate / view field / not in schema /");
+            Console.WriteLine("                installation-specific, with Why giving the reason");
+            Console.WriteLine();
+            Console.WriteLine("  An 'installation-specific' row is a column your site added — Epicor's");
+            Console.WriteLine("  _c suffix. It is listed so you can see it, never proposed, and never");
+            Console.WriteLine("  written into a generated DTO: it does not exist on anyone else's");
+            Console.WriteLine("  server. Reach it through ExtraData, or name it in additionalColumns.");
+            Console.WriteLine();
+            Console.WriteLine("  A 'not in schema' row is the one the server did not supply: a property");
+            Console.WriteLine("  the DTO models that this Epicor has no column for. It carries no type");
+            Console.WriteLine("  and no description because there is nothing on the server to read.");
             Console.WriteLine();
             Console.WriteLine("  An undescribed column is usually not a stored column. The business");
             Console.WriteLine("  object adds fields no table holds: values denormalized from a related");
@@ -374,6 +412,23 @@ namespace KeriPocs
             Console.WriteLine();
             Console.WriteLine("  The standard user-defined columns (Character01, ShortChar02, ...) are");
             Console.WriteLine("  undescribed by design and are never treated as view fields.");
+        }
+
+        /// <summary>
+        /// Writes one annotated CSV per entity that parsed.
+        /// </summary>
+        /// <remarks>
+        /// Called after the reference check, never during the probe. The CSV is
+        /// the copy that outlives the console, so it has to carry the run's
+        /// final answer rather than the one it held halfway through.
+        /// </remarks>
+        private static void WriteCsvs(List<EntityResult> results)
+        {
+            foreach (EntityResult r in results)
+            {
+                if (r.CsvPath == null || !r.Parsed) continue;
+                TryWrite(r.CsvPath, DtoDiscovery.RenderCsv(r.Columns, keepColumn: false));
+            }
         }
 
         private static void ReportFindings(List<EntityResult> results, string outDir, string repoRoot)
@@ -398,6 +453,29 @@ namespace KeriPocs
 
                 foreach (DtoDiscovery.ColumnDoc c in r.WouldDrop)
                     Console.WriteLine($"      - {c.Name,-28} {c.Why}");
+
+                foreach (DtoDiscovery.ColumnDoc c in r.NotInSchema)
+                    Console.WriteLine($"      ! {c.Name,-28} {c.Why}");
+            }
+
+            // Not a judgement the probe made — a disagreement between the DTO
+            // and the server. It gets its own paragraph because the reader's
+            // next move is different: verify against the server, not weigh.
+            var missing = results.Where(r => r.Parsed && r.NotInSchema.Count > 0).ToList();
+            if (missing.Count > 0)
+            {
+                int total = missing.Sum(r => r.NotInSchema.Count);
+                Console.WriteLine();
+                Console.WriteLine($"  ! {total} modelled propert(ies) are not in this server's schema at all.");
+                Console.WriteLine( "  Keri puts every modelled column into $select, so each one is being");
+                Console.WriteLine( "  asked for on every read of that entity and nothing comes back for");
+                Console.WriteLine( "  it. Generating the DTO drops the property, which is a breaking");
+                Console.WriteLine( "  change for anyone holding the package.");
+                Console.WriteLine();
+                Console.WriteLine( "  Check the column against your Epicor version before accepting: an");
+                Console.WriteLine( "  absence can mean the column was renamed or retired, or that this");
+                Console.WriteLine( "  installation does not license the module that surfaces it. Those");
+                Console.WriteLine( "  are different problems and the schema cannot tell them apart.");
             }
 
             // Described columns nothing mechanical can judge. Listed, never

@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using KeriPocs;
 using Xunit;
@@ -78,12 +79,63 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void AnUndescribedScreenFlagIsProposedForRemoval()
         {
+            var cols = new List<DtoDiscovery.ColumnDoc> { Col("EnableVoidLN", null, false, "Edm.Boolean") };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "EnableVoidLN" });
+
+            Assert.False(Find(cols, "EnableVoidLN").Recommend);
+            Assert.Contains("screen flag", Find(cols, "EnableVoidLN").Why);
+        }
+
+        [Fact]
+        public void APackedIndicatorIsProposedForRemovalAndIsNotCalledAScreenFlag()
+        {
+            // BitFlag encodes facts about the row, not about a screen. It is
+            // still not modellable — Epicor publishes no bit layout — but the
+            // reason on the row has to be the true one.
             var cols = new List<DtoDiscovery.ColumnDoc> { Col("BitFlag", null, false, "Edm.Int32") };
 
             DtoDiscovery.Annotate(cols, new List<string> { "BitFlag" });
 
             Assert.False(Find(cols, "BitFlag").Recommend);
-            Assert.Contains("screen flag", Find(cols, "BitFlag").Why);
+            Assert.Equal("drop suggested", Find(cols, "BitFlag").Signal);
+            Assert.Contains("packed indicator", Find(cols, "BitFlag").Why);
+            Assert.DoesNotContain("screen flag", Find(cols, "BitFlag").Why);
+        }
+
+        [Fact]
+        public void TheRulesOwnSourceIsNotEvidenceThatAColumnIsUsed()
+        {
+            // A rule proposing to drop BitFlag must write "BitFlag" down, and
+            // the test pinning it writes it down again. Counting those made the
+            // tool withdraw its own recommendation every run.
+            string root = Path.Combine(Path.GetTempPath(), "keri-ownsrc-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(root, "KeriPocs"));
+            Directory.CreateDirectory(Path.Combine(root, "Tests"));
+            File.WriteAllText(
+                Path.Combine(root, "KeriPocs", "DtoDiscovery.cs"),
+                "if (string.Equals(name, \"BitFlag\")) return true;");
+            File.WriteAllText(
+                Path.Combine(root, "Tests", "DtoDiscoveryTests.cs"),
+                "var c = Col(\"BitFlag\");");
+
+            try
+            {
+                var removal = Col("BitFlag", null, false, "Edm.Int32");
+                removal.InDto = true;
+                removal.Recommend = false;
+                removal.Why = "undescribed; packed indicator with no published layout";
+
+                DtoDiscovery.VetoReferencedRemovals(
+                    new List<DtoDiscovery.ColumnDoc> { removal }, root);
+
+                Assert.False(removal.Recommend);
+                Assert.DoesNotContain("referenced in", removal.Why);
+            }
+            finally
+            {
+                try { Directory.Delete(root, true); } catch { }
+            }
         }
 
         [Fact]
@@ -198,6 +250,104 @@ namespace KineticRESTIntegrator.Tests
 
             Assert.False(Find(cols, "NettingID").Recommend);
             Assert.Equal("candidate", Find(cols, "NettingID").Signal);
+        }
+
+        // ---------------------------------------------------------------
+        // Additions are screened before they are proposed
+        // ---------------------------------------------------------------
+
+        [Fact]
+        public void ARenderingOfAModelledColumnIsNotProposed()
+        {
+            // It belongs to the family and it is described. Neither makes it
+            // data — it exists so a screen has something readable to show.
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("ScrapReasonCode", "Scrap reason code."),
+                Col("ScrapReasonCodeDesc", "Scrap reason code description"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "ScrapReasonCode" });
+
+            Assert.False(Find(cols, "ScrapReasonCodeDesc").Recommend);
+            Assert.Contains("rendering of ScrapReasonCode", Find(cols, "ScrapReasonCodeDesc").Why);
+        }
+
+        [Fact]
+        public void ASiblingIsNotMistakenForARendering()
+        {
+            // The removal rule matches any column whose name starts with
+            // another's, which would swallow this one. The addition screen is
+            // narrower for exactly this reason.
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("ElecRemittanceSent", "True when remittance has been uploaded.", edm: "Edm.Boolean"),
+                Col("ElecRemittanceSentDate", "The date the remittance was uploaded.", edm: "Edm.DateTimeOffset"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "ElecRemittanceSent" });
+
+            Assert.True(Find(cols, "ElecRemittanceSentDate").Recommend);
+        }
+
+        [Fact]
+        public void AScreenFlagIsNotProposed()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("BankAcctID", "The bank account the payment draws from."),
+                Col("BankAccountEnabled", "Enable the Bank Account Search Button.", edm: "Edm.Boolean"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "BankAcctID" });
+
+            Assert.False(Find(cols, "BankAccountEnabled").Recommend);
+            Assert.Contains("screen flag", Find(cols, "BankAccountEnabled").Why);
+        }
+
+        [Fact]
+        public void ATrailingEnableIsAScreenFlagToo()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("PkgHeight", "Package height.", edm: "Edm.Decimal"),
+                Col("PkgHeightEnable", "A zero indicates the height field is enabled.", edm: "Edm.Int32"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "PkgHeight" });
+
+            Assert.False(Find(cols, "PkgHeightEnable").Recommend);
+        }
+
+        [Fact]
+        public void ADescriptionThatIsOnlyTheColumnNameIsNotEvidence()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("AssemblySeq", "The assembly sequence.", edm: "Edm.Int32"),
+                Col("AssemblyMatch", "AssemblyMatch"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "AssemblySeq" });
+
+            Assert.False(Find(cols, "AssemblyMatch").Recommend);
+            Assert.Contains("only the column name", Find(cols, "AssemblyMatch").Why);
+        }
+
+        [Fact]
+        public void AProperDescriptionIsNotMistakenForARestatement()
+        {
+            // "Shipped Date" describes ShippedDate correctly. Comparing loosely
+            // enough to ignore the space would throw the column away.
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("ShippedQty", "Quantity shipped.", edm: "Edm.Decimal"),
+                Col("ShippedDate", "Shipped Date", edm: "Edm.DateTimeOffset"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "ShippedQty" });
+
+            Assert.True(Find(cols, "ShippedDate").Recommend);
         }
 
         // ---------------------------------------------------------------
@@ -371,6 +521,198 @@ namespace KineticRESTIntegrator.Tests
             Assert.Equal("Keep", header[0]);
             Assert.Equal("yes", DtoDiscovery.SplitCsvLine(rows[1])[0]);   // VendorNum
             Assert.Equal("no", DtoDiscovery.SplitCsvLine(rows[2])[0]);    // VendorNumName
+        }
+
+        // ---------------------------------------------------------------
+        // Installation-specific columns. Discovery runs against a live
+        // server, so a `_c` name is the operator's own business
+        // vocabulary. It must never be proposed for a shared library and
+        // must never reach a generated DTO by any route.
+        // ---------------------------------------------------------------
+
+        [Fact]
+        public void AnInstallationSpecificColumnIsNeverProposedForAddition()
+        {
+            // Described, and in a family the DTO already models — everything
+            // that would otherwise make it a strong suggestion.
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("ShipDate", "The date the order shipped."),
+                Col("ShipDateReason_c", "Why the ship date moved."),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "ShipDate" });
+
+            DtoDiscovery.ColumnDoc custom = Find(cols, "ShipDateReason_c");
+            Assert.False(custom.Recommend);
+            Assert.Equal("installation-specific", custom.Signal);
+        }
+
+        [Fact]
+        public void AModelledInstallationSpecificColumnIsProposedForRemoval()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc> { Col("WarrantyPeriod_c", "Warranty months.") };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "WarrantyPeriod_c" });
+
+            Assert.False(Find(cols, "WarrantyPeriod_c").Recommend);
+            Assert.Contains("installation-specific", Find(cols, "WarrantyPeriod_c").Why);
+        }
+
+        [Fact]
+        public void AReferenceDoesNotRescueAnInstallationSpecificColumn()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "keri-custom-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(root, "App"));
+            File.WriteAllText(Path.Combine(root, "App", "Report.cs"), "var w = part.WarrantyPeriod_c;");
+
+            try
+            {
+                var cols = new List<DtoDiscovery.ColumnDoc> { Col("WarrantyPeriod_c", "Warranty months.") };
+                DtoDiscovery.Annotate(cols, new List<string> { "WarrantyPeriod_c" });
+
+                DtoDiscovery.ColumnDoc custom = Find(cols, "WarrantyPeriod_c");
+                DtoDiscovery.VetoReferencedRemovals(
+                    new List<DtoDiscovery.ColumnDoc> { custom }, root);
+
+                // The reference is reported, but it cannot make the column
+                // exist on anyone else's server.
+                Assert.Contains("referenced in", custom.Why);
+                Assert.False(custom.Recommend);
+            }
+            finally
+            {
+                try { Directory.Delete(root, true); } catch { }
+            }
+        }
+
+        [Fact]
+        public void AKeepFileCannotPutAnInstallationSpecificColumnIntoADto()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("PartNum", "The part number.", key: true),
+                Col("WarrantyPeriod_c", "Warranty months."),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "PartNum" });
+
+            string dto = DtoDiscovery.RenderDto(
+                "Part", "Erp.BO.PartSvc", "Parts", cols,
+                new List<string> { "PartNum", "WarrantyPeriod_c" }, "an edited keep file");
+
+            Assert.Contains("public string PartNum", dto);
+            Assert.DoesNotContain("WarrantyPeriod_c", dto);
+            Assert.Contains("Models 1 of the", dto);
+        }
+
+        // ---------------------------------------------------------------
+        // A modelled property the server's schema does not declare. Every
+        // rule above walks the server's columns, so without a row of its
+        // own such a property is never judged, never reported, and simply
+        // absent from the next generated DTO.
+        // ---------------------------------------------------------------
+
+        [Fact]
+        public void AModelledColumnTheSchemaDoesNotDeclareIsReported()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("QuoteNum", "The quote number.", key: true),
+                Col("OrderUnitPrice", "Unit price in order UOM.", edm: "Edm.Decimal"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string>
+            {
+                "QuoteNum", "OrderUnitPrice", "UnitPrice"
+            });
+
+            DtoDiscovery.ColumnDoc phantom = Find(cols, "UnitPrice");
+            Assert.False(phantom.InSchema);
+            Assert.True(phantom.InDto);
+            Assert.False(phantom.Recommend);
+            Assert.Equal("not in schema", phantom.Signal);
+        }
+
+        [Fact]
+        public void AColumnTheSchemaDoesNotDeclareIsNotWrittenIntoTheDto()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("QuoteNum", "The quote number.", key: true),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "QuoteNum", "UnitPrice" });
+
+            // A keep file may name anything, including the phantom.
+            string dto = DtoDiscovery.RenderDto(
+                "QuoteDtl", "Erp.BO.QuoteSvc", "QuoteDtls", cols,
+                new List<string> { "QuoteNum", "UnitPrice" }, "the probe's recommendation");
+
+            Assert.Contains("public string QuoteNum", dto);
+            Assert.DoesNotContain("UnitPrice", dto);
+            Assert.Contains("Models 1 of the", dto);   // the phantom is not counted
+        }
+
+        [Fact]
+        public void AColumnTheSchemaDoesNotDeclareReachesTheCsv()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc> { Col("QuoteNum", "The quote number.") };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "QuoteNum", "UnitPrice" });
+
+            string csv = DtoDiscovery.RenderCsv(cols, keepColumn: false);
+            List<string> rows = Lines(csv);
+            List<string> header = DtoDiscovery.SplitCsvLine(rows[0]);
+            List<string> phantom = DtoDiscovery.SplitCsvLine(rows[2]);
+
+            Assert.Equal("UnitPrice", phantom[header.IndexOf("Column")]);
+            Assert.Equal("not in schema", phantom[header.IndexOf("Signal")]);
+            Assert.Equal("yes", phantom[header.IndexOf("InDto")]);
+        }
+
+        [Fact]
+        public void AFailedProbeDoesNotReportEveryPropertyAsMissing()
+        {
+            // Nothing parsed. Reporting all three properties as absent from
+            // the server would describe the probe failing, not the DTO.
+            var cols = new List<DtoDiscovery.ColumnDoc>();
+
+            DtoDiscovery.Annotate(cols, new List<string> { "QuoteNum", "UnitPrice", "Company" });
+
+            Assert.Empty(cols);
+        }
+
+        [Fact]
+        public void ReferencesToAMissingColumnAreRecordedWithoutRestoringIt()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "keri-missing-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(root, "Keri.Epicor"));
+            File.WriteAllText(
+                Path.Combine(root, "Keri.Epicor", "QuoteSvc.cs"),
+                "var p = line.UnitPrice;");
+
+            try
+            {
+                var cols = new List<DtoDiscovery.ColumnDoc> { Col("QuoteNum", "The quote number.") };
+                DtoDiscovery.Annotate(cols, new List<string> { "QuoteNum", "UnitPrice" });
+
+                DtoDiscovery.ColumnDoc phantom = Find(cols, "UnitPrice");
+                DtoDiscovery.NoteReferencesToMissingColumns(
+                    new List<DtoDiscovery.ColumnDoc> { phantom }, root);
+
+                Assert.Contains("referenced in", phantom.Why);
+                Assert.Contains("QuoteSvc.cs", phantom.Why);
+
+                // A reference cannot bring back a column the server does not
+                // have — unlike a proposed removal, which it overturns.
+                Assert.False(phantom.Recommend);
+                Assert.Equal("not in schema", phantom.Signal);
+            }
+            finally
+            {
+                try { Directory.Delete(root, true); } catch { }
+            }
         }
     }
 }

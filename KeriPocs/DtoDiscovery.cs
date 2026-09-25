@@ -46,6 +46,14 @@ namespace KeriPocs
             public bool Recommend;
             public string Why = "";
 
+            /// <summary>
+            /// False for a column the DTO models that the server's schema does
+            /// not declare at all. Such a column has no type, no description and
+            /// no counterpart on the server: it is in this list only so that a
+            /// property the DTO carries can never leave the DTO unannounced.
+            /// </summary>
+            public bool InSchema = true;
+
             public bool Described
             {
                 get { return !string.IsNullOrWhiteSpace(Description); }
@@ -55,6 +63,8 @@ namespace KeriPocs
             {
                 get
                 {
+                    if (!InSchema) return "not in schema";
+                    if (IsInstallationSpecific(Name)) return "installation-specific";
                     if (InDto && Recommend && Described) return "modelled";
                     if (InDto && Recommend) return "modelled, undescribed";
                     if (InDto) return "drop suggested";
@@ -77,9 +87,10 @@ namespace KeriPocs
         /// <para>
         /// <b>Removals.</b> A modelled column the server does not describe, whose
         /// name is another column's name plus a suffix (<c>VendorNum</c> +
-        /// <c>Name</c>) or reads as a screen flag (<c>Enable*</c>,
-        /// <c>*Enabled</c>, <c>BitFlag</c>). Standard user-defined columns are
-        /// undescribed by design and are never proposed for removal.
+        /// <c>Name</c>), reads as a screen flag (<c>Enable*</c>, <c>*Enabled</c>),
+        /// or packs indicators into one number with no published layout
+        /// (<c>BitFlag</c>). Standard user-defined columns are undescribed by
+        /// design and are never proposed for removal.
         /// </para>
         /// <para>
         /// <b>Additions.</b> Only two, because only two are facts rather than
@@ -88,6 +99,30 @@ namespace KeriPocs
         /// currency counterpart of a modelled amount, or a column sharing a long
         /// leading stem with one. Modelling half a family is the mistake those
         /// catch.
+        /// </para>
+        /// <para>
+        /// <b>A proposed addition is screened before it is proposed.</b>
+        /// Belonging to a family does not make a column worth modelling, and
+        /// being described does not make it data: a rendering of another column
+        /// (<c>ScrapReasonCodeDesc</c>), a screen flag
+        /// (<c>BankAccountEnabled</c>), or a description that is only the column
+        /// name (<c>AssemblyMatch</c>) are all dropped, with the reason
+        /// recorded so a reviewer can disagree with it.
+        /// </para>
+        /// <para>
+        /// <b>Installation-specific columns are never proposed, in either
+        /// direction.</b> A name ending <c>_c</c> is a column one installation
+        /// added. It is judged before every other rule and recommended by none
+        /// of them — see <see cref="IsInstallationSpecific"/> for why that is
+        /// unconditional rather than a default.
+        /// </para>
+        /// <para>
+        /// <b>Columns the server does not have.</b> A property the DTO carries
+        /// that the schema never declares is added to the list as its own row,
+        /// signalled <c>not in schema</c>. It is not a proposed removal — there
+        /// is nothing to weigh — but it must be said out loud: the DTO is asking
+        /// <c>$select</c> for a column this server will not return, and
+        /// regenerating the DTO drops the property.
         /// </para>
         /// <para>
         /// <b>Not automated.</b> A described column unrelated to anything
@@ -100,7 +135,11 @@ namespace KeriPocs
         /// </remarks>
         internal static void Annotate(List<ColumnDoc> cols, List<string> dtoColumns)
         {
-            if (cols == null) return;
+            // No schema means no comparison. Annotating an empty list would
+            // report every property the DTO has as missing from the server,
+            // which says nothing about the DTO and everything about the probe
+            // having failed.
+            if (cols == null || cols.Count == 0) return;
 
             var inDto = new HashSet<string>(dtoColumns ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             var allNames = new HashSet<string>(cols.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
@@ -122,6 +161,17 @@ namespace KeriPocs
 
             foreach (ColumnDoc c in cols)
             {
+                // Before anything else. A custom column exists on the install
+                // that created it and nowhere else, so it cannot belong to a
+                // DTO shipped to everyone — and its name is the customer's
+                // business vocabulary, which has no place in this repository.
+                if (IsInstallationSpecific(c.Name))
+                {
+                    c.Recommend = false;
+                    c.Why = "installation-specific custom column";
+                    continue;
+                }
+
                 if (c.InDto)
                 {
                     if (c.Described)
@@ -139,6 +189,10 @@ namespace KeriPocs
                     else if (LooksLikeScreenFlag(c.Name))
                     {
                         c.Recommend = false; c.Why = "undescribed; screen flag";
+                    }
+                    else if (LooksLikePackedIndicator(c.Name))
+                    {
+                        c.Recommend = false; c.Why = "undescribed; packed indicator with no published layout";
                     }
                     else
                     {
@@ -161,6 +215,35 @@ namespace KeriPocs
 
                     if (relative != null)
                     {
+                        // Belonging to a family is not enough on its own. A
+                        // description does not stop ScrapReasonCodeDesc being a
+                        // rendering of ScrapReasonCode, BankAccountEnabled being
+                        // a button, or AssemblyMatch being explained by the word
+                        // "AssemblyMatch".
+                        string describes = DescribesAnotherColumn(c.Name, allNames);
+                        if (describes != null)
+                        {
+                            c.Recommend = false;
+                            c.Why = "belongs with modelled " + relative
+                                  + ", but reads as a rendering of " + describes;
+                            continue;
+                        }
+
+                        if (LooksLikeScreenFlag(c.Name))
+                        {
+                            c.Recommend = false;
+                            c.Why = "belongs with modelled " + relative + ", but reads as a screen flag";
+                            continue;
+                        }
+
+                        if (RestatesItsName(c.Name, c.Description))
+                        {
+                            c.Recommend = false;
+                            c.Why = "belongs with modelled " + relative
+                                  + ", but the description is only the column name";
+                            continue;
+                        }
+
                         c.Recommend = true;
                         c.Why = "described; belongs with modelled " + relative;
                         continue;
@@ -172,6 +255,54 @@ namespace KeriPocs
                     ? (c.IsNew ? "described, new since the last run - needs a person"
                                : "described; no relation to a modelled column")
                     : "undescribed; not modelled";
+            }
+
+            // Everything above walks the server's columns, so a property the DTO
+            // carries that the server does not declare is invisible to all of it
+            // — it would simply not be written out again, which is the one
+            // outcome this must never produce silently. Give each one a row of
+            // its own so it reaches the CSV and the summary.
+            foreach (string name in inDto)
+            {
+                if (allNames.Contains(name)) continue;
+
+                cols.Add(new ColumnDoc
+                {
+                    Name = name,
+                    InSchema = false,
+                    InDto = true,
+                    Recommend = false,
+                    Why = "modelled here, but the server's schema does not declare it"
+                });
+            }
+        }
+
+        /// <summary>
+        /// Records where each column the schema does not declare is referenced,
+        /// so the summary can say what removing it would break.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="VetoReferencedRemovals"/> this never withdraws the
+        /// finding. A proposed removal is a judgement a reference can overturn;
+        /// a column the server does not have cannot be kept whatever the source
+        /// tree says, because there is no type to declare it with and no value
+        /// coming back for it. References are reported so the break is known
+        /// before it happens, not to prevent it.
+        /// </remarks>
+        internal static void NoteReferencesToMissingColumns(List<ColumnDoc> missing, string repoRoot)
+        {
+            if (missing == null || missing.Count == 0 || repoRoot == null) return;
+
+            var names = new HashSet<string>(missing.Select(c => c.Name), StringComparer.Ordinal);
+            Dictionary<string, List<string>> hits = ScanForUsages(repoRoot, names);
+
+            foreach (ColumnDoc c in missing)
+            {
+                List<string> where;
+                if (!hits.TryGetValue(c.Name, out where) || where.Count == 0) continue;
+
+                c.Why += "; referenced in " + string.Join(", ", where.Take(3))
+                       + (where.Count > 3 ? $" (+{where.Count - 3} more)" : "");
             }
         }
 
@@ -268,14 +399,138 @@ namespace KeriPocs
         }
 
         /// <summary>True for a name that describes what a screen does, not what a row holds.</summary>
+        /// <remarks>
+        /// <c>Enable</c> turns up at both ends — <c>EnableVoidLN</c> and
+        /// <c>PkgHeightEnable</c> are the same kind of field.
+        /// </remarks>
         internal static bool LooksLikeScreenFlag(string name)
         {
             if (string.IsNullOrEmpty(name)) return false;
-            if (string.Equals(name, "BitFlag", StringComparison.OrdinalIgnoreCase)) return true;
             if (name.StartsWith("Enable", StringComparison.OrdinalIgnoreCase)) return true;
             if (name.StartsWith("Disable", StringComparison.OrdinalIgnoreCase)) return true;
             if (name.EndsWith("Enabled", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.EndsWith("Enable", StringComparison.OrdinalIgnoreCase)) return true;
             return false;
+        }
+
+        /// <summary>
+        /// True for a column that packs several indicators into one number the
+        /// business object computes for its client.
+        /// </summary>
+        /// <remarks>
+        /// <c>BitFlag</c> is the only one Epicor ships. It is not a screen flag
+        /// — it encodes facts about the row, such as whether it has memos or
+        /// attachments — but it is no more modellable than one. Epicor does not
+        /// publish the bit layout in the schema and it differs by table and by
+        /// version, so a typed property would hand a caller a number nothing in
+        /// this library can explain, and every fact inside it is available typed
+        /// and current from the service that owns it. It stays reachable through
+        /// <c>ExtraData</c> for anyone who knows the layout.
+        /// </remarks>
+        internal static bool LooksLikePackedIndicator(string name)
+        {
+            return string.Equals(name, "BitFlag", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// True for a column added by one installation — Epicor's <c>_c</c>
+        /// suffix convention.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// These are never modelled, never proposed, and never written into a
+        /// generated DTO, whatever else is true of them. A column that exists on
+        /// the install that created it and nowhere else cannot belong to a type
+        /// shipped to everyone: the property would be null on every other
+        /// installation, and the DTO would be asking <c>$select</c> for a column
+        /// those servers do not have.
+        /// </para>
+        /// <para>
+        /// There is a second reason, and it is the one that makes this
+        /// unconditional rather than a default. Discovery runs against a live
+        /// server, so these names are the operator's own business vocabulary —
+        /// their EDI partners, their customer categories, their process fields.
+        /// Whoever runs the probe must not find them proposed for a shared
+        /// library, because accepting a proposal is how they would end up in a
+        /// public repository under someone's name.
+        /// </para>
+        /// <para>
+        /// The data still reaches the caller: <c>ExtraData</c> captures every
+        /// column the typed properties do not consume, and a list read can name
+        /// one in <c>additionalColumns</c>.
+        /// </para>
+        /// </remarks>
+        internal static bool IsInstallationSpecific(string name)
+        {
+            return !string.IsNullOrEmpty(name)
+                && name.EndsWith("_c", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// True for a column a generated DTO may declare a property for. The
+        /// last gate before anything is written, so that no edited keep file and
+        /// no withdrawn removal can put a column into a shipped type that has no
+        /// business being there.
+        /// </summary>
+        internal static bool IsWritable(ColumnDoc c)
+        {
+            return c != null && c.InSchema && !IsInstallationSpecific(c.Name);
+        }
+
+        private static readonly string[] RenderingSuffixes =
+            { "Description", "Desc", "Trans", "Disp", "Name" };
+
+        /// <summary>
+        /// The column this one renders for display, or null —
+        /// <c>ScrapReasonCodeDesc</c> against <c>ScrapReasonCode</c>,
+        /// <c>SNStatusTrans</c> against <c>SNStatus</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Deliberately narrower than <see cref="LooksLikeLookup"/>, which
+        /// matches any column whose name starts with another column's. That
+        /// breadth is safe where it is used — on undescribed columns, where the
+        /// missing description is the real evidence — but applied to described
+        /// ones it swallows legitimate siblings: <c>ElecRemittanceSentDate</c>
+        /// is not a rendering of <c>ElecRemittanceSent</c>, and
+        /// <c>ShipCountryNum</c> is not a rendering of <c>ShipCountry</c>.
+        /// </para>
+        /// <para>
+        /// Requiring one of a short list of rendering suffixes keeps it to the
+        /// case it is meant for: a value that exists so a screen has something
+        /// readable to show.
+        /// </para>
+        /// </remarks>
+        internal static string DescribesAnotherColumn(string name, HashSet<string> allNames)
+        {
+            if (string.IsNullOrEmpty(name) || allNames == null) return null;
+
+            foreach (string suffix in RenderingSuffixes)
+            {
+                if (name.Length <= suffix.Length) continue;
+                if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
+
+                string stem = name.Substring(0, name.Length - suffix.Length);
+                if (allNames.Contains(stem)) return stem;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// True when the description is nothing but the column name —
+        /// <c>AssemblyMatch: "AssemblyMatch"</c>.
+        /// </summary>
+        /// <remarks>
+        /// Compared literally rather than loosely on purpose. Ignoring spaces
+        /// would make <c>"Shipped Date"</c> a restatement of
+        /// <c>ShippedDate</c>, which is a correct description of a real column,
+        /// not an absence of one.
+        /// </remarks>
+        internal static bool RestatesItsName(string name, string description)
+        {
+            if (string.IsNullOrEmpty(name) || description == null) return false;
+            return string.Equals(name, description.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         // -----------------------------------------------------------------
@@ -346,6 +601,16 @@ namespace KeriPocs
                 List<string> where;
                 if (!hits.TryGetValue(c.Name, out where) || where.Count == 0) continue;
 
+                // A reference overturns a judgement. It cannot overturn the fact
+                // that a custom column does not exist on anyone else's server,
+                // so the removal stands and the references are reported instead.
+                if (IsInstallationSpecific(c.Name))
+                {
+                    c.Why += "; referenced in " + string.Join(", ", where.Take(3))
+                           + (where.Count > 3 ? $" (+{where.Count - 3} more)" : "");
+                    continue;
+                }
+
                 c.Recommend = true;   // withdraw the proposal
                 c.Why = "referenced in " + string.Join(", ", where.Take(3))
                       + (where.Count > 3 ? $" (+{where.Count - 3} more)" : "");
@@ -357,6 +622,24 @@ namespace KeriPocs
         /// as "file:line". A DTO declaring the property is not a use of it, so
         /// declarations under a <c>Dtos</c> folder are skipped.
         /// </summary>
+        /// <summary>
+        /// True for the discovery rules and their tests.
+        /// </summary>
+        /// <remarks>
+        /// These files name columns as data — a rule that proposes dropping
+        /// <c>X</c> has to write <c>X</c> down, and the test pinning that rule
+        /// writes it down again. Counting those as uses makes the tool veto its
+        /// own recommendation, and it would do so for any column it ever names,
+        /// whether or not a caller touches it. Nothing here consumes a DTO, so
+        /// nothing here is evidence that a property is in use.
+        /// </remarks>
+        private static bool IsOwnSource(string file)
+        {
+            string name = Path.GetFileName(file) ?? "";
+            return name.Equals("DtoDiscovery.cs", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("DtoDiscoveryTests.cs", StringComparison.OrdinalIgnoreCase);
+        }
+
         internal static Dictionary<string, List<string>> ScanForUsages(string repoRoot, HashSet<string> names)
         {
             var hits = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -378,6 +661,7 @@ namespace KeriPocs
                 files = Directory.GetFiles(repoRoot, "*.cs", SearchOption.AllDirectories)
                     .Where(f => f.IndexOf(sep + "bin" + sep, StringComparison.OrdinalIgnoreCase) < 0)
                     .Where(f => f.IndexOf(sep + "obj" + sep, StringComparison.OrdinalIgnoreCase) < 0)
+                    .Where(f => !IsOwnSource(f))
                     .ToArray();
             }
             catch
@@ -754,9 +1038,19 @@ namespace KeriPocs
             string entity, string service, string entitySet,
             List<ColumnDoc> cols, List<string> keep, string source)
         {
-            var wanted = new HashSet<string>(keep, StringComparer.OrdinalIgnoreCase);
             var byName = new Dictionary<string, ColumnDoc>(StringComparer.OrdinalIgnoreCase);
             foreach (ColumnDoc c in cols) byName[c.Name] = c;
+
+            // Count what will actually be written: a keep file may name a column
+            // the server does not declare, or one belonging to this install
+            // alone, and neither is written.
+            var wanted = new HashSet<string>(
+                keep.Where(n =>
+                {
+                    ColumnDoc c;
+                    return byName.TryGetValue(n, out c) && IsWritable(c);
+                }),
+                StringComparer.OrdinalIgnoreCase);
 
             var sb = new StringBuilder();
             sb.AppendLine("using System;");
@@ -772,7 +1066,7 @@ namespace KeriPocs
             sb.AppendLine("    /// <remarks>");
             sb.AppendLine("    /// <para>");
             sb.AppendLine($"    /// Read through <c>{service}/{entitySet}</c>. Models {wanted.Count} of the");
-            sb.AppendLine($"    /// {cols.Count} columns the server reports; the rest reach the caller");
+            sb.AppendLine($"    /// {cols.Count(c => c.InSchema)} columns the server reports; the rest reach the caller");
             sb.AppendLine("    /// through <c>ExtraData</c>.");
             sb.AppendLine("    /// </para>");
             sb.AppendLine("    /// <para>");
@@ -792,6 +1086,11 @@ namespace KeriPocs
 
                 ColumnDoc c;
                 if (!byName.TryGetValue(name, out c)) continue;
+
+                // A keep file can ask for anything, including a column this
+                // server does not declare and one that belongs to this install
+                // alone. Neither is written, whatever the file says.
+                if (!IsWritable(c)) continue;
 
                 sb.AppendLine();
                 foreach (string line in DocComment(c))
