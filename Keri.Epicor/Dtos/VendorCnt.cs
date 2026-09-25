@@ -189,9 +189,6 @@ namespace Keri.Epicor.Dtos
         /// <summary>The linked person/contact's name.</summary>
         public string PerConName { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
         // --- Denormalized purchase-point join columns ---
 
         /// <summary>Purchase point ZIP / postal code.</summary>

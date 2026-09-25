@@ -156,9 +156,6 @@ namespace Keri.Epicor.Dtos
         /// <summary>Epicor system row GUID (as a string).</summary>
         public string SysRowID { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
         // Standard user-defined columns — present on every Epicor installation.
 
         /// <summary>Standard user-defined character column 01.</summary>

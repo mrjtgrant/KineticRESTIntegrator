@@ -37,214 +37,315 @@ namespace Keri.Epicor.Dtos
     /// </remarks>
     public class SerialNo
     {
-        /// <summary>Epicor company code.</summary>
+
+        /// <summary>Company Identifier.</summary>
         public string Company { get; set; }
 
-        /// <summary>The part this serial number belongs to.</summary>
+        /// <summary>
+        /// The PartNum field identifies the Part and is used as the primary
+        /// key.
+        /// </summary>
         public string PartNum { get; set; }
 
-        /// <summary>The serial number value — primary key (with Company, PartNum).</summary>
+        /// <summary>
+        /// Serial number. This is part is the unique index for this table. It
+        /// can contain prefixes and suffixes determined during setup of the
+        /// part.
+        /// </summary>
         public string SerialNumber { get; set; }
 
-        /// <summary>The serial number's status.</summary>
+        /// <summary>
+        /// INVENTORY, WIP, SHIPPED, INSPECTION, DMR, MISC-ISSUE,REJECTED,PACKED
+        /// = assigned in shipment process but not yet shipped; CONSUMED =
+        /// issued as raw material to a job parent assembly if full serial
+        /// tracking or assigned as a child component if outbound tracking. Add
+        /// new status codes to Code/Desc and Description: PACKED`Packed
+        /// CONSUMED`Consumed
+        /// </summary>
         public string SNStatus { get; set; }
 
-        /// <summary>The job that produced this serial, if any.</summary>
+        /// <summary>Job number. The job number that this item is linked to.</summary>
         public string JobNum { get; set; }
 
-        /// <summary>Assembly sequence on the job.</summary>
+        /// <summary>
+        /// A sequence number that uniquely identifies the Assembly record
+        /// within the JobNum/LotNum. This can be user assigned or assigned by
+        /// the system. The system assigns the next available number during add
+        /// mode if its left blank.
+        /// </summary>
         public int AssemblySeq { get; set; }
 
-        /// <summary>Material sequence on the job.</summary>
+        /// <summary>Seq # of specific material or subcontract operation record.</summary>
         public int MtlSeq { get; set; }
 
-        /// <summary>The customer shipment pack number, if shipped.</summary>
+        /// <summary>
+        /// Packing Slip. The Packing slip number that this serial numbered item
+        /// shiped on.
+        /// </summary>
         public int PackNum { get; set; }
 
-        /// <summary>The pack line.</summary>
+        /// <summary>
+        /// The packing slip line that this serial numbered item shipped on.
+        /// </summary>
         public int PackLine { get; set; }
 
-        /// <summary>True if voided.</summary>
+        /// <summary>Indicates that this serial number has been voided.</summary>
         public bool Voided { get; set; }
 
-        /// <summary>True if scrapped.</summary>
+        /// <summary>Indicates that this serial numbered item has been scrapped.</summary>
         public bool Scrapped { get; set; }
 
-        /// <summary>The vendor, if vendor-supplied.</summary>
+        /// <summary>
+        /// The internal key that is used to tie back to the Vendor master file.
+        /// </summary>
         public int VendorNum { get; set; }
 
-        /// <summary>The vendor purchase point.</summary>
+        /// <summary>Purchase Point</summary>
         public string PurPoint { get; set; }
 
-        /// <summary>Vendor pack slip.</summary>
+        /// <summary>Vendors Packing Slip #.</summary>
         public string PackSlip { get; set; }
 
-        /// <summary>Vendor pack slip line.</summary>
+        /// <summary>
+        /// An integer that uniquely identifies a detail record within a Packing
+        /// slip.
+        /// </summary>
         public int PackSlipLine { get; set; }
 
-        /// <summary>The previous serial-number status.</summary>
+        /// <summary>
+        /// The status of this serial numbered item prior to its current status.
+        /// </summary>
         public string PrevSNStatus { get; set; }
 
-        /// <summary>Serial number prefix.</summary>
+        /// <summary>
+        /// A Standard prefix that will be attached to all Serial Numbers for a
+        /// particular part.
+        /// </summary>
         public string SNPrefix { get; set; }
 
-        /// <summary>Serial number format.</summary>
+        /// <summary>Format of the Base number.</summary>
         public string SNFormat { get; set; }
 
-        /// <summary>Serial number base structure.</summary>
+        /// <summary>Information about serail number formatting.</summary>
         public string SNBaseStructure { get; set; }
 
-        /// <summary>Serial number base number.</summary>
+        /// <summary>
+        /// Base number of Serial Number, needed mainly for adding ranges of
+        /// numbers.
+        /// </summary>
         public string SNBaseNumber { get; set; }
 
-        /// <summary>Scrap reason code.</summary>
+        /// <summary>
+        /// The reason code that is used to link this transaction to a Reason
+        /// master record, which indicates why this scrap occurred.
+        /// </summary>
         public string ScrapReasonCode { get; set; }
 
-        /// <summary>Serial number reference.</summary>
+        /// <summary>
+        /// A generic fill-in field that could be used to allow the user to
+        /// enter data.
+        /// </summary>
         public string SNReference { get; set; }
 
-        /// <summary>RMA number, if returned.</summary>
+        /// <summary>Return Authorization Number of related RMAHead.</summary>
         public int RMANum { get; set; }
 
-        /// <summary>RMA line.</summary>
+        /// <summary>Line # of the related RMADtl record.</summary>
         public int RMALine { get; set; }
 
-        /// <summary>RMA receipt.</summary>
+        /// <summary>RMA receipt</summary>
         public int RMAReceipt { get; set; }
 
-        /// <summary>DMR number, if in a defective-material report.</summary>
+        /// <summary>DMR Number to identify the DMR record.</summary>
         public int DMRNum { get; set; }
 
-        /// <summary>Date the record was created.</summary>
+        /// <summary>The date that this serial numbered was created.</summary>
         public DateTime? CreateDate { get; set; }
 
         /// <summary>DMR action number.</summary>
         public int DMRActionNum { get; set; }
 
-        /// <summary>True if the serial failed selection.</summary>
+        /// <summary>Indicates that this item has failed inspection.</summary>
         public bool FailSelect { get; set; }
 
-        /// <summary>Non-conformance number.</summary>
+        /// <summary>
+        /// Stores the linked non-conformance number from the NonConf record.
+        /// (NonConf.TranID)
+        /// </summary>
         public int NonConfNum { get; set; }
 
-        /// <summary>Warehouse code where the serial currently resides.</summary>
+        /// <summary>Warehouse that transaction is applied to</summary>
         public string WareHouseCode { get; set; }
 
-        /// <summary>Bin number within the warehouse.</summary>
+        /// <summary>Identifies the Bin location that this transaction affected.</summary>
         public string BinNum { get; set; }
 
-        /// <summary>Warranty expiration date.</summary>
+        /// <summary>The latest of the 3 warranty expiration dates</summary>
         public DateTime? WarrExpiration { get; set; }
 
-        /// <summary>Customer this serial is associated with.</summary>
+        /// <summary>
+        /// Contains the Customer number that the sales order is for. This must
+        /// be valid in the Customer table.
+        /// </summary>
         public int CustNum { get; set; }
 
-        /// <summary>Ship-to number.</summary>
+        /// <summary>
+        /// Indicates which customer ship to is to be used as the default for
+        /// the Order release records for this order. It can be blank or it must
+        /// be valid in the SHIPTO table. Use the CUSTOMER.SHIPTONUM as the
+        /// default on new orders or when the ORDERHED.CUSTNUM is changed.
+        /// </summary>
         public string ShipToNum { get; set; }
 
-        /// <summary>Who created the record.</summary>
+        /// <summary>Created By</summary>
         public string CreatedBy { get; set; }
 
-        /// <summary>Who last modified the record.</summary>
+        /// <summary>Modified By</summary>
         public string ModifiedBy { get; set; }
 
-        /// <summary>Date the record was last modified.</summary>
+        /// <summary>Modification Date</summary>
         public DateTime? ModifiedDate { get; set; }
 
-        /// <summary>Time the record was last modified (seconds past midnight).</summary>
+        /// <summary>Modification Time</summary>
         public int ModifiedTime { get; set; }
 
-        /// <summary>Where the serial shipped from.</summary>
+        /// <summary>
+        /// Indicates where the serial# was shipped from, (I)nventory or (W)ip.
+        /// </summary>
         public string ShippedFrom { get; set; }
 
-        /// <summary>Transfer pack number.</summary>
+        /// <summary>Transfer Order packing slip.</summary>
         public int TFPackNum { get; set; }
 
-        /// <summary>Transfer pack line.</summary>
+        /// <summary>Transfer Order packing slip Line.</summary>
         public int TFPackLine { get; set; }
 
-        /// <summary>Sales order number, if allocated.</summary>
+        /// <summary>Related (OrderHed) Sales Order number</summary>
         public int OrderNum { get; set; }
 
-        /// <summary>Sales order line.</summary>
+        /// <summary>Related (OrderDtl) sales order line number</summary>
         public int OrderLine { get; set; }
 
-        /// <summary>Sales order release number.</summary>
+        /// <summary>related (OrderRel) order release number</summary>
         public int OrderRelNum { get; set; }
 
-        /// <summary>The raw serial number (before masking).</summary>
+        /// <summary>
+        /// This will be the raw serial number as it was scanned or entered into
+        /// the system. This would only differ from the SerialNumber field if a
+        /// mask was being used where characters were stripped (using ~ in the
+        /// mask).
+        /// </summary>
         public string RawSerialNum { get; set; }
 
-        /// <summary>Serial number mask.</summary>
+        /// <summary>
+        /// The Serial Mask ID that was used when a serial number was created.
+        /// </summary>
         public string SNMask { get; set; }
 
-        /// <summary>Serial number mask suffix.</summary>
+        /// <summary>
+        /// The suffix that was used to construct the serial number ? currently
+        /// used only by SNBaseStructure Mask types
+        /// </summary>
         public string SNMaskSuffix { get; set; }
 
-        /// <summary>Serial number mask prefix.</summary>
+        /// <summary>
+        /// The prefix that was used to construct the serial number ? currently
+        /// used only by SNBaseStructure Mask types
+        /// </summary>
         public string SNMaskPrefix { get; set; }
 
-        /// <summary>Plant the serial was created in.</summary>
+        /// <summary>
+        /// Indicates which Site?s SNFormat data was used to generate this
+        /// serial number.
+        /// </summary>
         public string CreatedInPlant { get; set; }
 
-        /// <summary>Lot number, if also lot-tracked.</summary>
+        /// <summary>
+        /// LotNumber assigned to the serial number in cycle count/Physical
+        /// Inventory.
+        /// </summary>
         public string LotNum { get; set; }
 
-        /// <summary>Drop-ship pack slip.</summary>
+        /// <summary>Drop shipment Packing Slip.</summary>
         public string DropShipPackSlip { get; set; }
 
-        /// <summary>Drop-ship pack line.</summary>
+        /// <summary>Drop Shipment Pack Line</summary>
         public int DropShipPackLine { get; set; }
 
-        /// <summary>Ship-to customer number.</summary>
+        /// <summary>
+        /// Ship To Customer Number. This along with ShipToNum provides the
+        /// foreign key field to a given ShipTo. Normally this has the same
+        /// value as the CustNum field. However, if the customer allows 3rd
+        /// party shipto (Customer.AllowShipTo3) then this could be a different
+        /// custnum.
+        /// </summary>
         public int ShipToCustNum { get; set; }
 
-        /// <summary>Field-service asset class code.</summary>
+        /// <summary>Class Code Entry Field</summary>
         public string FSAssetClassCode { get; set; }
 
-        /// <summary>Field-service service-level agreement.</summary>
+        /// <summary>Field Service Level Agreement Text</summary>
         public string FSServiceLevelAgreement { get; set; }
 
-        /// <summary>Epicor row-version identifier.</summary>
-        public int SysRevID { get; set; }
+        /// <summary>
+        /// Revision identifier for this row. It is incremented upon each write.
+        /// </summary>
+        public long SysRevID { get; set; }
 
-        /// <summary>Epicor system row GUID (as a string).</summary>
+        /// <summary>Unique identifier for this row. The value is a GUID.</summary>
         public string SysRowID { get; set; }
 
-        /// <summary>Package control ID.</summary>
+        /// <summary>PCID</summary>
         public string PCID { get; set; }
 
-        /// <summary>Miscellaneous shipment pack number.</summary>
+        /// <summary>Misc Shipment Pack Num if related to a misc shipment</summary>
         public int MscPackNum { get; set; }
 
-        /// <summary>Miscellaneous shipment pack line.</summary>
+        /// <summary>Misc Shipment Pack Line if related to a Misc Shipment</summary>
         public int MscPackLine { get; set; }
 
-        /// <summary>Asset number, if registered as a fixed asset.</summary>
+        /// <summary>
+        /// Identifier of the asset this Serial Number is associated to. when
+        /// the SNStatus = INVENTORY this means the SN has been selected for an
+        /// Asset Addition that has not yet been posted.
+        /// </summary>
         public string AssetNum { get; set; }
 
-        /// <summary>Asset addition number.</summary>
+        /// <summary>
+        /// Addition Number of the asset the Serial Number is associated to.
+        /// when the SNStatus = INVENTORY this means the SN has been selected
+        /// for an Asset Addition that has not yet been posted.
+        /// </summary>
         public int AdditionNum { get; set; }
 
-        /// <summary>Asset disposal number.</summary>
+        /// <summary>DisposalNum</summary>
         public int DisposalNum { get; set; }
 
-        /// <summary>True if the serial should be sent to Field Service Automation.</summary>
+        /// <summary>
+        /// Determines if the serial number has to be synchronized with Epicor
+        /// FSA application.
+        /// </summary>
         public bool SendToFSA { get; set; }
 
-        /// <summary>Attribute set ID.</summary>
+        /// <summary>The unique identifier of the related Dynamic Attribute Set.</summary>
         public int AttributeSetID { get; set; }
 
-        /// <summary>Transfer order number.</summary>
+        /// <summary>Related (TFOrdHed) Transfer Order number</summary>
         public string TFOrdNum { get; set; }
 
-        /// <summary>Transfer order line.</summary>
+        /// <summary>Related (TFOrdLine) Transfer Order Line number</summary>
         public int TFOrdLine { get; set; }
 
-        /// <summary>The part revision.</summary>
+        /// <summary>
+        /// Revision number which is used to uniquely identify the revision of
+        /// the part.
+        /// </summary>
         public string RevisionNum { get; set; }
 
-        /// <summary>The transaction source.</summary>
+        /// <summary>Shipt To Customer ID</summary>
+        public string ShipToCustID { get; set; }
+
+        /// <summary>Source of transaction</summary>
         public string TransactionSource { get; set; }
 
         /// <summary>
@@ -258,8 +359,7 @@ namespace Keri.Epicor.Dtos
         /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
         /// on deserialization with any JSON property the typed DTO does not
         /// have a field for; serialized back out as siblings of the typed
-        /// properties. Read or write a custom column by key —
-        /// e.g. <c>dto.ExtraData["MyField_c"] = "value"</c>.
+        /// properties.
         /// </summary>
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtraData { get; set; }

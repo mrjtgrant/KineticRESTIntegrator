@@ -63,9 +63,6 @@ namespace Keri.Epicor.Dtos
         /// <summary>Epicor system row GUID (as a string).</summary>
         public string SysRowID { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
         /// <summary>Description of the code type (denormalized join column).</summary>
         public string codeTypeIDDescCodeTypeDesc { get; set; }
 

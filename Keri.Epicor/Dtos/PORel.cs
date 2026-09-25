@@ -28,146 +28,254 @@ namespace Keri.Epicor.Dtos
     /// </remarks>
     public class PORel
     {
-        /// <summary>Epicor company code.</summary>
+
+        /// <summary>Company Identifier.</summary>
         public string Company { get; set; }
 
-        /// <summary>The PO number.</summary>
-        public int PONum { get; set; }
-
-        /// <summary>The PO line number this release belongs to.</summary>
-        public int POLine { get; set; }
-
-        /// <summary>The release sequence — primary key within the line.</summary>
-        public int PORelNum { get; set; }
-
-        // Schedule and quantity.
-
-        /// <summary>The due date for this release.</summary>
-        public DateTime? DueDate { get; set; }
-
-        /// <summary>The promise date for this release.</summary>
-        public DateTime? PromiseDt { get; set; }
-
-        /// <summary>The need-by date for this release.</summary>
-        public DateTime? NeedByDate { get; set; }
-
-        /// <summary>The release quantity in inventory UOM.</summary>
-        public decimal RelQty { get; set; }
-
-        /// <summary>The release quantity in base UOM.</summary>
-        public decimal BaseQty { get; set; }
-
-        /// <summary>The base unit of measure.</summary>
-        public string BaseUOM { get; set; }
-
-        /// <summary>The internal unit of measure.</summary>
-        public string IUM { get; set; }
-
-        /// <summary>The purchasing unit of measure.</summary>
-        public string PUM { get; set; }
-
-        // Quantity progress.
-
-        /// <summary>The quantity received against this release.</summary>
-        public decimal ReceivedQty { get; set; }
-
-        /// <summary>The quantity shipped against this release (drop-ship case).</summary>
-        public decimal ShippedQty { get; set; }
-
-        /// <summary>The quantity arrived at the receiving dock.</summary>
-        public decimal ArrivedQty { get; set; }
-
-        /// <summary>The quantity invoiced against this release.</summary>
-        public decimal InvoicedQty { get; set; }
-
-        /// <summary>The quantity awaiting inspection.</summary>
-        public decimal InspectionQty { get; set; }
-
-        /// <summary>The quantity that passed inspection.</summary>
-        public decimal PassedQty { get; set; }
-
-        /// <summary>The quantity that failed inspection.</summary>
-        public decimal FailedQty { get; set; }
-
-        // Destination.
-
-        /// <summary>The destination plant.</summary>
-        public string Plant { get; set; }
-
-        /// <summary>The destination warehouse for the receipt.</summary>
-        public string WarehouseCode { get; set; }
-
-        /// <summary>The person or location goods should be delivered to.</summary>
-        public string DeliverTo { get; set; }
-
-        /// <summary>The vendor's purchase point shipping from.</summary>
-        public string PurPoint { get; set; }
-
-        // Status flags.
-
-        /// <summary>True if the release is open (not yet fully received/closed).</summary>
+        /// <summary>
+        /// Indicates if this release is open. This is normally closed via the
+        /// receiving program. But can be changed indirectly by the user during
+        /// order entry when they "Void" the release..
+        /// </summary>
         public bool OpenRelease { get; set; }
 
-        /// <summary>True if the release has been voided.</summary>
+        /// <summary>
+        /// Indicates if the release was voided. Voided releases items are not
+        /// maintainable, can't "unvoid". This field is not directly
+        /// maintainable. Instead the void function will be performed via a
+        /// "Void Release" button. Which then presents a verification dialog
+        /// box. When an PORel record is 'voided', PORel.OpenRelease is set to
+        /// "no". If no other open PORel records exist for the related PODetail
+        /// then the PoDetail.OpenLine is set to "No". If no other open PoDetail
+        /// records exist then set the PoHeader.OperOrder = No. This can also be
+        /// set when the related PoDetail or PoHeader is voided.
+        /// </summary>
         public bool VoidRelease { get; set; }
 
-        /// <summary>True if the PO release is firmed.</summary>
-        public bool FirmRelease { get; set; }
+        /// <summary>Purchase order that this release record is related to.</summary>
+        public int PONum { get; set; }
 
-        /// <summary>True if the release is taxable.</summary>
-        public bool Taxable { get; set; }
+        /// <summary>
+        /// The line # of PODetail record that the PORel record is related to.
+        /// </summary>
+        public int POLine { get; set; }
 
-        /// <summary>True if a receiving inspection is required.</summary>
-        public bool Inspection { get; set; }
+        /// <summary>
+        /// Purchase order release number uniquely identifies a purchase release
+        /// requirement record for a specific line item on an order. This is
+        /// assigned by the system.
+        /// </summary>
+        public int PORelNum { get; set; }
 
-        /// <summary>True if this is a drop-ship release (direct to customer).</summary>
-        public bool DropShip { get; set; }
+        /// <summary>
+        /// Specifies the date by which you need to receive a release of a part.
+        /// This date is taken from the Purchase Order Line Due Date, if it’s
+        /// null, PORel.DueDate will take the value from POHeader.DueDate. If
+        /// you're adding releases from: - BTO or Drop Shipments, PORel.DueDate
+        /// will take the value from OrderRel.NeedByDate - Job Material ,
+        /// PORel.DueDate will take the value from JobMtl.ReqDate. - Subcontract
+        /// Operations, PORel.DueDate wil take the value from JobOper.DueDate
+        /// </summary>
+        public DateTime? DueDate { get; set; }
 
-        /// <summary>True if the release is confirmed by the vendor.</summary>
-        public bool Confirmed { get; set; }
+        /// <summary>Order quantity for this release in vendors unit of measure.</summary>
+        public decimal RelQty { get; set; }
 
-        /// <summary>The release status text.</summary>
-        public string Status { get; set; }
-
-        // Cross-references.
-
-        /// <summary>If linked to a job, the job number.</summary>
+        /// <summary>
+        /// This is populated for Purchase Direct items only and contains the
+        /// job number for the purchased direct item.
+        /// </summary>
         public string JobNum { get; set; }
 
-        /// <summary>If linked to a job, the assembly sequence.</summary>
+        /// <summary>
+        /// This is populated for Purchase Direct items only and contains the
+        /// assembly number for the purchased direct item.
+        /// </summary>
         public int AssemblySeq { get; set; }
 
-        /// <summary>If linked to a job, the material or operation sequence.</summary>
-        public int JobSeq { get; set; }
-
-        /// <summary>The job sequence type (M = material, O = operation, etc.).</summary>
+        /// <summary>
+        /// Qualifies the JobSeq field as to be a "M" - Material (JobMtl) record
+        /// or "S" - Subcontract (JobOper) reference. FYI: This field can
+        /// indirectly sets the TranType field via the write trigger. It can
+        /// itself be set from the TranType. System keeps them compatible.
+        /// JobSeqType/TranType values are; M = PUR-MTL, S = PUR-SUB, " " =
+        /// PUR-STK or PUR-UKN. This possibly could have been deleted. However
+        /// we decided to keep it for backward compatablity reasons.
+        /// </summary>
         public string JobSeqType { get; set; }
 
-        /// <summary>If linked to a sales order (buy-to-order), the order number.</summary>
-        public int OrderNum { get; set; }
+        /// <summary>Seq # of specific material or subcontract operation record.</summary>
+        public int JobSeq { get; set; }
 
-        /// <summary>If linked to a sales order, the order line.</summary>
-        public int OrderLine { get; set; }
+        /// <summary>
+        /// Warehouse that the item on this release is being purchased for.
+        /// </summary>
+        public string WarehouseCode { get; set; }
 
-        /// <summary>If linked to a sales order, the order release number.</summary>
-        public int OrderRelNum { get; set; }
+        /// <summary>
+        /// Total quantity received to stock to date. In Purchasing unit of
+        /// measure. This is a field maintained by the receipt process.
+        /// </summary>
+        public decimal ReceivedQty { get; set; }
 
-        /// <summary>If linked to a requisition, the requisition number.</summary>
+        /// <summary>Requisition which generated this PORel record.</summary>
         public int ReqNum { get; set; }
 
-        /// <summary>If linked to a requisition, the requisition line.</summary>
+        /// <summary>Requisition line which generated this PORel record.</summary>
         public int ReqLine { get; set; }
 
-        // Audit.
+        /// <summary>Site Identifier.</summary>
+        public string Plant { get; set; }
 
-        /// <summary>Epicor row-version identifier.</summary>
-        public int SysRevID { get; set; }
+        /// <summary>
+        /// Specifies the date on which the supplier has promised to ship this
+        /// release.This date is taken from POHeader.PromiseDate. If you're
+        /// adding releases from: - BTO or Drop Shipments, PORel.PromiseDt will
+        /// take the value from OrderRel.NeedByDate. - Job Material ,
+        /// PORel.DueDate will take the value from JobMtl.ReqDate. - Subcontract
+        /// Operations, PORel.DueDate wil take the value from JobOper.DueDate
+        /// </summary>
+        public DateTime? PromiseDt { get; set; }
 
-        /// <summary>Epicor system row GUID (as a string).</summary>
+        /// <summary>
+        /// Indicated Supplier Confirmed the PO. Will default from the PO
+        /// header. Also used when the supplier or
+        /// </summary>
+        public bool Confirmed { get; set; }
+
+        /// <summary>Can be "web", "client", or "rejected"</summary>
+        public string ConfirmVia { get; set; }
+
+        /// <summary>
+        /// Order number created for this PO for the Inter-Company Trading.
+        /// </summary>
+        public int OrderNum { get; set; }
+
+        /// <summary>
+        /// Order Line created for this PO Line for the Inter-Company Trading.
+        /// </summary>
+        public int OrderLine { get; set; }
+
+        /// <summary>
+        /// Order Release Line created for this PO Release for the Inter-Company
+        /// Trading.
+        /// </summary>
+        public int OrderRelNum { get; set; }
+
+        /// <summary>
+        /// Total quantity shipped but not received (In-Transit). In Purchasing
+        /// unit of measure. This is a summary maintained by the receipt
+        /// process. This number is 0 every time the company receives every
+        /// thing the other company ships.
+        /// </summary>
+        public decimal ShippedQty { get; set; }
+
+        /// <summary>Shipped Date</summary>
+        public DateTime? ShippedDate { get; set; }
+
+        /// <summary>
+        /// Quantity in the Parts Base UOM. Set by the system by doing a UOM
+        /// conversion of the PORel.XRelQty to the PORel.BaseUOM .
+        /// </summary>
+        public decimal BaseQty { get; set; }
+
+        /// <summary>
+        /// Unit of Measure of the PORel.BaseRequiredQty. If valid part, then it
+        /// is the Parts Primary Inventory UOM otherwise it is the same as
+        /// PODetail.IUM
+        /// </summary>
+        public string BaseUOM { get; set; }
+
+        /// <summary>
+        /// The value of this field comes from the sales order release. Used
+        /// only for Buy To Order POs.
+        /// </summary>
+        public bool DropShip { get; set; }
+
+        /// <summary>
+        /// Revision identifier for this row. It is incremented upon each write.
+        /// </summary>
+        public long SysRevID { get; set; }
+
+        /// <summary>Unique identifier for this row. The value is a GUID.</summary>
         public string SysRowID { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
+        /// <summary>Indicates Due Date has been changed.</summary>
+        public bool DueDateChanged { get; set; }
+
+        /// <summary>
+        /// Indicates the current status of the release. This field is
+        /// maintained by the System automatically. The possible values are:
+        /// Open (O), Arrived (A), Inspection (I), Received (R), Consumed (U),
+        /// Drop Shipped (D), Closed (C), Voided (V).
+        /// </summary>
+        public string Status { get; set; }
+
+        /// <summary>
+        /// Total quantity arrived to our site to date. In Purchasing unit of
+        /// measure. This is a field maintained by the Receipt Process.
+        /// </summary>
+        public decimal ArrivedQty { get; set; }
+
+        /// <summary>
+        /// Total quantity invoiced to date. In Purchasing unit of measure. This
+        /// is a field maintained by the AP Invoicing Process.
+        /// </summary>
+        public decimal InvoicedQty { get; set; }
+
+        /// <summary>
+        /// Date the PO Release is required for, this can be either from the
+        /// Sales Order, Material Job, Subcontract Operation, Due Date set
+        /// within Generate POSuggestions or the Purchase Order Header Date.
+        /// </summary>
+        public DateTime? NeedByDate { get; set; }
+
+        /// <summary>
+        /// Total to date quantity that has been placed into inspection. This is
+        /// a summary maintained by the DMR process.
+        /// </summary>
+        public decimal InspectionQty { get; set; }
+
+        /// <summary>
+        /// Total to date quantity that has failed inspection. This is a summary
+        /// maintained by the DMR process.
+        /// </summary>
+        public decimal FailedQty { get; set; }
+
+        /// <summary>
+        /// Total quantity that passed inspection to date. In receiving unit of
+        /// measure. This is a summary maintained by the DMR process.
+        /// </summary>
+        public decimal PassedQty { get; set; }
+
+        /// <summary>
+        /// PO Line types of 'Other' have no specified warehouse / bin and what
+        /// this field provides is a means of designating 'where / whom' this
+        /// delivery is intended for.
+        /// </summary>
+        public string DeliverTo { get; set; }
+
+        /// <summary>Taxable</summary>
+        public bool Taxable { get; set; }
+
+        /// <summary>Indicates if this release is "FIRM".</summary>
+        public bool FirmRelease { get; set; }
+
+        /// <summary>The server supplies no description for this column.</summary>
+        public bool Inspection { get; set; }
+
+        /// <summary>The server supplies no description for this column.</summary>
+        public string IUM { get; set; }
+
+        /// <summary>Replicate PUM on detail</summary>
+        public string PUM { get; set; }
+
+        /// <summary>
+        /// THIS FIELD IS EXTRACTED DIRECTLY FROM THE POHEADER TABLE. Ties the
+        /// PO header back to the VendPP master file. This can be blank
+        /// indicating No purchase point.
+        /// </summary>
+        public string PurPoint { get; set; }
 
         /// <summary>
         /// Row state for Epicor's dataset protocol: <c>"A"</c> = added,
@@ -177,9 +285,10 @@ namespace Keri.Epicor.Dtos
 
         /// <summary>
         /// Unmodeled columns on this row, including installation-specific
-        /// custom columns (Epicor's <c>_c</c> suffix convention) and the
-        /// many multi-currency tax / EDI / drop-ship-override variants
-        /// intentionally not modeled by this DTO.
+        /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
+        /// on deserialization with any JSON property the typed DTO does not
+        /// have a field for; serialized back out as siblings of the typed
+        /// properties.
         /// </summary>
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtraData { get; set; }

@@ -24,244 +24,286 @@ namespace Keri.Epicor.Dtos
     /// </remarks>
     public class PayMethod
     {
-        /// <summary>Epicor company code.</summary>
+
+        /// <summary>Company</summary>
         public string Company { get; set; }
 
-        /// <summary>Payment method unique identifier — primary key.</summary>
+        /// <summary>Unique identifier of the payment method</summary>
         public int PMUID { get; set; }
 
-        /// <summary>Payment method display name.</summary>
+        /// <summary>Name of the payment method</summary>
         public string Name { get; set; }
 
-        /// <summary>Payment method type code.</summary>
+        /// <summary>
+        /// Indicated the type of payment with the following options: ? 0 =
+        /// Manual (default) ? 1 = Electronic Interface ? 2 = Check Printing ? 3
+        /// = Generated Payment Instrument ? 4 = Received Payment Instrument ? 5
+        /// = Future Payment Instrument Printing ? 6 = Manual Payment Instrument
+        /// ? 7 = In Cash ? 8 = On-site ? 9 = MICR Check Printing
+        /// </summary>
         public int Type { get; set; }
 
-        /// <summary>Linked EFT header unique identifier.</summary>
+        /// <summary>
+        /// Indicates the electronic interface that shall be used for the
+        /// payment method
+        /// </summary>
         public int EFTHeadUID { get; set; }
 
-        /// <summary>Output file path/name for generated payment files.</summary>
+        /// <summary>
+        /// This will be the default filename for the output file created by the
+        /// electronic interface
+        /// </summary>
         public string OutputFile { get; set; }
 
-        /// <summary>True if restricted to the bank's currency only.</summary>
+        /// <summary>
+        /// Indicates if this interface will only support payments in the
+        /// currency of the bank. This will affect selection of invoices in the
+        /// AP payment function.
+        /// </summary>
         public bool OnlyBankCurr { get; set; }
 
-        /// <summary>Payment-method source (identifies AP vs AR vs other).</summary>
+        /// <summary>
+        /// Indicated the source of payment method 0 = AP payment method 1 = AR
+        /// payment method
+        /// </summary>
         public int PMSource { get; set; }
 
-        /// <summary>True if payments are summarized per customer.</summary>
+        /// <summary>
+        /// Indicates that invoices for the customer is summarized and sent as a
+        /// sum to the bank without specifying the individual invoices. A single
+        /// bank transaction is created for the payment but what?s actually sent
+        /// to the bank will be determined by the electronic interface plug-in
+        /// program. Only enabled if type is set to ?Electronic Interface?
+        /// </summary>
         public bool SummarizePerCustomer { get; set; }
 
-        /// <summary>Default pay code.</summary>
+        /// <summary>Default Payment Code</summary>
         public string DefPayCode { get; set; }
 
-        /// <summary>True if bank reconciliation is automatic.</summary>
+        /// <summary>Auto Bank Reconciliation</summary>
         public bool AutoBankRec { get; set; }
 
-        /// <summary>Sender reference.</summary>
+        /// <summary>Sender Reference</summary>
         public string SenderRef { get; set; }
 
-        /// <summary>Registration number.</summary>
+        /// <summary>Registration Number</summary>
         public string RegNum { get; set; }
 
-        /// <summary>True if this is a test payment method.</summary>
+        /// <summary>Checkbox to indicate test transmissions</summary>
         public bool Test { get; set; }
 
-        /// <summary>True if reimbursable.</summary>
+        /// <summary>Reimbursable</summary>
         public bool Reimbursable { get; set; }
 
-        /// <summary>True if this payment method is inactive.</summary>
+        /// <summary>Inactive flag</summary>
         public bool Inactive { get; set; }
 
-        /// <summary>Allowed overpayment percentage.</summary>
+        /// <summary>
+        /// Contains the overpayment threshold allowed for ar invoices in bank
+        /// file import.
+        /// </summary>
         public decimal OverPayPct { get; set; }
 
-        /// <summary>Allowed underpayment percentage.</summary>
+        /// <summary>
+        /// Contains the underpayment threshold allowed for ar invoices in bank
+        /// file import.
+        /// </summary>
         public decimal UnderPayPct { get; set; }
 
-        /// <summary>Payment instrument type.</summary>
+        /// <summary>Payment Instrument Type</summary>
         public string PIType { get; set; }
 
-        /// <summary>Payment instrument generation method.</summary>
+        /// <summary>Payment Instrument Generation Method</summary>
         public int PIGenMethod { get; set; }
 
-        /// <summary>True if payment instruments require approval.</summary>
+        /// <summary>Payment Instrument Approve flag</summary>
         public bool PIApprove { get; set; }
 
-        /// <summary>True if this is a global payment method.</summary>
+        /// <summary>
+        /// Marks this PayMethod as global, available to be sent out to other
+        /// companies.
+        /// </summary>
         public bool GlobalPayMethod { get; set; }
 
-        /// <summary>True if globally locked.</summary>
+        /// <summary>Disables this record from receiving global updates.</summary>
         public bool GlobalLock { get; set; }
 
-        /// <summary>Card code.</summary>
+        /// <summary>Denmark Localization Card (payment) code</summary>
         public string CardCode { get; set; }
 
-        /// <summary>Epicor row-version identifier.</summary>
-        public int SysRevID { get; set; }
+        /// <summary>
+        /// Revision identifier for this row. It is incremented upon each write.
+        /// </summary>
+        public long SysRevID { get; set; }
 
-        /// <summary>Epicor system row GUID (as a string).</summary>
+        /// <summary>System Row ID - GUID</summary>
         public string SysRowID { get; set; }
 
-        /// <summary>Number of deposit slips.</summary>
+        /// <summary>DepositSlips</summary>
         public int DepositSlips { get; set; }
 
-        /// <summary>True if a positive balance is expected.</summary>
+        /// <summary>IsPositiveBalance</summary>
         public bool IsPositiveBalance { get; set; }
 
-        /// <summary>AP grouping option.</summary>
+        /// <summary>
+        /// Specifies how the payments are processed in a bank - individually or
+        /// in a batch
+        /// </summary>
         public int APGrouping { get; set; }
 
-        /// <summary>True if AP ID generation is enabled.</summary>
+        /// <summary>
+        /// When this check box is selected, the application uses identifiers
+        /// generated via an EI program during processing
+        /// </summary>
         public bool APIDGeneration { get; set; }
 
-        /// <summary>AR grouping option.</summary>
+        /// <summary>
+        /// Allows the user to specify how the receipts are processed in a bank
+        /// - individually or in a batch
+        /// </summary>
         public int ARGrouping { get; set; }
 
-        /// <summary>True if AR ID generation is enabled.</summary>
+        /// <summary>
+        /// When this check box is selected, the application uses identifiers
+        /// generated via an EI program during processing
+        /// </summary>
         public bool ARIDGeneration { get; set; }
 
-        /// <summary>AR ID timing option.</summary>
+        /// <summary>
+        /// Specify at what moment the application groups AR receipts in batches
+        /// </summary>
         public int ARIDTiming { get; set; }
 
-        /// <summary>EFT debit-memo handling code.</summary>
+        /// <summary>EFTDebitMemoHandlingCode</summary>
         public string EFTDebitMemoHandlingCode { get; set; }
 
-        /// <summary>EFT debit-memo due date.</summary>
+        /// <summary>EFTDebitMemoDueDate</summary>
         public DateTime? EFTDebitMemoDueDate { get; set; }
 
-        /// <summary>EFT product-number date.</summary>
+        /// <summary>EFTProductNumDate</summary>
         public DateTime? EFTProductNumDate { get; set; }
 
-        /// <summary>EFT product number.</summary>
+        /// <summary>EFTProductNumber</summary>
         public int EFTProductNumber { get; set; }
 
-        /// <summary>Sweden: O3 payment flag.</summary>
+        /// <summary>SEPO3Payment</summary>
         public bool SEPO3Payment { get; set; }
 
-        /// <summary>Sweden: cross-border payment method.</summary>
+        /// <summary>SECrossBrdPayMethod</summary>
         public string SECrossBrdPayMethod { get; set; }
 
-        /// <summary>Sweden: currency pocket.</summary>
+        /// <summary>SECurrPocket</summary>
         public string SECurrPocket { get; set; }
 
-        /// <summary>Sweden: error handling.</summary>
+        /// <summary>SEErrorHandling</summary>
         public string SEErrorHandling { get; set; }
 
-        /// <summary>Sweden: use IBAN setting.</summary>
+        /// <summary>SEUseIBAN</summary>
         public string SEUseIBAN { get; set; }
 
-        /// <summary>Sweden: file path.</summary>
+        /// <summary>SEPath</summary>
         public string SEPath { get; set; }
 
-        /// <summary>Sweden: create error log flag.</summary>
+        /// <summary>SECreateErrorLog</summary>
         public bool SECreateErrorLog { get; set; }
 
-        /// <summary>Sweden: separate file for each pay currency.</summary>
+        /// <summary>SEFileForEachPayCurr</summary>
         public bool SEFileForEachPayCurr { get; set; }
 
-        /// <summary>Norway: payment list flag.</summary>
+        /// <summary>NOPaymentList</summary>
         public bool NOPaymentList { get; set; }
 
-        /// <summary>Norway: Telepay payment flag.</summary>
+        /// <summary>NOTelepayPayment</summary>
         public bool NOTelepayPayment { get; set; }
 
-        /// <summary>Norway: Telepay reply flag.</summary>
+        /// <summary>NOTelepayReply</summary>
         public bool NOTelepayReply { get; set; }
 
-        /// <summary>Germany: fee rule.</summary>
+        /// <summary>DEFeeRule</summary>
         public string DEFeeRule { get; set; }
 
-        /// <summary>Germany: serial number.</summary>
+        /// <summary>DESerialNum</summary>
         public int DESerialNum { get; set; }
 
-        /// <summary>Germany: state number.</summary>
+        /// <summary>DEStateNum</summary>
         public string DEStateNum { get; set; }
 
-        /// <summary>Germany: last use date.</summary>
+        /// <summary>DELastUseDate</summary>
         public DateTime? DELastUseDate { get; set; }
 
-        /// <summary>Mexico: paid-as designation.</summary>
+        /// <summary>MXPaidAs</summary>
         public string MXPaidAs { get; set; }
 
-        /// <summary>Mexico: payment number.</summary>
+        /// <summary>MXPaymentNum</summary>
         public int MXPaymentNum { get; set; }
 
-        /// <summary>Mexico: total payments.</summary>
+        /// <summary>MXTotalPayments</summary>
         public int MXTotalPayments { get; set; }
 
-        /// <summary>Mexico: payment type.</summary>
+        /// <summary>
+        /// The field specifies the mexican type of the payment: 2 – Check, 3 –
+        /// Transfer, 0 – Other
+        /// </summary>
         public int MXPaymentType { get; set; }
 
-        /// <summary>Mexico: SAT code.</summary>
+        /// <summary>MXSATCode</summary>
         public string MXSATCode { get; set; }
 
-        /// <summary>Mexico: SAT description.</summary>
+        /// <summary>MXSATDesc</summary>
         public string MXSATDesc { get; set; }
 
-        /// <summary>True if payment proposal is enabled.</summary>
+        /// <summary>PymtProposal</summary>
         public bool PymtProposal { get; set; }
 
-        /// <summary>True if check numbers are auto-assigned.</summary>
+        /// <summary>AutoCheckNum</summary>
         public bool AutoCheckNum { get; set; }
 
-        /// <summary>True if the payment total is entered manually.</summary>
+        /// <summary>EnterPymtTotal</summary>
         public bool EnterPymtTotal { get; set; }
 
-        /// <summary>Check number sequence.</summary>
+        /// <summary>CheckNumSeq</summary>
         public int CheckNumSeq { get; set; }
 
-        /// <summary>US 1099-K transaction type.</summary>
+        /// <summary>Form 1099-K Transaction Type</summary>
         public string US1099KTranType { get; set; }
 
-        /// <summary>US 1099-K amount threshold.</summary>
+        /// <summary>Form 1099-K Third Party Network Amount Threshold</summary>
         public decimal US1099KAmtThreshold { get; set; }
 
-        /// <summary>US 1099-K transaction-count threshold.</summary>
+        /// <summary>Form 1099-K Third Party Network Transaction Threshold</summary>
         public int US1099KTranThreshold { get; set; }
 
-        /// <summary>Colombia: payment form.</summary>
+        /// <summary>COPayForm</summary>
         public string COPayForm { get; set; }
 
-        /// <summary>Colombia: payment method.</summary>
+        /// <summary>COPayMethod</summary>
         public string COPayMethod { get; set; }
 
-        /// <summary>Type code.</summary>
+        /// <summary>UNCL4461</summary>
         public string TypeCode { get; set; }
 
-        /// <summary>True if thresholds are enabled.</summary>
+        /// <summary>Indicates if the threshold fields are enabled</summary>
         public bool EnableThresholds { get; set; }
 
-        /// <summary>True if Czech localization applies.</summary>
+        /// <summary>The server supplies no description for this column.</summary>
         public bool IsCZLocalization { get; set; }
 
-        /// <summary>The module the payment-method source belongs to.</summary>
+        /// <summary>Shows a char representation of a PMSource: 0 = AP, 1 = AR.</summary>
         public string PMSourceModule { get; set; }
 
-        /// <summary>True if AP info is enabled.</summary>
+        /// <summary>EnableAPInfo</summary>
         public bool EnableAPInfo { get; set; }
 
-        /// <summary>Colombia: payment-method description.</summary>
-        public string COPayMethodDesc { get; set; }
-
-        /// <summary>Description of the payment-method type.</summary>
-        public string TypeDescription { get; set; }
-
-        /// <summary>Electronic-interface type.</summary>
+        /// <summary>Electronic Interface Type</summary>
         public int EIType { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
-        /// <summary>Linked EFT header name.</summary>
+        /// <summary>The server supplies no description for this column.</summary>
         public string EFTHeadName { get; set; }
 
-        /// <summary>Linked EFT header type.</summary>
+        /// <summary>The server supplies no description for this column.</summary>
         public int EFTHeadType { get; set; }
 
-        /// <summary>Description of the payment-instrument type.</summary>
-        public string PITypeDescription { get; set; }
-
-        /// <summary>Cross-system electronic-invoice flag.</summary>
+        /// <summary>The server supplies no description for this column.</summary>
         public bool XbSystELIEinvoice { get; set; }
 
         /// <summary>
@@ -275,8 +317,7 @@ namespace Keri.Epicor.Dtos
         /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
         /// on deserialization with any JSON property the typed DTO does not
         /// have a field for; serialized back out as siblings of the typed
-        /// properties. Read or write a custom column by key —
-        /// e.g. <c>dto.ExtraData["MyField_c"] = "value"</c>.
+        /// properties.
         /// </summary>
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtraData { get; set; }

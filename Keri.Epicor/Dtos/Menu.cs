@@ -164,9 +164,6 @@ namespace Keri.Epicor.Dtos
         /// <summary>True when Epicor flags the row as a duplicate.</summary>
         public bool IsDuplicate { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
         /// <summary>
         /// Row state for Epicor's dataset protocol: <c>"A"</c> = added,
         /// <c>"U"</c> = updated, <c>""</c> = unchanged.

@@ -39,163 +39,269 @@ namespace Keri.Epicor.Dtos
     /// </remarks>
     public class JobHead
     {
-        /// <summary>Epicor company code.</summary>
+
+        /// <summary>Company Identifier.</summary>
         public string Company { get; set; }
 
-        /// <summary>The job number — primary key.</summary>
-        public string JobNum { get; set; }
-
-        /// <summary>The part number being manufactured.</summary>
-        public string PartNum { get; set; }
-
-        /// <summary>The part description as on the job.</summary>
-        public string PartDescription { get; set; }
-
-        /// <summary>The part revision.</summary>
-        public string RevisionNum { get; set; }
-
-        /// <summary>The drawing number for the job.</summary>
-        public string DrawNum { get; set; }
-
-        /// <summary>True if the job has been released to the shop floor.</summary>
-        public bool JobReleased { get; set; }
-
-        /// <summary>True if the job is engineered (BOM/routing complete).</summary>
-        public bool JobEngineered { get; set; }
-
-        /// <summary>True if the job is closed.</summary>
+        /// <summary>
+        /// Indicates if Job is closed. A closed Job cannot be accessed for
+        /// maintenance.
+        /// </summary>
         public bool JobClosed { get; set; }
 
-        /// <summary>The date the job was closed (if closed).</summary>
+        /// <summary>
+        /// Date the Job was closed. Defaults as the system but can be
+        /// overridden.
+        /// </summary>
         public DateTime? ClosedDate { get; set; }
 
-        /// <summary>True if the job is complete.</summary>
+        /// <summary>
+        /// Indicates if production is complete for the job. A complete job
+        /// cannot be scheduled. It can still have cost posted against it.
+        /// Maintained via Job Completion processing.
+        /// </summary>
         public bool JobComplete { get; set; }
 
-        /// <summary>The date the job was completed (if complete).</summary>
+        /// <summary>
+        /// The date that production was completed for this Job. Maintained via
+        /// Job Completion Processing.
+        /// </summary>
         public DateTime? JobCompletionDate { get; set; }
 
-        /// <summary>True if the job is held.</summary>
+        /// <summary>
+        /// Indicates if Engineering is complete for this job. That is, all
+        /// departments that need to "check off" on this job before it is
+        /// actually considered ready to go have done so. A job must be
+        /// Engineered before it can be scheduled. Non Engineered Jobs are
+        /// excluded from most reports.
+        /// </summary>
+        public bool JobEngineered { get; set; }
+
+        /// <summary>
+        /// Indicates if job has been "Released" to production. Only jobs that
+        /// are released can have labor posted against them. Once labor is
+        /// posted to a Job this flag cannot be changed.
+        /// </summary>
+        public bool JobReleased { get; set; }
+
+        /// <summary>
+        /// Indicates if the Job has been placed on "HOLD". Currently this field
+        /// is only used for display purposes. It may be used later to prevent
+        /// or provide warnings and messages in appropriate areas such as
+        /// Shipping, Purchasing, Labor processing, etc.
+        /// </summary>
         public bool JobHeld { get; set; }
 
-        /// <summary>True if the job is firmed (locked from MRP rescheduling).</summary>
-        public bool JobFirm { get; set; }
-
-        /// <summary>The job type code — e.g. <c>MFG</c> (manufacturing), <c>PRJ</c> (project).</summary>
-        public string JobType { get; set; }
-
-        /// <summary>Job classification code.</summary>
-        public string JobCode { get; set; }
-
-        /// <summary>The scheduling status text.</summary>
+        /// <summary>
+        /// Scheduling Status Control (R-Required, P-Pending, A-Active,
+        /// C-Complete). NOT CURRENTLY IMPLEMENTED.
+        /// </summary>
         public string SchedStatus { get; set; }
 
-        /// <summary>True if the job is a scheduling candidate.</summary>
-        public bool Candidate { get; set; }
+        /// <summary>
+        /// Job number. Unique key to identify the production job. When adding
+        /// "new" records and this is left blank the system will assign a job
+        /// number. Assigning numbers will be done by using a "database"
+        /// sequence number. Then using that number loop and increment until an
+        /// available number is found.
+        /// </summary>
+        public string JobNum { get; set; }
 
-        /// <summary>True if the job has been rough-cut-scheduled.</summary>
-        public bool RoughCutScheduled { get; set; }
+        /// <summary>
+        /// Part number of the manufactured item. Does not have to be valid in
+        /// the Part master. Cannot be blank. With verion 8.0 and Advanced
+        /// Production License a job can have multiple end parts. These are
+        /// defined in the JobPart table. This field has not changed. But will
+        /// now be used to indicate the primary end part that is being produced.
+        /// That is, the JobPart record where JobPart.PartNum = JobHead.PartNum
+        /// will be considered as the primary end part. A primary part is only
+        /// significant on Concurrent mode of production, because it?s quantity
+        /// drives the material/operation requirements.
+        /// </summary>
+        public string PartNum { get; set; }
 
-        /// <summary>The production quantity ordered.</summary>
+        /// <summary>
+        /// Part Revision number. Defaults from the most current
+        /// PartRev.RevisionNum.
+        /// </summary>
+        public string RevisionNum { get; set; }
+
+        /// <summary>Engineering Drawing Number, an optional field.</summary>
+        public string DrawNum { get; set; }
+
+        /// <summary>
+        /// The description of the part that is to be manufactured. Use the
+        /// Part.Description as the default.
+        /// </summary>
+        public string PartDescription { get; set; }
+
+        /// <summary>
+        /// This field is not directly maintainable. The value stored here will
+        /// be different than it was in the pre 8.0- versions. If ProcessMode is
+        /// Sequential then this is a total of ALL end parts that are being
+        /// produced on the job. If Concurrent then it is the production
+        /// quantity of the primary part /PartsPerOp . For example 1000 bottle
+        /// caps are require, 100 caps are produced per machine cycle would
+        /// result in ProdQty of 10. See JobPart table for information on end
+        /// parts of a job.
+        /// </summary>
         public decimal ProdQty { get; set; }
 
-        /// <summary>The quantity completed so far.</summary>
-        public decimal QtyCompleted { get; set; }
-
-        /// <summary>The unit of measure for <see cref="ProdQty"/> and <see cref="QtyCompleted"/>.</summary>
+        /// <summary>The unit of measure for the job. Defaulted from Part.IUM.</summary>
         public string IUM { get; set; }
 
-        /// <summary>The job start date.</summary>
+        /// <summary>
+        /// The Scheduled job start date (including queue time). This is not
+        /// directly user maintainable. It is calculated/updated via the
+        /// scheduling functions
+        /// </summary>
         public DateTime? StartDate { get; set; }
 
-        /// <summary>The job due date.</summary>
+        /// <summary>
+        /// Scheduled finish date for the entire Job (including move time). This
+        /// is not user maintainable. It is updated via the scheduling process.
+        /// </summary>
         public DateTime? DueDate { get; set; }
 
-        /// <summary>The required-by date.</summary>
+        /// <summary>
+        /// Indicates the date at which this job needs to be completed. This is
+        /// maintainable by the user. It can be defaulted as the earliest due
+        /// date of the linked orders. This due date is used as the default date
+        /// for "backward" scheduling of the job.
+        /// </summary>
         public DateTime? ReqDueDate { get; set; }
 
-        /// <summary>The plant the job is associated with.</summary>
-        public string Plant { get; set; }
+        /// <summary>
+        /// An optional user defined code. This will be used for report
+        /// selections and views of job headers.
+        /// </summary>
+        public string JobCode { get; set; }
 
-        /// <summary>The product group code.</summary>
-        public string ProdCode { get; set; }
-
-        /// <summary>The project ID, if the job is tied to a project.</summary>
-        public string ProjectID { get; set; }
-
-        /// <summary>The project phase ID, if the job is tied to a phase.</summary>
-        public string PhaseID { get; set; }
-
-        /// <summary>Source quote number, if the job originated from a quote.</summary>
+        /// <summary>
+        /// Contains the Quote number reference. This was assigned when the job
+        /// details were pulled in from the quote. It will be used to show quote
+        /// figures compared to estimated and actual.
+        /// </summary>
         public int QuoteNum { get; set; }
 
-        /// <summary>Source quote line, if the job originated from a quote.</summary>
+        /// <summary>Contains the quote line number reference. (see QuoteNum )</summary>
         public int QuoteLine { get; set; }
 
-        /// <summary>Free-form job comment text.</summary>
-        public string CommentText { get; set; }
+        /// <summary>
+        /// Product Group Code. Use the Part.ProdCode as a default. This can be
+        /// blank or must be valid in the ProdGrup table.
+        /// </summary>
+        public string ProdCode { get; set; }
 
-        /// <summary>The person who created the job.</summary>
-        public string CreatedBy { get; set; }
-
-        /// <summary>The date the job was created.</summary>
-        public DateTime? CreateDate { get; set; }
-
-        /// <summary>Who last changed the record.</summary>
-        public string LastChangedBy { get; set; }
-
-        /// <summary>The date and time the record was last changed.</summary>
-        public DateTime? LastChangedOn { get; set; }
-
-        /// <summary>Epicor row-version identifier.</summary>
-        public int SysRevID { get; set; }
-
-        /// <summary>Epicor system row GUID (as a string).</summary>
-        public string SysRowID { get; set; }
-
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
-        // Standard user-defined columns — present on every Epicor installation.
-        // JobHead uses a different naming convention than most Epicor tables:
-        // UserChar/UserDate/UserDecimal/UserInteger (no leading zero, no
-        // CheckBox/ShortChar variants).
-
-        /// <summary>Standard user-defined character column 1.</summary>
+        /// <summary>UserChar1</summary>
         public string UserChar1 { get; set; }
 
-        /// <summary>Standard user-defined character column 2.</summary>
+        /// <summary>UserChar2</summary>
         public string UserChar2 { get; set; }
 
-        /// <summary>Standard user-defined character column 3.</summary>
+        /// <summary>UserChar3</summary>
         public string UserChar3 { get; set; }
 
-        /// <summary>Standard user-defined character column 4.</summary>
+        /// <summary>UserChar4</summary>
         public string UserChar4 { get; set; }
 
-        /// <summary>Standard user-defined date column 1.</summary>
+        /// <summary>UserDate1</summary>
         public DateTime? UserDate1 { get; set; }
 
-        /// <summary>Standard user-defined date column 2.</summary>
+        /// <summary>UserDate2</summary>
         public DateTime? UserDate2 { get; set; }
 
-        /// <summary>Standard user-defined date column 3.</summary>
+        /// <summary>UserDate3</summary>
         public DateTime? UserDate3 { get; set; }
 
-        /// <summary>Standard user-defined date column 4.</summary>
+        /// <summary>UserDate4</summary>
         public DateTime? UserDate4 { get; set; }
 
-        /// <summary>Standard user-defined decimal column 1.</summary>
+        /// <summary>UserDecimal1</summary>
         public decimal UserDecimal1 { get; set; }
 
-        /// <summary>Standard user-defined decimal column 2.</summary>
+        /// <summary>UserDecimal2</summary>
         public decimal UserDecimal2 { get; set; }
 
-        /// <summary>Standard user-defined integer column 1.</summary>
+        /// <summary>UserInteger1</summary>
         public int UserInteger1 { get; set; }
 
-        /// <summary>Standard user-defined integer column 2.</summary>
+        /// <summary>UserInteger2</summary>
         public int UserInteger2 { get; set; }
+
+        /// <summary>Editor widget for Job header comments.</summary>
+        public string CommentText { get; set; }
+
+        /// <summary>
+        /// Indicates if the system considers this Job as a candidate for the
+        /// completion process. Jobs that are marked as JobClosed = No,
+        /// JobComplete = No and Candidate = Yes can be viewed in the Job
+        /// Completion/Closing program by selecting the Candidates option. This
+        /// field is not directly maintainable. It is set to based on the value
+        /// of JobOper.OpComplete of the last operation of the final assembly.
+        /// </summary>
+        public bool Candidate { get; set; }
+
+        /// <summary>
+        /// Associates the JobHead with a project in the Project table. This can
+        /// be blank.
+        /// </summary>
+        public string ProjectID { get; set; }
+
+        /// <summary>
+        /// A flag which controls whether or not the MRP process can make
+        /// changes to this job. MRP can only make changes when JobFirm = No.
+        /// </summary>
+        public bool JobFirm { get; set; }
+
+        /// <summary>
+        /// Production quantity completed. Updated via JobOper write trigger. If
+        /// JobOper is the "Final Operation" (see JobAsmbl.FinalOpr) then this
+        /// is set equal to JobOper.QtyCompleted.
+        /// </summary>
+        public decimal QtyCompleted { get; set; }
+
+        /// <summary>Site Identifier.</summary>
+        public string Plant { get; set; }
+
+        /// <summary>
+        /// Describe the type of job this is: MFG = Manufacturing, MNT =
+        /// Maintenance, PRJ = Project, SRV = Service
+        /// </summary>
+        public string JobType { get; set; }
+
+        /// <summary>Project Phase ID</summary>
+        public string PhaseID { get; set; }
+
+        /// <summary>The user that created this Job.</summary>
+        public string CreatedBy { get; set; }
+
+        /// <summary>The date that this Job was created.</summary>
+        public DateTime? CreateDate { get; set; }
+
+        /// <summary>Indicates if the job was rough cut scheduled.</summary>
+        public bool RoughCutScheduled { get; set; }
+
+        /// <summary>
+        /// It indicates that the shop load for that job was not generated
+        /// (shopload table). The load in shopload can be recreated by Save
+        /// Resource Load process
+        /// </summary>
+        public bool RoughCut { get; set; }
+
+        /// <summary>LastChangedBy</summary>
+        public string LastChangedBy { get; set; }
+
+        /// <summary>LastChangedOn</summary>
+        public DateTime? LastChangedOn { get; set; }
+
+        /// <summary>
+        /// Revision identifier for this row. It is incremented upon each write.
+        /// </summary>
+        public long SysRevID { get; set; }
+
+        /// <summary>Unique identifier for this row. The value is a GUID.</summary>
+        public string SysRowID { get; set; }
 
         /// <summary>
         /// Row state for Epicor's dataset protocol: <c>"A"</c> = added,
@@ -208,8 +314,7 @@ namespace Keri.Epicor.Dtos
         /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
         /// on deserialization with any JSON property the typed DTO does not
         /// have a field for; serialized back out as siblings of the typed
-        /// properties. Read or write a custom column by key —
-        /// e.g. <c>dto.ExtraData["MyField_c"] = "value"</c>.
+        /// properties.
         /// </summary>
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtraData { get; set; }

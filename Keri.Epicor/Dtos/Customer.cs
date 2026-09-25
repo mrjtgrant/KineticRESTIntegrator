@@ -41,186 +41,324 @@ namespace Keri.Epicor.Dtos
     /// </remarks>
     public class Customer
     {
-        // ----- Identity -----
 
-        /// <summary>The company code this customer belongs to.</summary>
+        /// <summary>Company Identifier.</summary>
         public string Company { get; set; }
 
-        /// <summary>The internal customer number — Epicor's primary key.</summary>
-        public int CustNum { get; set; }
-
-        /// <summary>The user-facing customer ID code (e.g. <c>"ACME01"</c>).</summary>
+        /// <summary>
+        /// A user defined external customer ID. This must be unique within the
+        /// file. This ID may be used in certain screen displays or reports
+        /// where a full customer name is inappropriate. Therefore users should
+        /// use meaningful characters as they would in any other master file.
+        /// This master file key is a little different in that the user can
+        /// change. This change is allowed because the system is not using the
+        /// CustID as a foreign key in any other file. Rather it uses the
+        /// CustNum field which is assigned to the customer by the system.
+        /// </summary>
         public string CustID { get; set; }
 
-        /// <summary>Customer display name.</summary>
+        /// <summary>
+        /// A unique integer assigned by the system to new customers by the
+        /// customer maintenance program. This field is used as the foreign key
+        /// to identify the customer in other files such as OrderHed or
+        /// InvcHead. The end user should never see this field in the
+        /// application but can use it for reporting purposes.
+        /// </summary>
+        public int CustNum { get; set; }
+
+        /// <summary>The full name of the customer.</summary>
         public string Name { get; set; }
 
-        /// <summary>Marks the customer record as inactive.</summary>
-        public bool Inactive { get; set; }
-
-        /// <summary>
-        /// Customer type code (e.g. <c>"CUST"</c>, <c>"PROSPECT"</c>,
-        /// <c>"SUSPECT"</c>) — controls which menus/flows the record
-        /// participates in.
-        /// </summary>
-        public string CustomerType { get; set; }
-
-        // ----- Sold-to address (the row's primary address) -----
-
-        /// <summary>First line of the sold-to street address.</summary>
+        /// <summary>The first line of the customer's main address.</summary>
         public string Address1 { get; set; }
 
-        /// <summary>Second line of the sold-to street address.</summary>
+        /// <summary>The second line of the customer's main address.</summary>
         public string Address2 { get; set; }
 
-        /// <summary>Third line of the sold-to street address.</summary>
+        /// <summary>The third line of the customer's main address.</summary>
         public string Address3 { get; set; }
 
-        /// <summary>Sold-to city.</summary>
+        /// <summary>The city portion of the customer's main address.</summary>
         public string City { get; set; }
 
-        /// <summary>Sold-to state or province.</summary>
+        /// <summary>The state or province portion of the customer's main address.</summary>
         public string State { get; set; }
 
-        /// <summary>Sold-to ZIP or postal code.</summary>
+        /// <summary>The zip or postal code portion of the customer's main address.</summary>
         public string Zip { get; set; }
 
-        /// <summary>Sold-to country code (string).</summary>
+        /// <summary>The country of the main customer address.</summary>
         public string Country { get; set; }
 
-        /// <summary>Sold-to country number — Epicor's numeric country key.</summary>
-        public int CountryNum { get; set; }
-
-        /// <summary>Primary phone number for the sold-to address.</summary>
-        public string PhoneNum { get; set; }
-
-        /// <summary>Fax number for the sold-to address.</summary>
-        public string FaxNum { get; set; }
-
-        /// <summary>Primary email address.</summary>
-        public string EMailAddress { get; set; }
-
-        /// <summary>Customer website URL.</summary>
-        public string CustURL { get; set; }
-
-        // ----- Bill-to address (carried on the Customer row itself) -----
-
-        /// <summary>Bill-to name. May differ from <see cref="Name"/>.</summary>
-        public string BTName { get; set; }
-
-        /// <summary>First line of the bill-to street address.</summary>
-        public string BTAddress1 { get; set; }
-
-        /// <summary>Second line of the bill-to street address.</summary>
-        public string BTAddress2 { get; set; }
-
-        /// <summary>Third line of the bill-to street address.</summary>
-        public string BTAddress3 { get; set; }
-
-        /// <summary>Bill-to city.</summary>
-        public string BTCity { get; set; }
-
-        /// <summary>Bill-to state or province.</summary>
-        public string BTState { get; set; }
-
-        /// <summary>Bill-to ZIP or postal code.</summary>
-        public string BTZip { get; set; }
-
-        /// <summary>Bill-to country code (string).</summary>
-        public string BTCountry { get; set; }
-
-        /// <summary>Bill-to country number — Epicor's numeric country key.</summary>
-        public int BTCountryNum { get; set; }
-
-        /// <summary>Phone number for the bill-to address.</summary>
-        public string BTPhoneNum { get; set; }
-
-        /// <summary>Fax number for the bill-to address.</summary>
-        public string BTFaxNum { get; set; }
-
-        // ----- Sales / shipping / terms defaults -----
-
-        /// <summary>Sales representative code.</summary>
-        public string SalesRepCode { get; set; }
-
-        /// <summary>Territory the customer belongs to.</summary>
-        public string TerritoryID { get; set; }
-
-        /// <summary>Customer-group code (used to segment AR reporting).</summary>
-        public string GroupCode { get; set; }
-
-        /// <summary>Default payment-terms code.</summary>
-        public string TermsCode { get; set; }
-
-        /// <summary>Default ship-via (carrier/method) code.</summary>
-        public string ShipViaCode { get; set; }
-
-        /// <summary>Default FOB code for shipments to this customer.</summary>
-        public string DefaultFOB { get; set; }
-
-        /// <summary>Default ship-to number for the customer.</summary>
-        public string ShipToNum { get; set; }
-
-        /// <summary>Default line-discount percentage applied on new orders.</summary>
-        public decimal DiscountPercent { get; set; }
-
-        /// <summary>Currency code billed in (e.g. <c>"USD"</c>).</summary>
-        public string CurrencyCode { get; set; }
-
-        /// <summary>Resale (tax exemption) certificate ID.</summary>
+        /// <summary>
+        /// Optional field used to record the customer's State Tax
+        /// Identification number, which is displayed on Sales Acknowledgments.
+        /// </summary>
         public string ResaleID { get; set; }
 
-        /// <summary>Tax-exempt status (free-form code or reason).</summary>
-        public string TaxExempt { get; set; }
-
-        /// <summary>Tax-region code controlling tax calculation.</summary>
-        public string TaxRegionCode { get; set; }
-
-        /// <summary>Tax-authority code controlling tax calculation.</summary>
-        public string TaxAuthorityCode { get; set; }
-
-        // ----- Credit-control settings -----
-
-        /// <summary>Maximum allowed outstanding credit (in customer currency).</summary>
-        public decimal CreditLimit { get; set; }
-
-        /// <summary>Maximum allowed outstanding payment-instruments balance.</summary>
-        public decimal CustPILimit { get; set; }
-
-        /// <summary>Whether the customer is currently on credit hold.</summary>
-        public bool CreditHold { get; set; }
-
-        /// <summary>Date the credit hold was applied (if any).</summary>
-        public DateTime? CreditHoldDate { get; set; }
-
-        /// <summary>Who or what placed the customer on credit hold.</summary>
-        public string CreditHoldSource { get; set; }
-
-        /// <summary>Reason code for the credit hold.</summary>
-        public string CreditHoldReason { get; set; }
-
-        /// <summary>Free-form note associated with the credit hold.</summary>
-        public string CreditHoldNote { get; set; }
-
-        /// <summary>Next scheduled credit-review date.</summary>
-        public DateTime? CreditReviewDate { get; set; }
+        /// <summary>
+        /// The SalesRep.SalesRepCode of the default salesperson for the
+        /// customer. This field is used to supply defaults to Order Entry and
+        /// Invoice entry for invoices that do not reference a sales orders.
+        /// </summary>
+        public string SalesRepCode { get; set; }
 
         /// <summary>
-        /// Whether open sales orders count against this customer's credit
-        /// limit (in addition to invoiced balances).
+        /// The SalesTer.TerritoryID value of the territory assigned to the
+        /// customer.
+        /// </summary>
+        public string TerritoryID { get; set; }
+
+        /// <summary>
+        /// Contains the key of the default ship to for the customer. A blank
+        /// value indicates that the name and address in the Customer file is
+        /// considered the default ship to. This field is updated when the user
+        /// marks the check box in ship to maintenance indicating that the ship
+        /// to is to be designated as the default. This default will be used in
+        /// areas such as Sales Order entry.
+        /// </summary>
+        public string ShipToNum { get; set; }
+
+        /// <summary>
+        /// The Terms.TermsCode value of the default sales terms associated with
+        /// the customer. A default may be supplied by XaSyst.TermsCode if not
+        /// blank. The terms will default into quotes and orders for this
+        /// customer. For invoices not related to a sales order, these terms
+        /// will also default into the invoice.
+        /// </summary>
+        public string TermsCode { get; set; }
+
+        /// <summary>
+        /// Contains the ShipVia.ShipViaCode value of the default ShipVia for
+        /// the customer.
+        /// </summary>
+        public string ShipViaCode { get; set; }
+
+        /// <summary>
+        /// Controls whether or not the customer will be included in the finance
+        /// charge calculation process.
+        /// </summary>
+        public bool FinCharges { get; set; }
+
+        /// <summary>
+        /// Indicates if customer has been placed into a "Credit Hold" status. A
+        /// "yes" will trigger notification of this condition in Order Entry and
+        /// Shipping.
+        /// </summary>
+        public bool CreditHold { get; set; }
+
+        /// <summary>
+        /// Contains the CustGrup.GroupCode value of the customer group that the
+        /// customer has been assigned to. This field is used by the application
+        /// for sorting or filtering on reports and can also be associated with
+        /// price lists.
+        /// </summary>
+        public string GroupCode { get; set; }
+
+        /// <summary>
+        /// An optional field used to establish a default purchasing discount
+        /// percentage for any order placed by customer. This value is supplied
+        /// to order entry as a default for line item discount percent.
+        /// </summary>
+        public decimal DiscountPercent { get; set; }
+
+        /// <summary>
+        /// The Fax Number for the customer. Optional field. Field is displayed
+        /// in Order entry when no contact is specifically given or the contact
+        /// has a blank fax number.
+        /// </summary>
+        public string FaxNum { get; set; }
+
+        /// <summary>
+        /// The general Business Phone Number for the customer. Displayed in
+        /// Order entry when no contact is given or when contact has a blank
+        /// phone number.
+        /// </summary>
+        public string PhoneNum { get; set; }
+
+        /// <summary>
+        /// Indicates the reason why the customer is normally exempt from sales
+        /// tax. Used as a default in invoice entry. If field is non-blank it is
+        /// considered exempt.
+        /// </summary>
+        public string TaxExempt { get; set; }
+
+        /// <summary>
+        /// Contains the default FOB.FOB value of the FOB policy for this
+        /// customers orders. Default used in sales order entry for this
+        /// customer.
+        /// </summary>
+        public string DefaultFOB { get; set; }
+
+        /// <summary>
+        /// Determines whether or not Open Sales Orders are to be included in
+        /// the credit limit checking process for the customer. This checkbox
+        /// will also include open service contracts.
         /// </summary>
         public bool CreditIncludeOrders { get; set; }
 
         /// <summary>
-        /// Whether outstanding payment instruments count against this
-        /// customer's credit limit.
+        /// Date on which the next credit review should be conducted for the
+        /// customer.
+        /// </summary>
+        public DateTime? CreditReviewDate { get; set; }
+
+        /// <summary>
+        /// Date on which the customer was last placed on credit hold. This
+        /// field is maintained by the system.
+        /// </summary>
+        public DateTime? CreditHoldDate { get; set; }
+
+        /// <summary>
+        /// Indicates how the customer was placed on credit hold. Valid values
+        /// are "MANUAL", "INVOICES", "ORDERS", and "CONTRACTS". "MANUAL" means
+        /// that the user placed the customer on hold. INVOICES means that the
+        /// customer's open A/R balance exceeded the credit limit. ORDERS means
+        /// that the sum of the open A/R and the open orders exceeded the credit
+        /// limit. This field is maintained by the system.
+        /// </summary>
+        public string CreditHoldSource { get; set; }
+
+        /// <summary>
+        /// Contains the Currency.CurrencyCode value of the customer's base
+        /// currency.
+        /// </summary>
+        public string CurrencyCode { get; set; }
+
+        /// <summary>
+        /// Contains the Country.CountryNum value of the country the customer is
+        /// located in.
+        /// </summary>
+        public int CountryNum { get; set; }
+
+        /// <summary>
+        /// The Bill To name of this customer. Will be used by the AR module for
+        /// Invoices. This defaults to the Customer.Name but can be overrode by
+        /// the user.
+        /// </summary>
+        public string BTName { get; set; }
+
+        /// <summary>The first line of the customer's Bill To address.</summary>
+        public string BTAddress1 { get; set; }
+
+        /// <summary>The second line of the customer's Bill To address.</summary>
+        public string BTAddress2 { get; set; }
+
+        /// <summary>The second line of the customer's Bill To address.</summary>
+        public string BTAddress3 { get; set; }
+
+        /// <summary>The city portion of the customer's Bill To address.</summary>
+        public string BTCity { get; set; }
+
+        /// <summary>
+        /// The state or province portion of the customer's Bill To address.
+        /// </summary>
+        public string BTState { get; set; }
+
+        /// <summary>
+        /// The zip or postal code portion of the customer's Bill To address.
+        /// </summary>
+        public string BTZip { get; set; }
+
+        /// <summary>
+        /// The Country.Countrynum value of the Country portion of the
+        /// customer's Bill To address.
+        /// </summary>
+        public int BTCountryNum { get; set; }
+
+        /// <summary>
+        /// Contains the Country.Description value of the Country portion of the
+        /// customer's Bill To address.
+        /// </summary>
+        public string BTCountry { get; set; }
+
+        /// <summary>The phone number related to the customer's Bill To Address.</summary>
+        public string BTPhoneNum { get; set; }
+
+        /// <summary>The fax number of the customer's Bill To address.</summary>
+        public string BTFaxNum { get; set; }
+
+        /// <summary>
+        /// Contains the TaxRgn.TaxRegionCode value of the customer's tax region
+        /// for purposes of Sales Tax calculations.
+        /// </summary>
+        public string TaxRegionCode { get; set; }
+
+        /// <summary>Default email address for the customer.</summary>
+        public string EMailAddress { get; set; }
+
+        /// <summary>Used to define the type of the customer record.</summary>
+        public string CustomerType { get; set; }
+
+        /// <summary>
+        /// Determines whether or not the customer's territory can be changed by
+        /// system processes that could potentially change the territory from
+        /// its current value.
+        /// </summary>
+        public bool TerritoryLock { get; set; }
+
+        /// <summary>The Customer's website URL.</summary>
+        public string CustURL { get; set; }
+
+        /// <summary>
+        /// Indicates that Payment Instruments (bank drafts, post dated checks)
+        /// are to be included in the credit limit checking.
         /// </summary>
         public bool CreditIncludePI { get; set; }
 
-        /// <summary>Whether finance charges apply to overdue balances.</summary>
-        public bool FinCharges { get; set; }
+        /// <summary>Establishes the tax authority for this customer.</summary>
+        public string TaxAuthorityCode { get; set; }
 
-        // ----- Plumbing -----
+        /// <summary>
+        /// An optional field that allows user to enter a monetary value to be
+        /// used as a Credit limit. A credit limit of zero is considered as
+        /// having unlimited credit.
+        /// </summary>
+        public decimal CreditLimit { get; set; }
+
+        /// <summary>
+        /// An optional field that allows user to enter a monetary value to be
+        /// used as a credit limit for payment instruments such as post dated
+        /// checks or bank drafts. A credit limit of zero is considered as
+        /// having unlimited credit.
+        /// </summary>
+        public decimal CustPILimit { get; set; }
+
+        /// <summary>
+        /// The discount qualifier is primarily used when applying order value
+        /// based discounts to the customer's sales orders. The value of this
+        /// field affects the discount percent given to the customer. Here's the
+        /// rule: "MIN" = means that the default order discount percent is the
+        /// minimum discount the customer could get as compared to the order
+        /// value based discount. "MAX" = means that the default order discount
+        /// percent is the maximum discount the customer could get as compared
+        /// to the order value based discount. "ADD" = means that the customer
+        /// could get the order value based discount in addition to the default
+        /// order discount.
+        /// </summary>
+        public string DiscountQualifier { get; set; }
+
+        /// <summary>
+        /// A flag indicating that an address has already been validated. This
+        /// helps improve the performance of the bulk address validation process
+        /// by allowing address that have already been validated to be skipped.
+        /// This flag is set anytime a successful validation is performed,
+        /// either by the bulk address validation or validation from the
+        /// Customer form.
+        /// </summary>
+        public bool AddressVal { get; set; }
+
+        /// <summary>Indicates if the record is inactive.</summary>
+        public bool Inactive { get; set; }
+
+        /// <summary>The reason a customer is placed on credit hold.</summary>
+        public string CreditHoldReason { get; set; }
+
+        /// <summary>
+        /// Optional notes that can be entered when a customer is placed on
+        /// credit hold
+        /// </summary>
+        public string CreditHoldNote { get; set; }
 
         /// <summary>
         /// Row state for Epicor's dataset protocol: <c>"A"</c> = added,
@@ -233,8 +371,7 @@ namespace Keri.Epicor.Dtos
         /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
         /// on deserialization with any JSON property the typed DTO does not
         /// have a field for; serialized back out as siblings of the typed
-        /// properties. Read or write a custom column by key —
-        /// e.g. <c>dto.ExtraData["MyField_c"] = "value"</c>.
+        /// properties.
         /// </summary>
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtraData { get; set; }

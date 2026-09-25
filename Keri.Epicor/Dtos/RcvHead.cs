@@ -37,183 +37,242 @@ namespace Keri.Epicor.Dtos
     /// </remarks>
     public class RcvHead
     {
-        // ----- Identity / primary key -----
 
-        /// <summary>The company code this receipt belongs to.</summary>
+        /// <summary>Company Identifier.</summary>
         public string Company { get; set; }
 
-        /// <summary>Vendor (supplier) number — first part of the compound key.</summary>
+        /// <summary>
+        /// The internal key that is used to tie back to the Vendor master file.
+        /// </summary>
         public int VendorNum { get; set; }
 
-        /// <summary>Purchase point code — second part of the compound key.</summary>
+        /// <summary>The Vendors purchase point ID.</summary>
         public string PurPoint { get; set; }
 
-        /// <summary>Packing-slip identifier — third part of the compound key.</summary>
+        /// <summary>Vendors Packing Slip #.</summary>
         public string PackSlip { get; set; }
 
-        // ----- PO link -----
-
-        /// <summary>The purchase order this receipt is against.</summary>
-        public int PONum { get; set; }
-
-        /// <summary>The PO line, when the receipt is against a single line.</summary>
-        public int POLine { get; set; }
-
-        /// <summary>The PO release, when the receipt is against a single release.</summary>
-        public int PORel { get; set; }
-
-        /// <summary>PO type (e.g. <c>"STK"</c> stock, <c>"JOB"</c> job, etc.).</summary>
-        public string POType { get; set; }
-
-        // ----- Dates / personnel -----
-
-        /// <summary>The receipt date — when goods were received.</summary>
+        /// <summary>Receipt Date. Defaults as current system date.</summary>
         public DateTime? ReceiptDate { get; set; }
 
-        /// <summary>The entry date — when the receipt record was created.</summary>
-        public DateTime? EntryDate { get; set; }
-
-        /// <summary>The arrived date — when goods physically arrived (may differ from receipt date).</summary>
-        public DateTime? ArrivedDate { get; set; }
-
-        /// <summary>UserID that created the receipt.</summary>
+        /// <summary>
+        /// Person that entered the transaction. It is set to the DCD-USERID
+        /// that was logged on when the record was created . This is not
+        /// maintainable by the user. This is could be used as a selection
+        /// parameter for reporting and browsing.
+        /// </summary>
         public string EntryPerson { get; set; }
 
-        /// <summary>UserID that physically received the goods.</summary>
-        public string ReceivePerson { get; set; }
-
-        /// <summary>UserID that last changed the receipt.</summary>
-        public string ChangedBy { get; set; }
-
-        /// <summary>Date the receipt was last changed.</summary>
-        public DateTime? ChangeDate { get; set; }
-
-        // ----- Location / shipping -----
-
-        /// <summary>Plant the receipt is into.</summary>
-        public string Plant { get; set; }
-
-        /// <summary>Ship-via (carrier/method) code.</summary>
-        public string ShipViaCode { get; set; }
-
-        /// <summary>Incoterm code (e.g. <c>"FOB"</c>, <c>"CIF"</c>).</summary>
-        public string IncotermCode { get; set; }
-
-        /// <summary>Free-form incoterm location (e.g. <c>"Port of Shanghai"</c>).</summary>
-        public string IncotermLocation { get; set; }
-
-        // ----- Status flags -----
-
-        /// <summary>True once the receipt is fully received.</summary>
-        public bool Received { get; set; }
-
-        /// <summary>True once the receipt has been invoiced.</summary>
-        public bool Invoiced { get; set; }
-
-        /// <summary>Whether the receipt is held in an unposted state for invoice matching.</summary>
+        /// <summary>
+        /// An internal flag that indicates this receipt document is to be saved
+        /// for retrieval by A\P invoice entry. This is set based on the value
+        /// stored in APSyst.SaveForInvoicing.
+        /// </summary>
         public bool SaveForInvoicing { get; set; }
 
-        /// <summary>Whether this receipt was created by an automatic process.</summary>
-        public bool AutoReceipt { get; set; }
+        /// <summary>
+        /// An internal flag that indicates "ALL" the details items on this
+        /// receipt document have been invoiced. This is set to "Yes" when there
+        /// are no related RcvDtl records where RcvDtl.Invoiced = No. This flag
+        /// along with the SaveForInvoicing flag are used to present a list of
+        /// uninvoiced packing slips.
+        /// </summary>
+        public bool Invoiced { get; set; }
 
-        /// <summary>True if linked to an inter-company shipment.</summary>
-        public bool ICLinked { get; set; }
-
-        /// <summary>True for partial-receipt scenarios.</summary>
-        public bool PartialReceipt { get; set; }
-
-        // ----- Comments / references -----
-
-        /// <summary>Free-form receipt comment.</summary>
+        /// <summary>Contains comments about the overall Receipt.</summary>
         public string ReceiptComment { get; set; }
 
-        /// <summary>Legal number assigned to this receipt (when configured).</summary>
-        public string LegalNumber { get; set; }
+        /// <summary>
+        /// Short name or initials of person who actually did the receiving. A
+        /// totally optional field which can be used for internal reference.
+        /// </summary>
+        public string ReceivePerson { get; set; }
 
-        /// <summary>Transaction-document type ID.</summary>
-        public string TranDocTypeID { get; set; }
+        /// <summary>
+        /// The code that links to the ShipVia master. Can be blank or must be
+        /// valid in the ShipVia.
+        /// </summary>
+        public string ShipViaCode { get; set; }
 
-        /// <summary>Import reference number.</summary>
-        public string ImportNum { get; set; }
+        /// <summary>The system date when this record was created.</summary>
+        public DateTime? EntryDate { get; set; }
 
-        /// <summary>Advance shipping notice ID.</summary>
-        public string ASNID { get; set; }
+        /// <summary>Site that received the goods.</summary>
+        public string Plant { get; set; }
 
-        // ----- Currency -----
+        /// <summary>
+        /// Purchase order number that uniquely identifies the purchase order.
+        /// </summary>
+        public int PONum { get; set; }
 
-        /// <summary>Currency code for amounts on this receipt.</summary>
-        public string CurrencyCode { get; set; }
-
-        // ----- Totals -----
-
-        /// <summary>Total amount (sum of lines + tax + duties + misc).</summary>
-        public decimal TotalAmt { get; set; }
-
-        /// <summary>Sum of line amounts.</summary>
-        public decimal TotLinesAmt { get; set; }
-
-        /// <summary>Total tax amount.</summary>
-        public decimal TotTaxAmt { get; set; }
-
-        /// <summary>Total non-deductible tax amount.</summary>
-        public decimal TotDedTaxAmt { get; set; }
-
-        /// <summary>Total duties amount.</summary>
-        public decimal TotDutiesAmt { get; set; }
-
-        /// <summary>Total indirect costs amount.</summary>
-        public decimal TotIndirectCostsAmt { get; set; }
-
-        /// <summary>Total self-assessed tax amount.</summary>
-        public decimal TotSATaxAmt { get; set; }
-
-        /// <summary>Total withholding tax amount.</summary>
-        public decimal TotWHTaxAmt { get; set; }
-
-        // ----- Tax basics -----
-
-        /// <summary>Tax-region code controlling tax calculation.</summary>
-        public string TaxRegionCode { get; set; }
-
-        /// <summary>Tax-rate group code.</summary>
-        public string TaxRateGrpCode { get; set; }
-
-        /// <summary>The tax point (date) used for tax determination.</summary>
-        public DateTime? TaxPoint { get; set; }
-
-        /// <summary>The tax-rate date used for tax determination.</summary>
-        public DateTime? TaxRateDate { get; set; }
-
-        /// <summary>Whether tax was calculated for this receipt.</summary>
-        public bool TaxesCalculated { get; set; }
-
-        /// <summary>Whether prices on this receipt include tax.</summary>
-        public bool InPrice { get; set; }
-
-        // ----- Landed cost -----
-
-        /// <summary>Total landed cost.</summary>
-        public decimal LandedCost { get; set; }
-
-        /// <summary>Landed-cost variance.</summary>
-        public decimal LCVariance { get; set; }
-
-        /// <summary>Landed-cost reference number.</summary>
+        /// <summary>Reference field for Landed Costs</summary>
         public string LCReference { get; set; }
 
-        /// <summary>Landed-cost comment.</summary>
+        /// <summary>Comment field for Landed Costs</summary>
         public string LCComment { get; set; }
 
-        /// <summary>Method used to disburse landed cost across lines.</summary>
+        /// <summary>
+        /// Total amount of landed cost spread amongst the lines. This amount
+        /// includes all duties and indirect costs of all lines.
+        /// </summary>
+        public decimal LandedCost { get; set; }
+
+        /// <summary>
+        /// The Legal Number for the record. This number is created based on
+        /// setup parameters in table LegalNumber.
+        /// </summary>
+        public string LegalNumber { get; set; }
+
+        /// <summary>This field holds the variance amount for the landed costs.</summary>
+        public decimal LCVariance { get; set; }
+
+        /// <summary>Indicates if linked to a inter-company shipment</summary>
+        public bool ICLinked { get; set; }
+
+        /// <summary>
+        /// Identifies how the landed cost was disbursed among the container
+        /// details. Valid options are Volume (only for po releases tied to a
+        /// container), Weight, Value and Manual.
+        /// </summary>
         public string LCDisburseMethod { get; set; }
 
-        /// <summary>Applied landed-cost amount.</summary>
+        /// <summary>
+        /// This is a flag representing whether or not this is a receipt that
+        /// was auto generated. It could only be true if it is associated with
+        /// an SMI type PO.
+        /// </summary>
+        public bool AutoReceipt { get; set; }
+
+        /// <summary>
+        /// POType Identifier of the associated PO ('Std', 'CMI', or 'SMI')
+        /// </summary>
+        public string POType { get; set; }
+
+        /// <summary>The total Landed Cost Amount disbursed for this receipt.</summary>
         public decimal AppliedLCAmt { get; set; }
 
-        /// <summary>True when the receipt should apply against a landed-cost record.</summary>
+        /// <summary>
+        /// Flag to indicate if all of the receipt duties and indirect costs
+        /// needs to be applied or disbursed.
+        /// </summary>
         public bool ApplyToLC { get; set; }
 
-        // ----- Plumbing -----
+        /// <summary>
+        /// Flag to indicate if the entire receipt has been completely received.
+        /// </summary>
+        public bool Received { get; set; }
+
+        /// <summary>
+        /// The date the shipment arrived. Defaults as current system date.
+        /// </summary>
+        public DateTime? ArrivedDate { get; set; }
+
+        /// <summary>The total Landed Cost Amount applied for this receipt.</summary>
+        public decimal AppliedRcptLCAmt { get; set; }
+
+        /// <summary>
+        /// This field holds the applied variance amount for the landed costs.
+        /// </summary>
+        public decimal AppliedLCVariance { get; set; }
+
+        /// <summary>Transaction document type id.</summary>
+        public string TranDocTypeID { get; set; }
+
+        /// <summary>
+        /// Stores the number of the import document. Default value for lines.
+        /// </summary>
+        public string ImportNum { get; set; }
+
+        /// <summary>Unique identifier for this row. The value is a GUID.</summary>
+        public string SysRowID { get; set; }
+
+        /// <summary>ChangedBy</summary>
+        public string ChangedBy { get; set; }
+
+        /// <summary>ChangeDate</summary>
+        public DateTime? ChangeDate { get; set; }
+
+        /// <summary>The Tax Liability for this Receipt</summary>
+        public string TaxRegionCode { get; set; }
+
+        /// <summary>Tax Point</summary>
+        public DateTime? TaxPoint { get; set; }
+
+        /// <summary>Date Used to calculate Tax Rates</summary>
+        public DateTime? TaxRateDate { get; set; }
+
+        /// <summary>Indicates that the tax is included in the unit price</summary>
+        public bool InPrice { get; set; }
+
+        /// <summary>Tax Rate Group Code - FUTUREUSE</summary>
+        public string TaxRateGrpCode { get; set; }
+
+        /// <summary>
+        /// The flag indicates that taxes have been calculated. Once the flag is
+        /// true is should never be changed back to false. This will be set to
+        /// true when any receipt line is marked as received, or when taxes have
+        /// been calculated via the Calculate All Taxes menu option.
+        /// </summary>
+        public bool TaxesCalculated { get; set; }
+
+        /// <summary>
+        /// Identifier for the ASN (Advance Ship Notice), used to tide in
+        /// Receipts created using as base this ASN
+        /// </summary>
+        public string ASNID { get; set; }
+
+        /// <summary>Incoterm Code</summary>
+        public string IncotermCode { get; set; }
+
+        /// <summary>Incoterm Location</summary>
+        public string IncotermLocation { get; set; }
+
+        /// <summary>
+        /// Logical indicating whether or not the receipt has been fully
+        /// received. If yes then the receipt has only been partially received.
+        /// </summary>
+        public bool PartialReceipt { get; set; }
+
+        /// <summary>The server supplies no description for this column.</summary>
+        public int POLine { get; set; }
+
+        /// <summary>The server supplies no description for this column.</summary>
+        public int PORel { get; set; }
+
+        /// <summary>Total amount. This is the sum of all the other total fields.</summary>
+        public decimal TotalAmt { get; set; }
+
+        /// <summary>Total dedicated Tax amount.</summary>
+        public decimal TotDedTaxAmt { get; set; }
+
+        /// <summary>
+        /// Total duties amount. This is the sum of RcvHead.SpecDutyAmt +
+        /// RcvHead.LCDutyAmt
+        /// </summary>
+        public decimal TotDutiesAmt { get; set; }
+
+        /// <summary>
+        /// Total Indirect Costs amount. This is a sum of all RcvMisc.ActualAmt.
+        /// </summary>
+        public decimal TotIndirectCostsAmt { get; set; }
+
+        /// <summary>
+        /// Total amount for all receipt lines. This is the sum of
+        /// RcvDtl.POTransValue.
+        /// </summary>
+        public decimal TotLinesAmt { get; set; }
+
+        /// <summary>Total Self Assessed Tax amount</summary>
+        public decimal TotSATaxAmt { get; set; }
+
+        /// <summary>Total tax amount. This is the sum of RcvHeadTax.TaxAmt</summary>
+        public decimal TotTaxAmt { get; set; }
+
+        /// <summary>Total WithHolding Tax amount</summary>
+        public decimal TotWHTaxAmt { get; set; }
+
+        /// <summary>A unique code that identifies the currency.</summary>
+        public string CurrencyCode { get; set; }
 
         /// <summary>
         /// Row state for Epicor's dataset protocol: <c>"A"</c> = added,
@@ -221,16 +280,12 @@ namespace Keri.Epicor.Dtos
         /// </summary>
         public string RowMod { get; set; }
 
-        /// <summary>Epicor row identifier (GUID).</summary>
-        public Guid SysRowID { get; set; }
-
         /// <summary>
         /// Unmodeled columns on this row, including installation-specific
         /// custom columns (Epicor's <c>_c</c> suffix convention). Populated
         /// on deserialization with any JSON property the typed DTO does not
         /// have a field for; serialized back out as siblings of the typed
-        /// properties. Read or write a custom column by key —
-        /// e.g. <c>dto.ExtraData["MyField_c"] = "value"</c>.
+        /// properties.
         /// </summary>
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtraData { get; set; }

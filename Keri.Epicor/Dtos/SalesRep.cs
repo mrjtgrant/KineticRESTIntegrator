@@ -184,9 +184,6 @@ namespace Keri.Epicor.Dtos
         /// <summary>The name of the rep this rep reports to.</summary>
         public string RepReportsToName { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
         /// <summary>Description of the country number.</summary>
         public string CountryNumDescription { get; set; }
 

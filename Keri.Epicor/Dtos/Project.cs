@@ -120,9 +120,6 @@ namespace Keri.Epicor.Dtos
         /// <summary>Epicor system row GUID (as a string).</summary>
         public string SysRowID { get; set; }
 
-        /// <summary>Epicor bit-flag field.</summary>
-        public int BitFlag { get; set; }
-
         /// <summary>
         /// Row state for Epicor's dataset protocol: <c>"A"</c> = added,
         /// <c>"U"</c> = updated, <c>""</c> = unchanged.
