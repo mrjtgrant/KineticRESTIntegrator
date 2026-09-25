@@ -5,40 +5,34 @@
 Targets **.NET Framework 4.6.1+**, **.NET Standard 2.0** and **.NET 8.0** — see [Target frameworks](#target-frameworks).
 
 ```csharp
-using Keri.Epicor;
-using Keri.Epicor.Dtos;
-using Keri.RestTransport;
-
-// The session is your Epicor connection. Read the values however your
-// application already reads configuration — the packages read none of their own.
-var session = new EpicorRestSessionKey
+// session = your Epicor connection: base URL, company, credentials.
+// See "Getting started" below for how it is defined.
+using (var epicorClient = new EpicorClient(session))
 {
-    BaseUrl    = Environment.GetEnvironmentVariable("EPICOR_URL"),      // https://yourco.epicorsaas.com/server
-    Company    = Environment.GetEnvironmentVariable("EPICOR_COMPANY"),  // EPIC01
-    AuthObject = new RestAuthenticationObject
+    // BAQ parameters are passed as a name/value dictionary.
+    // Values are object, so strings and numbers both work.
+    var parameters = new Dictionary<string, object>
     {
-        Username = Environment.GetEnvironmentVariable("EPICOR_USER"),
-        Password = Environment.GetEnvironmentVariable("EPICOR_PASSWORD"),
-        ApiKey   = Environment.GetEnvironmentVariable("EPICOR_API_KEY")  // blank = Basic auth on REST v1
-    }
-};
+        { "OrderNum", "12345" },
+        { "OpenOnly", 1 }
+    };
 
-using (var client = new EpicorClient(session))
-{
-    var parts = await client.Part.PartsAsync(top: 10);
-
-    if (parts.IsFailure)
+    // BAQ rows are returned as JObject — a BAQ's columns can change
+    // whenever the query is edited, so results aren't bound to a DTO.
+    var result = await epicorClient.BAQ.ExecuteAsync<JObject>("MyOpenOrders_BAQ", parameters);
+    if (result.IsFailure)
     {
-        Console.WriteLine(parts.ErrorMessage);
+        Console.WriteLine($"BAQ failed: {result.ErrorMessage}");
         return;
     }
 
-    foreach (Part part in parts.Value)
-        Console.WriteLine($"{part.PartNum}  {part.PartDescription}");
+    // BAQ columns follow Epicor's TableName_FieldName convention.
+    foreach (var row in result.Value)
+        Console.WriteLine($"{row["OrderHed_OrderNum"]}  {row["Customer_CustID"]}");
 }
 ```
 
-That is the whole integration: build a session, construct a client, await a call, check `IsFailure`, then use `Value`. Every service in the SDK works this way, and the session is the only thing you supply — the packages read no configuration of their own, so there is nothing to install or set up beyond the package itself.
+That snippet is the whole shape: construct a client from a session, await an async call, check `IsFailure`, then use `Value`. Every service in the SDK works this way, and the session is the only thing you supply — the packages read no configuration of their own.
 
 ---
 
@@ -141,9 +135,41 @@ Debug symbols ship as `.snupkg` packages, so stepping into Keri's source from yo
 
 ## Getting started
 
-Install the package, build a session from whatever configuration your application already uses, and call a service. The snippet at the top of this file is the complete integration — nothing is omitted from it.
+Install the package, build a session from whatever configuration your application already uses, and call a service:
 
-The packages read no configuration of their own — no config file, no environment variables, no ambient state — so wherever your credentials live today, read them your way and pass them in. Environment variables above, `IConfiguration` or a secrets vault or a credential store just as easily; [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md) has worked examples. [Using the SDK](#using-the-sdk) covers what every call returns and how failures report which side of the commit boundary they landed on.
+```csharp
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
+using Keri.RestTransport;
+
+var session = new EpicorRestSessionKey
+{
+    BaseUrl    = Environment.GetEnvironmentVariable("EPICOR_URL"),      // https://yourco.epicorsaas.com/server
+    Company    = Environment.GetEnvironmentVariable("EPICOR_COMPANY"),  // EPIC01
+    AuthObject = new RestAuthenticationObject
+    {
+        Username = Environment.GetEnvironmentVariable("EPICOR_USER"),
+        Password = Environment.GetEnvironmentVariable("EPICOR_PASSWORD"),
+        ApiKey   = Environment.GetEnvironmentVariable("EPICOR_API_KEY")  // blank = Basic auth on REST v1
+    }
+};
+
+using (var client = new EpicorClient(session))
+{
+    var parts = await client.Part.PartsAsync(top: 10);
+
+    if (parts.IsFailure)
+    {
+        Console.WriteLine(parts.ErrorMessage);
+        return;
+    }
+
+    foreach (Part part in parts.Value)
+        Console.WriteLine($"{part.PartNum}  {part.PartDescription}");
+}
+```
+
+That is the whole integration. The packages read no configuration of their own — no config file, no environment variables, no ambient state — so wherever your credentials live today, read them your way and pass them in. Environment variables above, `IConfiguration` or a secrets vault or a credential store just as easily; [CONFIGURATION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONFIGURATION.md) has worked examples. [Using the SDK](#using-the-sdk) covers what every call returns and how failures report which side of the commit boundary they landed on.
 
 **Want to watch it work against your own data before writing anything?** The repo ships three runnable companion projects that do exactly that — see [Trying it out with the companion projects](#trying-it-out-with-the-companion-projects).
 
@@ -156,7 +182,13 @@ If your application already manages its own clients — `IHttpClientFactory`, a 
 ```csharp
 using (var client = new EpicorClient(session, httpClientFactory.CreateClient("epicor")))
 {
-    // …
+    // Nothing else changes. Every service on this client sends through the
+    // HttpClient you supplied, and the result pattern is the same one.
+    var parts = await client.Part.PartsAsync(top: 5);
+
+    Console.WriteLine(parts.IsSuccess
+        ? $"{parts.Value.Count} parts"
+        : parts.ErrorMessage);
 }
 ```
 
@@ -347,21 +379,15 @@ The `OperationResult` also carries:
 
 ### Datasets and DTOs — which one you get, and why
 
-Keri types the edges and leaves the middle alone. Two rules, no exceptions:
+Epicor gives you two different things depending on what you ask for, and Keri keeps that distinction rather than flattening it. Three rules, no exceptions:
 
-- **A read returns what you asked for.** List reads (`PartsAsync`, `CustomersAsync`, …) return typed rows, and every `GetByIDAsync` has a generic overload that hands back the header row instead of the dataset:
+- **An entity-set read returns typed rows.** `PartsAsync`, `CustomersAsync`, `POesAsync` and the rest query an OData entity set — a flat list of rows, no related tables, no `RowMod`. A DTO isn't a projection of that; it *is* the shape, so that is what you get.
 
-  ```csharp
-  var result = await epicorClient.Customer.GetByIDAsync<Customer>("CUST001");
-  if (result.IsSuccess && result.Value != null)
-      Console.WriteLine(result.Value.Name);
-  ```
+- **A Business Object read returns the dataset.** `GetByIDAsync` gives you the whole `ds` document — `Customer`, `CustCnt`, `CustomerAttch`, all of it — as a `JObject`, exactly as Epicor sent it. If you have written Epicor customizations you already know this shape; it is the one in the Swagger page and the one your BPMs see.
 
-  It is the same single call as the untyped overload — Epicor still returns the whole dataset, and the whole dataset is still on `RawResponse`. When Epicor has no row for that key, the result is a *success* with a null `Value`: the call worked, there was nothing to find.
+- **A write returns the dataset Epicor returned.** `CreateOrderAsync`, `CreateQuoteAsync`, `CreateProjectAsync`, `AddMtlsAsync`, `MoveInventoryAsync` and the rest hand back the saved dataset — every table, every row, including the ones the call never touched. Where a write has no dataset to return, it returns its own outcome instead: `TruncateAsync` gives you the number of rows deleted.
 
-- **A write returns the dataset Epicor returned.** `CreateOrderAsync`, `CreateQuoteAsync`, `CreateProjectAsync`, `AddMtlsAsync`, `MoveInventoryAsync` and the rest hand back the saved dataset as a `JObject` — every table, every row, including the ones the call never touched. Projecting that to a DTO would discard most of what Epicor said, and returning one chosen field instead would mean each method guessing which field you wanted. Where a write has no dataset to return, it returns its own outcome: `TruncateAsync` gives you the number of rows deleted.
-
-Pulling a typed row out of a returned dataset is one call:
+When you want a typed row out of a dataset, you ask for it explicitly:
 
 ```csharp
 var created = await epicorClient.SalesOrder.CreateOrderAsync("CUST001", needByDate);
@@ -373,11 +399,9 @@ if (created.IsSuccess)
 }
 ```
 
-`ExtractDto<T>(tableName)` takes the first row of a table; `ExtractDtoList<T>(tableName)` takes all of them. Both are extension methods on `JObject`, so they work on anything carrying a `ds` envelope — a `GetByIDAsync` result, an `UpdateAsync` result, an orchestrator's return. `T` is any type whose properties are named after the table's columns: the bundled DTO, or your own narrower class with just the fields you care about. A missing table or an empty one gives you `null` rather than an exception.
+`ExtractDto<T>(tableName)` takes the first row of a table; `ExtractDtoList<T>(tableName)` takes all of them. Both are extension methods on `JObject`, so they work on anything carrying a `ds` envelope — a `GetByIDAsync` result, an `UpdateAsync` result, an orchestrator's return. `T` is any type whose properties are named after the table's columns: the bundled DTO, or your own narrower class with just the fields you care about. A missing or empty table gives you `null` rather than an exception.
 
-The short version: **reads are typed, writes are datasets, and `ExtractDto<T>` is the bridge between them.**
-
-The generic `GetByIDAsync<T>` overload is available on `Customer`, `Part`, `Vendor`, `SalesOrder`, `Quote`, `PO`, `Receipt`, `JobEntry`, `Project`, and `EngWorkBench`.
+**Why there is no typed `GetByIDAsync<T>`.** It would look convenient and it would be a lie: a `GetByID` response is a multi-table document, and handing back one row from it is a projection that silently discards the rest. Hiding that inside a method that looks like a fetch is how people end up surprised. `ExtractDto<T>` does the same work in one more line, and that line says what it is doing. One dataset, one visible way to narrow it.
 
 ### Naming conventions
 
@@ -432,33 +456,6 @@ The mapper validates the DTO on first use (column names exist on `UDRow`, types 
 
 For the full conventions — when to use which column family, the 2^5 key grain levels, reserved columns, and four progressively complete worked examples — see [EXAMPLES_EPICOR.md — Typed UD-table access](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#typed-ud-table-access).
 
-### Business Activity Queries
-
-`BAQ.ExecuteAsync` runs a published BAQ and returns its rows. Parameters go in as a name/value dictionary; values are `object`, so strings and numbers both work.
-
-```csharp
-var parameters = new Dictionary<string, object>
-{
-    { "OrderNum", "12345" },
-    { "OpenOnly", 1 }
-};
-
-var result = await client.BAQ.ExecuteAsync("MyOpenOrders_BAQ", parameters);
-if (result.IsFailure)
-{
-    Console.WriteLine($"BAQ failed: {result.ErrorMessage}");
-    return;
-}
-
-// BAQ columns follow Epicor's TableName_FieldName convention.
-foreach (var row in result.Value)
-    Console.WriteLine($"{row["OrderHed_OrderNum"]}  {row["Customer_CustID"]}");
-```
-
-Rows come back as `JObject` because a BAQ's columns change whenever the query is edited — there is no stable shape to bind to, which is why this is the one read in the SDK that is not typed.
-
-Where your BAQ *is* stable, the generic overload materializes rows into a class of your own: `ExecuteAsync<TRow>` binds to public settable properties named exactly after the BAQ's output columns (`Customer_CustID`, `Calculated_TotalValue`), or use `[JsonProperty("...")]` to keep C#-style names on the class while matching the wire.
-
 ### Calling Epicor Functions
 
 `client.Function` calls a function in an Epicor Function library. Pass the input parameters as an object whose properties are named after them; the output parameters come back as a `JObject`, or as your own type:
@@ -498,12 +495,16 @@ For per-service detail, the `KeriPocs` project runs nine labeled scenarios. Two 
 dotnet run --project KeriPocs
 ```
 
-Reads run safely against your configured environment. **Writes take two separate yeses.** `KERI_POC_ALLOW_WRITES` arms them, and each write is then confirmed at the moment it happens — after the POC names the records it will create, the company, the endpoint, and what becomes of them afterwards. An unarmed run still prints everything an armed one would create, so it is a complete description of what would happen without doing any of it. A redirected stdin declines rather than assuming consent, so a scripted run never writes even when armed.
+The OData one runs first on purpose. It establishes whether your session honours `$filter` and `$top` at all — Epicor's v1 endpoints are not OData, and setting `ApiKey` is what selects the v2 shape — because that decides how to read the row counts every other read prints. It does this with two reads of one small reference table, the second filtered on a value that cannot exist: nothing back means the filter worked, anything back means it was dropped.
+
+Reads run safely against your configured environment. The two writes (UDTable upsert, SalesOrder create) are **gated twice**: they need `KERI_POC_ALLOW_WRITES` set, and then each one asks before it runs, naming the records it will create and saying whether they can be removed again. With the variable unset they print what they would send and stop, so an unarmed run shows you everything an armed one would do.
 
 ```
 set KERI_POC_ALLOW_WRITES=true
 dotnet run --project KeriPocs
 ```
+
+Setting the variable arms the prompts; it does not skip them. Answering no to one leaves the rest of the run intact, and a redirected stdin counts as no — a scripted run never writes. The UD row is offered back for deletion once you have had a chance to look at it; the sales order stays, because Keri wraps no delete for sales orders.
 
 `KERI_POC_DISCOVER=true` separately arms the DTO discovery pass: it probes every entity-set read against your server's schema, writes a CSV of every column with Epicor's own description, and offers to act on what it finds. It writes nothing to Epicor and nothing into the source tree — see [DTO_FIELD_SELECTION.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/DTO_FIELD_SELECTION.md).
 
@@ -575,31 +576,40 @@ The .NET Framework builds don't reference MailKit; `System.Net.Mail` handles SMT
 ```
 KineticRESTIntegrator/
 ├── KineticRESTIntegrator.sln
+├── Directory.Build.props            shared build settings, signing, CI warning policy
+├── Keri.snk                         strong-name key (an identity, not a secret)
 ├── LICENSE                          Apache License 2.0
 ├── NOTICE                           attribution and trademark notice
 ├── README.md                        (this file)
-├── EXAMPLES_EPICOR.md                Worked Epicor examples
-├── EXAMPLES_RESTAPI.md               Using the transport for non-Epicor APIs
-├── COMPATIBILITY.md                  Which Epicor versions, inside and outside Epicor
-├── CONFIGURATION.md                  Connection and SMTP settings
-├── SECURITY.md                       Credentials, and what Keri leaves to you
-├── ADDING_A_SERVICE.md               Worked example: a new BO service and its DTO
-├── CHANGELOG.md
+├── EXAMPLES_EPICOR.md               worked Epicor examples
+├── EXAMPLES_RESTAPI.md              using the transport for non-Epicor APIs
+├── ENGINEERING_WORKBENCH.md         the three ECO orchestrators, step by step
+├── DTO_FIELD_SELECTION.md           how a DTO's column set is chosen
+├── ADDING_A_SERVICE.md              worked example: a new BO service and its DTO
+├── COMPATIBILITY.md                 which Epicor versions, inside and outside Epicor
+├── CONFIGURATION.md                 connection and SMTP settings
+├── SECURITY.md                      credentials, and what Keri leaves to you
 ├── CONTRIBUTING.md
+├── CHANGELOG.md
 ├── CLEANUP_RECOMMENDATIONS.md
-├── .gitignore
+├── .github/                         CI workflow
+├── tools/
+│   ├── update-readme-counts.ps1     refreshes the generated counts in the docs
+│   └── githooks/                    the pre-commit hook that runs it
 │
-├── Keri.RestTransport/                    Low-level REST transport
+├── Keri.RestTransport/              low-level REST transport
 │   ├── Authentication/              RestSessionKey, RestAuthenticationObject
 │   ├── Transport/                   RestConnect
 │   └── Keri.RestTransport.csproj
 │
-├── Keri.Epicor/                      Business Object wrappers
-│   ├── EpicorSvc.cs                 (base class — credential validation)
-│   ├── EpicorClient.cs              (the disposable facade)
-│   ├── OperationResult.cs           (the standard return type)
-│   ├── EpicorRestSessionKey.cs      (in Dtos/ — programmatic-session DTO)
-│   ├── Dtos/                        typed DTOs
+├── Keri.Epicor/                     Business Object wrappers
+│   ├── EpicorClient.cs              the disposable facade
+│   ├── EpicorSvc.cs                 base class — credentials, URLs, the $select
+│   ├── EpicorRestSessionKey.cs      the session you construct first
+│   ├── OperationResult.cs           the standard return type
+│   ├── FailureStage.cs              which side of the commit boundary a failure landed
+│   ├── ODataFilter.cs               filter and literal helpers
+│   ├── Dtos/                        typed DTOs, and SkipDefaultSelectAttribute
 │   ├── Sales/                       QuoteSvc, SalesOrderSvc
 │   ├── Engineering/                 BomSearchSvc, EngWorkBenchSvc
 │   ├── Production/                  JobEntrySvc
@@ -630,7 +640,7 @@ KineticRESTIntegrator/
 │   ├── SmtpSettings.cs              relay configuration (public)
 │   └── Keri.Mail.csproj
 │
-├── KeriConfigurator/                Setup console for the samples
+├── KeriConfigurator/                setup console for the samples
 │   ├── App.config.template          seeds the shared App.config on first build
 │   ├── App.config                   ← the one shared config (gitignored); exes link to it
 │   ├── KeriConfig.cs                builds sessions / clients + SmtpSettings from config
@@ -638,20 +648,28 @@ KineticRESTIntegrator/
 │   ├── Properties/                  unified Settings schema
 │   └── KeriConfigurator.csproj
 │
-├── KeriDemo/                   End-to-end sample app
-│   ├── Program.cs
+├── KeriDemo/                        end-to-end sample app
+│   ├── Program.cs                   BAQ → Excel → email, in a single run
+│   ├── DemoPartSnapshot.cs          the row type the demo binds to
+│   ├── Parts_BAQ.baq                the BAQ to import into your test environment
 │   └── KeriDemo.csproj
 │
-├── KeriPocs/                   Per-service runnable examples
+├── KeriPocs/                        per-service runnable examples
 │   ├── Program.cs
-│   ├── PocConfig.cs                 (the write-gate)
+│   ├── PocConfig.cs                 the write gate and the prompts
 │   ├── PocBanner.cs
-│   ├── UserCodesPoc.cs, PartPoc.cs, UDTablePoc.cs, SalesOrderPoc.cs, MenuTreePoc.cs
+│   ├── ODataProbePoc.cs             does this session honour $filter and $top?
+│   ├── SchemaProbePoc.cs            reads the server's schema; the discovery pass
+│   ├── DtoDiscovery.cs              the discovery rules, kept apart so they are testable
+│   ├── UserCodesPoc.cs, PartPoc.cs, UDTablePoc.cs, SalesOrderPoc.cs,
+│   │   JobEntryPoc.cs, MenuTreePoc.cs, FunctionPoc.cs
 │   └── KeriPocs.csproj
 │
 └── KineticRESTIntegrator.Tests/     xUnit unit tests (offline, deterministic)
-    ├── ColumnLegendTests.cs, OperationResultTests.cs,
-    │   OperationResultExtensionsTests.cs, UDRowSerializationTests.cs
+    ├── Files/                       fixtures
+    ├── StubHttpHandler.cs           the fake transport the transport tests run against
+    ├── *Tests.cs                    one file per area — transport, retry, auth, URLs,
+    │                                OperationResult, UD tables, DTO discovery, guards
     └── KineticRESTIntegrator.Tests.csproj
 ```
 
