@@ -32,6 +32,24 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ### Fixed
 
+- **An inner service no longer creates its own `HttpClient`.** `EngWorkBenchSvc` and `InvTransferSvc` are the only services that build another service — a `BomSearchSvc` for the source BOM in `AddOprsAsync`, a `SelectedSerialNumbersSvc` for the serial-number steps in `MoveInventoryAsync`. Both used the single-argument constructor, so the inner service built a client of its own. A caller supplying a client from `IHttpClientFactory`, or one carrying a proxy, logging or retry handler, did not get it used for those calls, and each service held a second connection pool. `EpicorClient` already passed its client to all 24 top-level services; these two inner ones were missed.
+
+  `RestConnect.HttpClient` is now `protected internal` so a derived service can hand its client across whether the caller supplied it or Keri created it, and both sites pass it unconditionally. A service receiving a client does not own it and will not dispose it — ownership stays with whoever created it. **This widens the public surface**: `protected` members are API for anyone subclassing `RestConnect`.
+
+- **Six dataset reads report a bad shape instead of throwing.** Found by scanning every service file for the defect class `ChangePartUnitPriceAsync` had: 59 envelope dereferences across 44 files, 26 without an obvious guard, six real once each was read in context.
+
+  `AddMscShpDtAsync` threaded `OnChangePartNum` and `OnChangeQuantity` without checking either, then indexed `ds["ds"]["MscShpDt"][0]`. Both return a raw `JObject` and an error-shaped response is a well-formed one, so a declined change threw `NullReferenceException` and lost Epicor's explanation. Each step is now checked before the next call and before the commit; nothing has been written at that point, so the failure is `Uncommitted`.
+
+  `ProcessSelectedSerialNumbersAsync` is **public** and takes the dataset as an argument, then dereferenced it on its first statement — so a caller passing a document without a `SerialNumberSelection` table received an `ArgumentNullException` from a library whose premise is that errors are values. It now returns a failure naming the table it expected. **This is a public behaviour change**: code catching `ArgumentNullException` around it will stop seeing one.
+
+  `AddOprsAsync` (the source BOM's `PartOpr` table and the `ECOOpr` template row), `AddPartRevAsync` (the `PartRev` table) and `GenerateGroupAsync` (the `ECOGroup` row) each dereferenced after a call that reported success, so they could only break on an HTTP 200 whose body was not the expected shape — `HandleResponse` falls through gracefully and the transport never inspects a 2xx body, so nothing upstream catches it. Each now returns a failure naming the step and the shape it wanted.
+
+  `AddMtlsAsync` already converted its populate-loop failure to a value inside a `try`/`catch`; it reported the exception. It now builds the failure with `StepFailure`, which prefers Epicor's own `ErrorMessage`, and keeps the exception attached.
+
+  **What these guards do not do is prevent a bad write.** No Epicor endpoint accepts an error object as its dataset, so a chain fed a broken one fails at the next call regardless. What changes is that the caller receives an `OperationResult` failure carrying the status, step trail and raw response, rather than an exception carrying none of them.
+
+  Covered by `MiscShipGuardTests` and `WriteOrchestratorGuardTests` — twelve tests over a scripted handler, including one pinning that a failed material still unlocks the ECO group and never reaches `Update`.
+
 - **`ChangePartUnitPriceAsync` reports a declined price change instead of throwing.** Its first step unwraps `["parameters"]` from the `ChangePartUnitPrice` response, and a response without that envelope — an unknown part, a permissions refusal, a transport failure — made `JObject.FromObject(null)` throw `ArgumentNullException`, discarding the Epicor message that explained why. It now returns a failure carrying that message, the same treatment the orchestrators received in 0.4.2 and 0.5.0. **Stopping at that point is unchanged and deliberate**: the chain must not continue on a dataset Epicor never produced. Only the way it stops is different.
 
 - **A failure crossing an orchestrator boundary no longer loses `ErrorType` and `CorrelationId`.** An orchestrator whose return type differs from the call underneath it has to re-describe that call's failure, and eleven places rebuilt it from four of its eight fields — dropping the provider error type and the correlation id, which are exactly the two the documentation tells you to branch on and to quote to whoever reads the server log. `CreateProjectAsync`, `CreateQuoteAsync`, `AddOprsAsync`, `GetUDCodeDescriptionAsync`, `TruncateAsync`, `SaveAsync`, `GetByPONumAsync`, `TestConnectionAsync` and the typed UD-table reads were affected. There is now one conversion in the codebase, and it carries message, status code, resource path, raw response, error type, correlation id, exception, commit stage and step trail.
@@ -39,6 +57,8 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
   Three places that look identical were left alone deliberately: the 404 and 409 from `GetByPONumAsync`, and `SaveAsync`'s "returned no row to populate". In each the underlying call *succeeded* and Keri is the one deciding the operation cannot continue, so there is no provider error to carry.
 
 ### Changed
+
+- **Warnings are errors on CI.** `TreatWarningsAsErrors` is set in `Directory.Build.props` under a `ContinuousIntegrationBuild` condition, and `ci.yml` passes `-p:ContinuousIntegrationBuild=true` on the build step. Unconditionally the property would turn a warning a newer Roslyn introduces into a build failure for a contributor on code they did not write, on a repository with no `global.json` pinning the SDK; conditioned, CI holds the line and a local build only warns. Add the same switch locally to reproduce a CI failure. The switch is also what SourceLink wants for deterministic path mapping, so the two travel together.
 
 - **The POCs ask before they write, and clean up after themselves where they can.** `KERI_POC_ALLOW_WRITES` was the only thing standing between running the examples and a record in Epicor. It is read once at startup, so someone who set it to watch a sales order get created had also armed every other write POC in the project — including any added later — and it stays set for the rest of their shell session. It answers "this program may write," which is not "write this, now."
 

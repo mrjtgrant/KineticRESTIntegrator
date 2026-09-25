@@ -47,10 +47,14 @@ namespace Keri.Epicor
 
         // Inner service for BOM lookups. Constructed lazily so it shares this
         // service's session — important for callers that pass a programmatic
-        // RestSessionKey rather than relying on app.config. Disposed below.
+        // RestSessionKey rather than relying on app.config — and its client, so
+        // there is one connection pool and a caller's own handlers (a proxy,
+        // logging, IHttpClientFactory) apply to the BOM read inside
+        // AddOprsAsync too. The inner service does not own the client and will
+        // not dispose it; this one is disposed below.
         private BomSearchSvc _bomSearchSvc;
         private BomSearchSvc BomSearchSvc =>
-            _bomSearchSvc ?? (_bomSearchSvc = new BomSearchSvc(EpicorSession));
+            _bomSearchSvc ?? (_bomSearchSvc = new BomSearchSvc(EpicorSession, HttpClient));
 
         // Properties to skip when copying operations from a source BOM into a
         // new ECO. Static readonly because the list never changes per-instance.

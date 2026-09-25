@@ -75,8 +75,22 @@ namespace Keri.RestTransport
         private readonly bool _ownsClient;
         private bool _disposed;
 
-        /// <summary>The client this transport sends on. Internal, for tests.</summary>
-        internal HttpClient HttpClient { get { return _client; } }
+        /// <summary>The client this transport sends on.</summary>
+        /// <remarks>
+        /// <para>
+        /// Visible to derived types so a service that builds another service can
+        /// hand its own client across, whether that client was supplied by the
+        /// caller or created here. Without this, an inner service could only
+        /// receive a client the caller passed in explicitly, and would open a
+        /// second connection pool in every other case.
+        /// </para>
+        /// <para>
+        /// A service receiving this client does not own it — see
+        /// <see cref="OwnsHttpClient"/> — so it will not dispose it. Ownership
+        /// stays with whoever created it.
+        /// </para>
+        /// </remarks>
+        protected internal HttpClient HttpClient { get { return _client; } }
 
         /// <summary>True when this instance created the client and will dispose it.</summary>
         internal bool OwnsHttpClient { get { return _ownsClient; } }

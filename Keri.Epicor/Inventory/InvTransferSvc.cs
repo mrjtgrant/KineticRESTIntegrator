@@ -44,11 +44,16 @@ namespace Keri.Epicor
 
         // Inner service for serial-number handling. Constructed lazily so it
         // shares this service's session — important for callers that pass a
-        // programmatic RestSessionKey rather than relying on app.config.
-        // Disposed in Dispose(bool) below.
+        // programmatic RestSessionKey rather than relying on app.config — and
+        // its client, so there is one connection pool and a caller's own
+        // handlers (a proxy, logging, IHttpClientFactory) apply to the
+        // serial-number calls inside MoveInventoryAsync too. The inner service
+        // does not own the client and will not dispose it; this one is disposed
+        // in Dispose(bool) below.
         private SelectedSerialNumbersSvc _selectedSerialNumbersSvc;
         private SelectedSerialNumbersSvc SelectedSerialNumbersSvc =>
-            _selectedSerialNumbersSvc ?? (_selectedSerialNumbersSvc = new SelectedSerialNumbersSvc(EpicorSession));
+            _selectedSerialNumbersSvc ?? (_selectedSerialNumbersSvc =
+                new SelectedSerialNumbersSvc(EpicorSession, HttpClient));
 
         // ---------------------------------------------------------------
         // Public API — the one true primitive
