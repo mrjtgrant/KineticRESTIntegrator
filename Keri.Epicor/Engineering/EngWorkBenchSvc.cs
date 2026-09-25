@@ -27,11 +27,20 @@ namespace Keri.Epicor
     /// generic read methods (<c>GetByIDAsync</c>, <c>GetNew*Async</c>,
     /// <c>ECOMtlsAsync</c>, dataset fetchers) and the generic <c>UpdateAsync</c>
     /// are <c>public</c> and return <see cref="OperationResult{T}"/>.
-    /// Process-step verbs (<c>CheckOutAsync</c>, <c>GroupUnLockAsync</c>,
-    /// <c>ApproveAndCheckInAllAsync</c>) are <c>internal</c> and return raw
-    /// <see cref="JObject"/> — they are implementation details of the ECO
-    /// workflow that callers reach via the orchestrators, not standalone
-    /// operations.
+    /// Process-step verbs that the orchestrators chain —
+    /// <c>CheckOutAsync</c> and <c>GroupUnLockAsync</c>, both called by
+    /// <see cref="AddMtlsAsync"/> — are <c>internal</c> and return raw
+    /// <see cref="JObject"/>. Wrapping each step of a chain in an
+    /// <see cref="OperationResult{T}"/> would add ceremony without value.
+    /// </para>
+    /// <para>
+    /// <c>CheckInAsync</c> and <c>ApproveAndCheckInAllAsync</c> are
+    /// <c>public</c> and return an <see cref="OperationResult{T}"/> like any
+    /// other public method. Neither is a chained step: no orchestrator calls
+    /// them. They close a cycle the orchestrators open —
+    /// <see cref="AddMtlsAsync"/> leaves the parent part checked out, which is
+    /// where Epicor's own flow leaves it, and a consumer automating a full cycle
+    /// needs a way to release or approve it.
     /// </para>
     /// </remarks>
     public partial class EngWorkBenchSvc : EpicorSvc
@@ -220,6 +229,132 @@ namespace Keri.Epicor
             return response.ToOperationResult(r => r);
         }
 
+        /// <summary>
+        /// Checks a part back in from an ECO group, releasing the checkout that
+        /// <see cref="AddMtlsAsync"/> takes. Calls
+        /// <c>Erp.BO.EngWorkBenchSvc/CheckIn</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This does not approve anything.</b> Epicor's
+        /// <c>ApproveAndCheckInAll</c> both approves the revision and checks it
+        /// in; this is the check-in alone. Approving an ECO is a sign-off with
+        /// engineering accountability attached, so Keri does not wrap it —
+        /// approve in Engineering Workbench.
+        /// </para>
+        /// <para>
+        /// <b>Leaving a part checked out is not a defect.</b>
+        /// <see cref="AddMtlsAsync"/> checks the parent part out and leaves it
+        /// that way because that is where Epicor's own flow leaves it: the part
+        /// is under revision until someone reviews and approves it. This method
+        /// exists for a consumer automating a full cycle who has their own
+        /// reason to release it, not because the workflow is unfinished.
+        /// </para>
+        /// <para>
+        /// The parameters mirror <c>CheckOutAsync</c>, which is the paired
+        /// operation — Epicor's metadata names the endpoint but declares no
+        /// parameters for it, so the payload is taken from its inverse rather
+        /// than from a published contract. <c>ipValidPassword</c> is sent as
+        /// <c>true</c> for the same reason.
+        /// </para>
+        /// </remarks>
+        /// <param name="GroupID">The ECO group ID the part is checked out to.</param>
+        /// <param name="PartNum">The parent part to check in.</param>
+        /// <param name="RevNum">The part revision to check in.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping Epicor's response.
+        /// </returns>
+        public async Task<OperationResult<JObject>> CheckInAsync(
+            string GroupID,
+            string PartNum,
+            string RevNum,
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.EngWorkBenchSvc/CheckIn";
+            JObject ds = new JObject {
+                new JProperty("ipGroupID", GroupID),
+                new JProperty("ipPartNum", PartNum),
+                new JProperty("ipRevisionNum", RevNum),
+                new JProperty("ipAltMethod", ""),
+                new JProperty("ipProcessMfgID", ""),
+                new JProperty("ipAsOfDate", DateTime.Now.ToString("yyyy-MM-dd")),
+                new JProperty("ipCompleteTree", false),
+                new JProperty("ipValidPassword", true),
+                new JProperty("ipReturn", false),
+                new JProperty("ipGetDatasetForTree", false),
+                new JProperty("ipUseMethodForParts", false)
+            };
+
+            JObject response = HandleResponse(await RestCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
+        /// <summary>
+        /// Approves every row in an ECO group and checks the group back in.
+        /// Calls <c>Erp.BO.EngWorkBenchSvc/ApproveAndCheckInAll</c> in Epicor.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Use with caution.</b> This is meant for automation purposes in a
+        /// workflow that is proven to be reliable with extensive testing.
+        /// </para>
+        /// <para>
+        /// <b>This approves.</b> It is the sign-off, not a tidy-up — every row in
+        /// the group is approved and the group is checked in, in one call. Where
+        /// your process expects a person to review a revision before it becomes
+        /// current, calling this from automation removes that review. Use
+        /// <see cref="CheckInAsync"/> when you only need to release a part.
+        /// </para>
+        /// <para>
+        /// <b>The whole group, not one part.</b> <c>ipPartNum</c> and
+        /// <c>ipRevisionNum</c> are sent blank, so the scope is every part in
+        /// the group — including any a different process added.
+        /// </para>
+        /// <para>
+        /// <c>ipValidPassword</c> is sent as <c>false</c>, the value this method
+        /// has always carried. Epicor can require a password for ECO approval
+        /// depending on configuration; what this flag does on that path is not
+        /// established here, so it is left as it was rather than guessed at.
+        /// </para>
+        /// </remarks>
+        /// <param name="GroupID">The ECO group ID to approve and check in.</param>
+        /// <param name="auditText">
+        /// What Epicor records in the audit trail as the reason for the
+        /// approval. This is a permanent record on the ECO, so supply something
+        /// that identifies the process or the authority behind it — a job name,
+        /// a ticket, an operator. The default is a visible placeholder rather
+        /// than plausible text, so an unset value reads as unset.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>
+        /// An <see cref="OperationResult{T}"/> wrapping Epicor's response.
+        /// </returns>
+        public async Task<OperationResult<JObject>> ApproveAndCheckInAllAsync(
+            string GroupID,
+            string auditText = "*Audit Message*",
+            CancellationToken ct = default)
+        {
+            string svc = "Erp.BO.EngWorkBenchSvc/ApproveAndCheckInAll";
+            JObject ds = new JObject {
+                new JProperty("ipGroupID", GroupID),
+                new JProperty("ipPartNum", ""),
+                new JProperty("ipRevisionNum", ""),
+                new JProperty("ipAltMethod", ""),
+                new JProperty("ipProcessMfgID", ""),
+                new JProperty("ipAsOfDate", DateTime.Now.ToString("yyyy-MM-dd")),
+                new JProperty("ipCompleteTree", false),
+                new JProperty("ipReturn", false),
+                new JProperty("ipGetDatasetForTree", false),
+                new JProperty("ipUseMethodForParts", false),
+                new JProperty("ipValidPassword", false),
+                new JProperty("ipAuditText", auditText)
+            };
+
+            JObject response = HandleResponse(await RestCallAsync(svc, ds, ct).ConfigureAwait(false));
+            return response.ToOperationResult(r => r);
+        }
+
         // ---------------------------------------------------------------
         // Internal API — ECO process steps
         //
@@ -262,35 +397,6 @@ namespace Keri.Epicor
                 new JProperty("ipUseMethodForParts", false)
             };
 
-            return HandleResponse(await RestCallAsync(svc, ds, ct).ConfigureAwait(false));
-        }
-
-        /// <summary>
-        /// Approves all rows in an ECO group and checks the group back in.
-        /// Calls <c>Erp.BO.EngWorkBenchSvc/ApproveAndCheckInAll</c> in Epicor.
-        /// </summary>
-        /// <param name="GroupID">The ECO group ID to approve and check in.</param>
-        /// <param name="ct">Cancellation token.</param>
-        /// <returns>The raw Epicor response, shape-normalized via <c>HandleResponse</c>.</returns>
-        internal async Task<JObject> ApproveAndCheckInAllAsync(
-            string GroupID,
-            CancellationToken ct = default)
-        {
-            string svc = "Erp.BO.EngWorkBenchSvc/ApproveAndCheckInAll";
-            JObject ds = new JObject {
-                new JProperty("ipGroupID", GroupID),
-                new JProperty("ipPartNum", ""),
-                new JProperty("ipRevisionNum", ""),
-                new JProperty("ipAltMethod", ""),
-                new JProperty("ipProcessMfgID", ""),
-                new JProperty("ipAsOfDate", DateTime.Now.ToString("yyyy-MM-dd")),
-                new JProperty("ipCompleteTree", false),
-                new JProperty("ipReturn", false),
-                new JProperty("ipGetDatasetForTree", false),
-                new JProperty("ipUseMethodForParts", false),
-                new JProperty("ipValidPassword", false),
-                new JProperty("ipAuditText", "ECO Group * * Import")
-            };
             return HandleResponse(await RestCallAsync(svc, ds, ct).ConfigureAwait(false));
         }
 
