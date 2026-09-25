@@ -1,7 +1,7 @@
 # Choosing the columns a DTO models
 
 Every DTO in `Keri.Epicor/Dtos` models a subset of its Epicor table. `Part`
-models 52 columns of 397. Everything a DTO does not model still reaches the
+models 51 columns of 397. Everything a DTO does not model still reaches the
 caller through `ExtraData`, which captures any JSON property the typed
 properties do not consume.
 
@@ -21,13 +21,18 @@ opt out of a request that never arrives. Generated lengths:
 
 | DTO columns | generated `$select` |
 |---|---|
-| 52 | 690 characters |
+| 51 | 680 characters |
 | 81 | 1,194 characters |
 | 203 | 3,260 characters |
 | 257 | 4,323 characters |
 
+These are the length of the `$select` value as it reaches the server — commas
+percent-encoded as `%2C`, the `$select=` key itself not counted. That is the
+same thing IIS measures `maxQueryString` against, so the figures compare
+directly to 2,048. `KeriPocs/ODataProbePoc.cs` reports it per entity.
+
 **The payload is smaller when the DTO is narrow.** Measured at 25 rows,
-`Part` projected onto its 52 columns is 83.1% smaller than the same read
+`Part` projected onto its modelled columns is 83.1% smaller than the same read
 unprojected. Where a DTO models every column of its table the projection
 saves nothing and costs 5–16%, because naming every column explicitly makes
 Epicor emit fields it otherwise omits.
@@ -55,7 +60,7 @@ and three columns added:
 |---|---|
 | `Described` | Epicor supplied prose for this column |
 | `InDto` | the Keri DTO models it today |
-| `Signal` | the two combined — `modelled`, `modelled, undescribed`, `candidate`, `view field` |
+| `Signal` | `modelled`, `modelled, undescribed`, `drop suggested`, `add suggested`, `missing key`, `candidate`, `view field`, `not in schema` |
 
 `InDto` is read from the DTO at run time, so the annotation cannot drift from
 the code.
@@ -84,6 +89,20 @@ screen flag describes a screen, not a record.
 **`candidate` — described, not modelled.** The rows worth reading. Epicor's
 own text is the evidence for whether the column belongs on the DTO.
 
+**`not in schema` — modelled here, absent from the server.** A property the
+DTO carries that this installation's schema does not declare. The probe did
+not judge it; there was nothing to judge. Two things follow. `$select` is
+built from the DTO's properties, so the column is asked for on every read of
+that entity and nothing comes back for it. And regenerating the DTO drops the
+property, which is a breaking change for anyone holding the package.
+
+An absence has more than one cause and the schema cannot tell them apart: the
+column may have been renamed or retired in a later Epicor version, or this
+installation may not license the module that surfaces it. Check it against
+your own server before accepting the removal. The probe reports where the
+property is referenced in this repository, so the cost of dropping it is known
+first — but a reference cannot keep a column the server does not have.
+
 **A description that restates the name says nothing.** `OwnReference:
 OwnReference`, `MsgId: MsgId`, `PriorJobNum: PriorJobNum`. Roughly 15 of
 CheckHed's and 10 of SerialNo's descriptions are of this kind. Named but not
@@ -107,7 +126,7 @@ Do not model it. The owning service returns the same value typed and current.
 `SelectedForAction`, `IsLcked`, `BitFlag`, `XRateLabel*`. This describes what a
 Kinetic screen does with the record, not the record. Do not model it.
 
-`Part` currently models `BitFlag`; no other DTO does. That is an open
+Seventeen DTOs model `BitFlag`; `Part` does not. That is an open
 inconsistency, not an exception to this test.
 
 **3. Is it a standard user-defined column?** `Character01`–`Character20`,
