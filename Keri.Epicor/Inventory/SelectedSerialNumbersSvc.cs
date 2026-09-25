@@ -114,8 +114,19 @@ namespace Keri.Epicor
             List<string> FoundSerialNumbers = new List<string>();
             string svc = "Erp.BO.SelectedSerialNumbersSvc/ProcessSelectedSerialNumbers";
 
+            // The dataset is the caller's, and one from a failed earlier step is
+            // a well-formed JObject like any other — the only way to tell is to
+            // look for what this method needs. Report it as a value: this is
+            // public surface, and a library whose premise is errors-as-values
+            // should not throw ArgumentNullException at a caller who handed it
+            // the wrong document.
+            JToken selection = ds == null ? null : ds["ds"]?["SerialNumberSelection"];
+            if (selection == null)
+                return StepFailure<JObject>(
+                    ds, "ProcessSelectedSerialNumbers", "a ds.SerialNumberSelection table");
+
             // All available serial numbers from the input dataset.
-            JArray available = JArray.FromObject(ds["ds"]["SerialNumberSelection"]);
+            JArray available = JArray.FromObject(selection);
 
             // Mark the rows whose serial number is in the requested list.
             for (int i = 0; i < available.Count; i++)
