@@ -82,14 +82,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<OrderHed>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.SalesOrderSvc/SalesOrders";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<OrderHed>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 

@@ -113,6 +113,54 @@ Four rules that matter here:
 - **No `_c` columns as typed properties.** Those belong to one installation, not
   the SDK.
 
+### Choosing which columns to model
+
+Which columns make the practical core is the one part of a DTO that cannot be
+derived. `DTO_FIELD_SELECTION.md` sets out how to decide, and
+`KeriPocs/SchemaProbePoc.cs` produces the evidence it works from: a CSV of every
+column the server has, with Epicor's own description, and whether your DTO
+models it.
+
+Two facts shape the decision. A response shrinks when the DTO is a narrow core
+of a wide table — `Part` models 52 of 397 columns and its reads are 83% smaller
+than unprojected ones. And the generated `$select` has a ceiling: IIS's default
+`maxQueryString` is 2,048 characters, which a DTO of roughly 130 columns
+reaches. A DTO wide enough to exceed it produces reads that fail before Epicor
+sees them, on any server left at the default.
+
+### Opting out of the default projection
+
+A DTO that models its table completely enough that the projection cannot make
+the response smaller can turn it off:
+
+```csharp
+using Keri.Epicor.Dtos;
+
+[SkipDefaultSelect]
+public class Warehse
+{
+    // ...
+}
+```
+
+Entity-set reads backed by that DTO then send no `$select` unless the caller
+asks for one — an explicit `select`, or any `additionalColumns`, projects
+exactly as it would without the attribute.
+
+Reach for it only with a measurement in hand. `KeriPocs/ODataProbePoc.cs`
+reads an entity twice, projected and unprojected, and reports the difference; a
+DTO qualifies when that difference is near zero or negative, which happens when
+it already names nearly every column of its table. Naming every column
+explicitly makes Epicor emit fields it otherwise omits, so projecting such a DTO
+measurably costs more than not projecting it — 15.6% more on one 81-column
+reference table.
+
+The attribute cannot cost a caller data. An unprojected read returns at least
+the columns the DTO models and usually more, and anything the typed properties
+do not consume lands in `ExtraData`. It trades bytes, never fields.
+
+No DTO in this library carries it.
+
 ---
 
 ## 3. The service

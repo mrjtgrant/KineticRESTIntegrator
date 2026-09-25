@@ -58,6 +58,15 @@
     <ProjectReference Include="..\Keri.Mail\Keri.Mail.csproj" />
   </ItemGroup>
 
+  <!-- KeriPocs holds DtoDiscovery: the rules that decide what a DTO should
+       model, which are pure functions and belong under test. The exe targets
+       net48 only, so the reference and the tests that use it are conditioned to
+       that target — the rules are framework-independent, so covering them on one
+       framework covers them. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <ProjectReference Include="..\KeriPocs\KeriPocs.csproj" />
+  </ItemGroup>
+
   <!-- System.Net.Http is built into .NET Framework but is not auto-referenced
        by the SDK. The transport tests construct HttpClient and
        HttpRequestMessage directly, so the net48 target needs it spelled out;

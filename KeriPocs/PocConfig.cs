@@ -65,6 +65,45 @@ namespace KeriPocs
         /// </summary>
         public static bool AllowWrites { get; } = ReadAllowWrites();
 
+        private const string DiscoverEnvVar = "KERI_POC_DISCOVER";
+
+        /// <summary>
+        /// True when the DTO discovery pass is armed. Read from the
+        /// <c>KERI_POC_DISCOVER</c> environment variable at first access.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Discovery is maintenance, not demonstration. Armed, it probes every
+        /// entity-set read, walks the repository's source to check whether
+        /// anything uses a column before proposing its removal, and offers to
+        /// generate DTOs. A program someone runs to see how the SDK works should
+        /// not do any of that unasked, which is why it is off by default.
+        /// </para>
+        /// <para>
+        /// It writes no file under <c>Keri.Epicor/Dtos</c> either way, and it
+        /// writes nothing at all to Epicor — the gate is about surprise, not
+        /// danger.
+        /// </para>
+        /// </remarks>
+        public static bool DiscoverDtos { get; } = ReadFlag(DiscoverEnvVar);
+
+        private static bool ReadFlag(string variable)
+        {
+            string raw = Environment.GetEnvironmentVariable(variable);
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+
+            switch (raw.Trim().ToLowerInvariant())
+            {
+                case "true":
+                case "1":
+                case "yes":
+                case "on":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         private static bool ReadAllowWrites()
         {
             string raw = Environment.GetEnvironmentVariable(AllowWritesEnvVar);
@@ -201,6 +240,53 @@ namespace KeriPocs
                         Console.WriteLine("  Please answer y or n.");
                         break;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Prompts until the answer matches one of <paramref name="choices"/>,
+        /// matched on its first letter, case-insensitively. Returns
+        /// <paramref name="safeDefault"/> when standard input is redirected or
+        /// has reached end of file, so a piped or scheduled run never hangs on
+        /// a question nobody will answer.
+        /// </summary>
+        /// <param name="prompt">The question, without the options.</param>
+        /// <param name="choices">
+        /// The permitted answers, longest form first — "review", "accept",
+        /// "nothing". The first letter of each is what the operator types.
+        /// </param>
+        /// <param name="safeDefault">
+        /// The answer a non-interactive run gets. It is the caller's job to make
+        /// this the one that changes nothing.
+        /// </param>
+        public static string AskChoice(string prompt, string[] choices, string safeDefault)
+        {
+            if (choices == null || choices.Length == 0) return safeDefault;
+            if (Console.IsInputRedirected) return safeDefault;
+
+            var keys = new List<string>();
+            foreach (string c in choices)
+                keys.Add(c.Substring(0, 1).ToLowerInvariant());
+
+            string options = string.Join("/", choices);
+
+            while (true)
+            {
+                Console.Write(prompt + " (" + options + "): ");
+                string ans = Console.ReadLine();
+
+                if (ans == null) return safeDefault;      // end of input
+
+                string typed = ans.Trim().ToLowerInvariant();
+                if (typed.Length == 0) return safeDefault;
+
+                for (int i = 0; i < choices.Length; i++)
+                {
+                    if (typed == keys[i] || typed == choices[i].ToLowerInvariant())
+                        return choices[i];
+                }
+
+                Console.WriteLine("  Please answer one of: " + options + ".");
             }
         }
     }

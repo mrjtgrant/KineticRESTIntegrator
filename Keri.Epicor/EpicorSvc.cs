@@ -79,6 +79,96 @@ namespace Keri.Epicor
         }
 
         /// <summary>
+        /// Builds the <c>$select</c> portion of an entity-set request URL, or an
+        /// empty string when no projection should be sent.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Three cases, decided by <paramref name="select"/>:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item><description>
+        ///     <b>Null</b> — the default. The projection is <see cref="SelectFor{T}"/>,
+        ///     every column the DTO models, plus <paramref name="additionalColumns"/>.
+        ///   </description></item>
+        ///   <item><description>
+        ///     <b>A list of names</b> — that projection exactly, plus
+        ///     <paramref name="additionalColumns"/>.
+        ///   </description></item>
+        ///   <item><description>
+        ///     <b>Empty, with no additional columns</b> — <i>no</i> <c>$select</c> is
+        ///     sent, so Epicor returns the entity set's full column list. Typed
+        ///     properties bind as usual and everything the DTO does not model lands
+        ///     in its <c>[JsonExtensionData]</c> overflow.
+        ///   </description></item>
+        /// </list>
+        /// <para>
+        /// That third case is the reason this method exists. A caller previously had
+        /// no way to ask for an unprojected read: the clause was always emitted, and
+        /// an empty list produced a malformed <c>?$select=</c>. It matters because
+        /// <c>$select</c> is a payload optimisation whose value depends on how much
+        /// of the table the DTO models — for a narrow DTO against a wide table it
+        /// saves a great deal, and for a DTO that models nearly every column it saves
+        /// little while making the request URL long enough to meet IIS's default
+        /// 2,048-character query-string limit.
+        /// </para>
+        /// <para>
+        /// The returned clause begins with <c>&amp;</c>, so callers put
+        /// <c>$top</c> first and append this after it.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">The DTO type backing the read.</typeparam>
+        /// <param name="select">
+        /// The caller's projection: null for the DTO's columns, a list to override
+        /// them, or an empty list to send no projection at all.
+        /// </param>
+        /// <param name="additionalColumns">
+        /// Columns to append that the DTO does not model — install-specific
+        /// <c>_c</c> columns, Epicor UD placeholders. They arrive in the row's
+        /// overflow.
+        /// </param>
+        /// <returns>
+        /// <c>"&amp;$select=…"</c>, or an empty string when there is nothing to
+        /// project.
+        /// </returns>
+        protected string SelectClause<T>(List<string> select, List<string> additionalColumns)
+        {
+            bool callerAskedForColumns =
+                select != null || (additionalColumns != null && additionalColumns.Count > 0);
+
+            // A DTO can opt out of the default projection, for the case where
+            // naming its columns cannot make the response smaller. Only when the
+            // caller has expressed no preference — see
+            // SkipDefaultSelectAttribute.
+            if (!callerAskedForColumns && SkipsDefaultSelect<T>())
+                return string.Empty;
+
+            List<string> cols = select ?? SelectFor<T>();
+
+            if (additionalColumns != null && additionalColumns.Count > 0)
+                cols = cols.Concat(additionalColumns).ToList();
+
+            if (cols.Count == 0) return string.Empty;
+
+            return "&$select=" + UrlEncode(string.Join(",", cols));
+        }
+
+        private static readonly ConcurrentDictionary<Type, bool> _skipDefaultSelectCache =
+            new ConcurrentDictionary<Type, bool>();
+
+        /// <summary>
+        /// True when <typeparamref name="T"/> carries
+        /// <see cref="SkipDefaultSelectAttribute"/>. Cached per type, like the
+        /// column list itself.
+        /// </summary>
+        private static bool SkipsDefaultSelect<T>()
+        {
+            return _skipDefaultSelectCache.GetOrAdd(
+                typeof(T),
+                t => t.GetCustomAttributes(typeof(SkipDefaultSelectAttribute), false).Length > 0);
+        }
+
+        /// <summary>
         /// Reflects a DTO type's public instance properties into column names,
         /// applying the <see cref="SelectFor{T}"/> rules (skip the
         /// <see cref="JsonExtensionDataAttribute"/> overflow and

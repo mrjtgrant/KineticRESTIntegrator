@@ -93,14 +93,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<JobHead>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.JobEntrySvc/JobEntries";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<JobHead>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
@@ -142,14 +137,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<JobAsmbl>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.JobEntrySvc/JobAsmbls";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<JobAsmbl>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
@@ -191,14 +181,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<JobMtl>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.JobEntrySvc/JobMtls";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<JobMtl>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
@@ -240,14 +225,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<JobPart>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.JobEntrySvc/JobParts";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<JobPart>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 

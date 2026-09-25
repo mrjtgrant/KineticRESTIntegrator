@@ -10,7 +10,7 @@ The README's [Quick start](README.md#quick-start) covers clone, restore, build. 
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-Expected: <!--TESTS-->405<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
+Expected: <!--TESTS-->437<!--/TESTS--> tests, all green, no network access required. If anything is red on a fresh clone, that's a bug — please open an issue rather than working around it.
 
 Each package builds for `net461` (`net462` for `Keri.Mail`), `netstandard2.0` and `net8.0`, and the test suite runs on `net48` and `net8.0`. A change must compile for every target and pass on both test runs. Raising a package's .NET Framework floor drops support for the Epicor releases below it, so it needs discussion first.
 

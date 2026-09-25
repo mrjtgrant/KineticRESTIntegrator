@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Keri.Epicor;
+using Keri.Epicor.Dtos;
 using Keri.RestTransport;
+using Newtonsoft.Json.Linq;
 
 namespace KeriPocs
 {
@@ -127,6 +130,159 @@ namespace KeriPocs
                 Report("v1", v1);
                 Verdict(configured, v1);
             }
+
+            await MeasureSelectSavingAsync(client).ConfigureAwait(false);
+        }
+
+        // -----------------------------------------------------------------
+        // What does $select actually save?
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Measures, per entity, what a DTO-shaped <c>$select</c> does to the
+        /// response compared with no projection at all.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>$select</c> exists to reduce the response, so the response decides
+        /// whether sending it is worth it. Four entities are read, chosen for
+        /// contrast: <c>Part</c>, a narrow DTO over one of the widest tables in
+        /// Epicor; and <c>PayMethod</c>, <c>SerialNo</c> and <c>CheckHed</c>, each
+        /// of which models every column of its table.
+        /// </para>
+        /// <para>
+        /// The unprojected read answers a question nothing else here can: how many
+        /// columns the Epicor table actually has. That is the denominator for any
+        /// rule about how much of a table a DTO should model, and the number a DTO
+        /// review needs when Epicor adds columns in a new version.
+        /// </para>
+        /// <para>
+        /// The projected read passes the DTO's column list explicitly rather than
+        /// relying on the default, so the comparison holds even for a DTO that
+        /// has opted out of the default projection with
+        /// <see cref="SkipDefaultSelectAttribute"/>.
+        /// </para>
+        /// <para>
+        /// Read-only, and bounded by <c>top</c>.
+        /// </para>
+        /// </remarks>
+        private static async Task MeasureSelectSavingAsync(EpicorClient client)
+        {
+            const int Rows = 25;
+
+            Console.WriteLine();
+            Console.WriteLine($"--- what $select buys, per entity (top: {Rows}) ---");
+            Console.WriteLine();
+            Console.WriteLine("  Keri's entity-set reads send a $select built from the DTO's properties,");
+            Console.WriteLine("  so a response carries only the columns that DTO can bind. That trims a");
+            Console.WriteLine("  lot when the DTO is a narrow core of a wide table. It costs bytes when");
+            Console.WriteLine("  the DTO already names every column, because naming them explicitly makes");
+            Console.WriteLine("  Epicor emit fields it otherwise leaves out.");
+            Console.WriteLine();
+            Console.WriteLine("  Each entity below is read twice: once projected onto the DTO's columns,");
+            Console.WriteLine("  once with select: new List<string>(), which sends no $select at all.");
+            Console.WriteLine("  On that second read, columns/row is the table's real width — nothing");
+            Console.WriteLine("  else here can tell you that number.");
+            Console.WriteLine();
+            Console.WriteLine("  A DTO whose two column counts match models its whole table, and gains");
+            Console.WriteLine("  nothing from the projection. The projected read below passes the DTO's");
+            Console.WriteLine("  columns explicitly, so the comparison still holds for a DTO that has");
+            Console.WriteLine("  opted out of the default projection with [SkipDefaultSelect].");
+
+            await MeasureOne<Part>("Part", client.Part.SelectFor<Part>(),
+                sel => client.Part.PartsAsync(select: sel, top: Rows))
+                .ConfigureAwait(false);
+
+            await MeasureOne<PayMethod>("PayMethod", client.PayMethod.SelectFor<PayMethod>(),
+                sel => client.PayMethod.PayMethodsAsync(select: sel, top: Rows))
+                .ConfigureAwait(false);
+
+            await MeasureOne<SerialNo>("SerialNo", client.SerialNo.SelectFor<SerialNo>(),
+                sel => client.SerialNo.SerialNoesAsync(select: sel, top: Rows))
+                .ConfigureAwait(false);
+
+            await MeasureOne<CheckHed>("CheckHed", client.PaymentEntry.SelectFor<CheckHed>(),
+                sel => client.PaymentEntry.PaymentEntriesAsync(select: sel, top: Rows))
+                .ConfigureAwait(false);
+
+            Console.WriteLine();
+            Console.WriteLine("  Reading this for a DTO you are adding or maintaining:");
+            Console.WriteLine("    - a large saving means the practical core is doing its job; keep it");
+            Console.WriteLine("    - a saving near zero or negative means the DTO mirrors the table, so");
+            Console.WriteLine("      the projection is buying nothing; see DTO_FIELD_SELECTION.md");
+            Console.WriteLine("    - the gap between the two column counts is how much of the table the");
+            Console.WriteLine("      DTO leaves to ExtraData, which is the number to argue about when");
+            Console.WriteLine("      deciding whether a newly-added Epicor column belongs on the DTO");
+        }
+
+        /// <summary>
+        /// Reads one entity set twice — projected onto <paramref name="dtoColumns"/>
+        /// and unprojected — and reports the payload difference.
+        /// </summary>
+        /// <remarks>
+        /// The projection is passed in rather than left to default, so the
+        /// comparison still means something for a DTO carrying
+        /// <c>[SkipDefaultSelect]</c>, where the default is already no projection.
+        /// </remarks>
+        private static async Task MeasureOne<T>(
+            string label,
+            List<string> dtoColumns,
+            Func<List<string>, Task<OperationResult<List<T>>>> read)
+        {
+            var projected = await read(dtoColumns).ConfigureAwait(false);
+            var full      = await read(new List<string>()).ConfigureAwait(false);
+
+            Console.WriteLine();
+            Console.WriteLine($"  {label}");
+
+            if (projected.IsFailure || full.IsFailure)
+            {
+                Console.WriteLine("    could not measure: "
+                    + (projected.IsFailure ? projected.ErrorMessage : full.ErrorMessage));
+                return;
+            }
+
+            int projectedBytes = SizeOf(projected.RawResponse);
+            int fullBytes      = SizeOf(full.RawResponse);
+            int projectedCols  = ColumnsPerRow(projected.RawResponse);
+            int fullCols       = ColumnsPerRow(full.RawResponse);
+
+            if (projectedBytes == 0 || fullBytes == 0)
+            {
+                Console.WriteLine("    no rows came back — nothing to measure");
+                return;
+            }
+
+            double saved = 100.0 * (1.0 - (double)projectedBytes / fullBytes);
+            bool marked = typeof(T).GetCustomAttributes(
+                typeof(SkipDefaultSelectAttribute), false).Length > 0;
+
+            Console.WriteLine($"    projected onto the DTO : {projectedBytes,9:N0} bytes   {projectedCols,4} columns/row");
+            Console.WriteLine($"    no projection          : {fullBytes,9:N0} bytes   {fullCols,4} columns/row");
+            Console.WriteLine($"    difference             : {saved,9:N1}%  {(saved < 0 ? "(projecting costs more)" : "(projecting saves)")}");
+            Console.WriteLine($"    the DTO models {projectedCols} of the table's {fullCols} columns; "
+                            + $"{Math.Max(fullCols - projectedCols, 0)} reach you via ExtraData");
+
+            if (marked)
+                Console.WriteLine("    [SkipDefaultSelect] — Keri sends no $select for this DTO by default");
+            else
+                Console.WriteLine("    Keri sends the DTO's $select for this read by default");
+        }
+
+        /// <summary>Serialized length of a response, as a proxy for wire size.</summary>
+        private static int SizeOf(JObject raw)
+        {
+            return raw == null ? 0 : raw.ToString(Newtonsoft.Json.Formatting.None).Length;
+        }
+
+        /// <summary>
+        /// Property count on the first returned row. With no projection this is the
+        /// entity set's full column count.
+        /// </summary>
+        private static int ColumnsPerRow(JObject raw)
+        {
+            JObject first = raw?["value"]?.FirstOrDefault() as JObject;
+            return first == null ? 0 : first.Properties().Count();
         }
 
         // -----------------------------------------------------------------

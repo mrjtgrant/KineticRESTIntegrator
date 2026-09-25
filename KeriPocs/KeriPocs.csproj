@@ -33,6 +33,22 @@
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
+  <!-- System.Net.Http is a built-in assembly on .NET Framework but is not
+       auto-referenced by the SDK — needs an explicit Reference. SchemaProbePoc
+       uses HttpClient directly, because the schema documents it fetches are
+       XML and the transport parses every response as JSON. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <!-- The discovery rules in DtoDiscovery.cs are pure functions and are worth
+       testing; the program around them needs a live Epicor server and is not.
+       The test project references this one on net48 only, since that is the
+       only framework this exe targets. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="KineticRESTIntegrator.Tests" Key="$(KeriPublicKey)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Keri.Epicor\Keri.Epicor.csproj" />
     <ProjectReference Include="..\Keri.RestTransport\Keri.RestTransport.csproj" />

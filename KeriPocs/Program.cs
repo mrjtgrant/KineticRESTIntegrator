@@ -63,8 +63,11 @@ namespace KeriPocs
                     //
                     // The OData probe goes first on purpose: whether this
                     // session honours query options decides how to read the
-                    // row counts every other read POC prints.
+                    // row counts every other read POC prints. The schema probe
+                    // follows it: both describe the shape of what the other
+                    // POCs read, and neither touches business data.
                     await SafeRun("OData",     () => ODataProbePoc.RunAsync(client)).ConfigureAwait(false);
+                    await SafeRun("Schema",    () => SchemaProbePoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("UserCodes", () => UserCodesPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("Part",      () => PartPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("UDTable",       () => UDTablePoc.RunAsync(client)).ConfigureAwait(false);

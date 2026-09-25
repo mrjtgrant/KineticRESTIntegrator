@@ -30,6 +30,26 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 - **A trace hook on the session.** `RestSessionKey.OnTrace` is called as each HTTP attempt completes with a `KeriTraceEvent`: method, URL, status, elapsed milliseconds, attempt number, whether a retry follows, and the error when there was one. Null by default, so nothing is traced unless you ask. Keri takes no logging dependency — wiring it to `ILogger`, Serilog or `Console.WriteLine` is one line of your code. A handler that throws is ignored rather than failing the call.
 - **`OperationResult<T>.Steps`** — what an orchestrator did on the way to a result, in order, and on a failure the step that stopped it. The trail travels with the result, so it survives being returned, logged, or handed to you by someone reporting a problem, including from inside a BPM where there is nowhere to log. Empty for single service calls, which `ResourcePath` and `ErrorMessage` already describe. Every orchestrator records it.
 
+- **DTO discovery.** A DTO models a subset of its Epicor table — `Part` models 52 of 397 columns, and the rest reach the caller through `ExtraData`. Which columns make that subset is the one part of maintaining a DTO that cannot be derived, and until now it rested on reading column names.
+
+  Your server describes them. The OData schema document carries a description per column, and on a live install 324 of `Part`'s 397 columns, 203 of `CheckHed`'s 257 and 140 of `SerialNo`'s 203 arrive with Epicor's own prose. `SchemaProbePoc` reads it for an entity and writes the raw document plus a CSV of every column — type, nullability, description, whether the schema declares it part of the entity key, whether the DTO models it, and a `Signal` combining those with the reason in a `Why` column. `InDto` is read from the live DTO through `SelectFor<T>()`, so the annotation cannot drift from the code.
+
+  **The useful signal is whether a column is described at all.** An undescribed column is usually not a stored column: the business object adds fields no table holds — values denormalized from a related table (`VendorNumName`, `CurrencyCodeCurrSymbol`) and flags that drive a screen (`EnableVoidLN`, `BankAccountEnabled`). Epicor documents tables, so those arrive with nothing said about them. The standard user-defined columns (`Character01`, `ShortChar02`, …) are the exception: undescribed by design, because Epicor cannot document a column whose meaning each installation sets.
+
+  **The discovery pass** — `KERI_POC_DISCOVER=true` — covers all twenty DTO-backed entity-set reads, and proposes changes. It proposes removing a modelled column the server does not describe whose name is another column's name plus a suffix, or that reads as a screen flag. It proposes adding a column the schema declares part of the entity key, and a described column belonging to a family the DTO already models — the currency counterpart of a modelled amount, or one sharing a long leading stem with it. A currency dimension the DTO uses nowhere produces no suggestion, so a deliberate absence is not undone one counterpart at a time.
+
+  **Before proposing a removal it checks whether anything uses the column**, scanning every `.cs` file under the solution root. A referenced column keeps its place and the CSV records where. With no solution file above the executable, every removal is withheld rather than assumed safe. It is a text scan, not a compiler: a column called `Company` matches every DTO's `Company`, which is the safe direction — a false hit turns an automatic removal into a decision a person makes. It cannot see code outside the repository, so a clean scan means safe *here*; removing a public property remains a breaking change for anyone holding the package.
+
+  **What it will not do is rank columns.** Nothing Epicor publishes says whether a described column matters, and a described column unrelated to anything modelled stays a `candidate` for a person to read. A column absent from the previous run's CSV is marked `New` — that is what an upgrade added, and where a review starts.
+
+  Then one question: **review**, which writes an editable `schema-<Entity>-keep.csv` pre-filled with the recommendation; **accept**, which generates `<Entity>.generated.cs` from exactly the additions and removals just listed; or **nothing**. A keep file edited on an earlier run is acted on at the start of the next one, before anything is asked. Generated DTOs carry the right C# types off the Edm types and Epicor's description as each doc comment, and land beside the CSVs — **no file under `Keri.Epicor/Dtos` is written**. A redirected stdin answers "nothing", as it declines a write.
+
+  The rules live in `DtoDiscovery`, apart from the program that fetches and prints, and are covered by nineteen offline tests. `DTO_FIELD_SELECTION.md` is the written procedure, including the four ordered tests for an undescribed column and the asymmetry that settles a tie: an unmodelled column still arrives through `ExtraData` and adding the property later is a minor release, while removing one is major. `ADDING_A_SERVICE.md` points at it from the DTO section.
+
+- **`SkipDefaultSelectAttribute`** — a DTO can turn off the default `$select` its entity-set reads send. `$select` exists to reduce a response to the columns a DTO can bind, which pays when the DTO is a narrow core of a wide table and stops paying when it already names nearly every column: naming them explicitly makes Epicor emit fields it otherwise omits. Measured on a live install at 25 rows, projecting `Part` onto its 52 columns returned a payload 83.1% smaller, while three DTOs modelling every column of their tables returned payloads 15.6%, 5.6% and 5.7% *larger* with the projection than without.
+
+  It changes nothing a caller asked for: an explicit `select`, or any `additionalColumns`, projects as it always did. It cannot cost a caller data — an unprojected read returns at least the columns the DTO models and often more, and the surplus lands in `ExtraData`. No DTO in this library carries it; it exists for consumers defining their own DTOs on top of `EpicorSvc`, and `ADDING_A_SERVICE.md` says when to reach for it. Covered by six tests.
+
 ### Fixed
 
 - **An inner service no longer creates its own `HttpClient`.** `EngWorkBenchSvc` and `InvTransferSvc` are the only services that build another service — a `BomSearchSvc` for the source BOM in `AddOprsAsync`, a `SelectedSerialNumbersSvc` for the serial-number steps in `MoveInventoryAsync`. Both used the single-argument constructor, so the inner service built a client of its own. A caller supplying a client from `IHttpClientFactory`, or one carrying a proxy, logging or retry handler, did not get it used for those calls, and each service held a second connection pool. `EpicorClient` already passed its client to all 24 top-level services; these two inner ones were missed.
@@ -55,6 +75,10 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 - **A failure crossing an orchestrator boundary no longer loses `ErrorType` and `CorrelationId`.** An orchestrator whose return type differs from the call underneath it has to re-describe that call's failure, and eleven places rebuilt it from four of its eight fields — dropping the provider error type and the correlation id, which are exactly the two the documentation tells you to branch on and to quote to whoever reads the server log. `CreateProjectAsync`, `CreateQuoteAsync`, `AddOprsAsync`, `GetUDCodeDescriptionAsync`, `TruncateAsync`, `SaveAsync`, `GetByPONumAsync`, `TestConnectionAsync` and the typed UD-table reads were affected. There is now one conversion in the codebase, and it carries message, status code, resource path, raw response, error type, correlation id, exception, commit stage and step trail.
 
   Three places that look identical were left alone deliberately: the 404 and 409 from `GetByPONumAsync`, and `SaveAsync`'s "returned no row to populate". In each the underlying call *succeeded* and Keri is the one deciding the operation cannot continue, so there is no provider error to carry.
+
+- **Two entity-set reads no longer build a default query string past the server's limit.** IIS's default `maxQueryString` is 2,048 characters. The `$select` generated from `CheckHed` ran to 4,323 URL-encoded characters and the one from `SerialNo` to 3,260, so on a server left at that default those reads did not return a larger payload — they did not return at all. Narrowing both DTOs (below) brings them to 1,178 and 926.
+
+  A caller could always sidestep it by passing a shorter `select`, or an empty list to send no `$select` at all. What failed was the default, which is the path anyone takes first.
 
 ### Changed
 
@@ -90,12 +114,23 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
   **Migration:** signing changes assembly identity. Rebuild against the new packages rather than dropping the assemblies in place, and update any binding redirect written against the unsigned identity. Nothing else about the API changes.
 
+- **`CheckHed` and `SerialNo` model a practical core rather than the whole table.** `CheckHed` goes from 257 properties to 84, `SerialNo` from 203 to 71. **Breaking.**
+
+  What each keeps was chosen against the column descriptions the server publishes. `CheckHed` keeps identity and posting status, the clearing and voiding state, the base and document amounts including the invoice-versus-miscellaneous split, the payee address, the payment instruction, and the vendor bank fields an electronic payment needs. `SerialNo` keeps identity and status, warehouse location, the job, vendor-receipt, shipment, order and customer links, the RMA, DMR and non-conformance references, serial formatting, and the asset and field-service links.
+
+  What each drops is reachable unchanged through `ExtraData`: for `CheckHed`, the `Rpt1/2/3*` reporting currencies, the country-specific columns (`NO*`, `SE*`, `MX*`, `TH*`, `US1099K*`, `SEPA*`), petty cash and bank reconciliation, and Epicor's denormalized join columns and screen-state flags; for `SerialNo`, the `OTS*` one-time-ship address fields, GPS and meter readings, the prior-job and labor-sequence columns, and the denormalized join columns.
+
+  **Migration:** a dropped property becomes `dto.ExtraData["ColumnName"]`, which is a `JToken` — convert it yourself, for example `(decimal?)dto.ExtraData["Rpt1CheckAmt"]`. A denormalized column is better read from the service that owns it: `VendorNumName` through `VendorSvc`, `PartNumPartDescription` through `PartSvc`, typed and current. Code referencing a dropped property fails to compile, which is the intended signal.
+
+- **`Part` no longer models `BitFlag`.** **Breaking**, and reachable as `dto.ExtraData["BitFlag"]`. It is an internal Epicor flag, the server publishes no description for it, and no other DTO models it.
+
+- **The POCs no longer probe schemas unasked.** `SchemaProbePoc` runs as a demonstration by default — one entity, one schema read, one CSV, nothing judged and nothing scanned. The discovery pass is maintenance, and a program someone runs to see how the SDK works should not walk their disk; `KERI_POC_DISCOVER` arms it, following `KERI_POC_ALLOW_WRITES`'s convention. The gate is about surprise rather than danger: neither mode writes to Epicor, and neither writes into the source tree.
+
 ## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.2 — 2026-09-23
 
 The second release candidate. Everything here is additive: rc.1 code compiles unchanged against rc.2.
 
 One `HttpClient` now serves a whole `EpicorClient` rather than one per service, you can supply your own, and transient failures are retried — with writes deliberately held back.
-
 
 ### Added
 
@@ -885,7 +920,6 @@ Configuration moves out of the libraries into a dedicated composition root. `Epi
 - **`DeleteByIDAsync<T>(T dto, string UDTable, …)` — typed-DTO single-row delete.** Completes the typed-DTO surface for the destructive path, alongside the existing `SaveAsync<T>`, `GetByIDAsync<T>`, and `QueryAsync<T>`. Reads the DTO's mapped `Key1`–`Key5` values through the existing `UDTableMapping<T>` infrastructure and delegates to the raw five-string `DeleteByIDAsync`. Keys the DTO does not map flow through as null and are coalesced to empty strings at the wire. `UDTable` is required with no default, consistent with the destructive-operation rule and with the raw method it wraps. Constrained `where T : class, new()`, matching the other typed wrappers.
 
 ---
-
 
 ### Added
 

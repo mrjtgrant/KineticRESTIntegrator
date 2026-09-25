@@ -119,14 +119,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<RcvHead>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.ReceiptSvc/Receipts";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<RcvHead>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
@@ -169,14 +164,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<RcvDtl>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.ReceiptSvc/RcvDtls";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<RcvDtl>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
@@ -224,14 +214,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<RcvHeadAttch>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.ReceiptSvc/RcvHeadAttches";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<RcvHeadAttch>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 

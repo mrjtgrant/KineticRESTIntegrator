@@ -102,14 +102,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<POHeader>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.POSvc/POes";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<POHeader>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
@@ -152,14 +147,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<PODetail>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.POSvc/PODetails";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<PODetail>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
@@ -207,14 +197,9 @@ namespace Keri.Epicor
             int top = 500,
             CancellationToken ct = default)
         {
-            List<string> cols = select ?? SelectFor<PORel>();
-            if (additionalColumns != null && additionalColumns.Count > 0)
-                cols = cols.Concat(additionalColumns).ToList();
-
             string svc = "Erp.BO.POSvc/PORels";
-            svc += "?$select=" + UrlEncode(string.Join(",", cols));
-            svc += "&$top=" + top.ToString();
-
+            svc += "?$top=" + top.ToString();
+            svc += SelectClause<PORel>(select, additionalColumns);
             if (filters != null && filters.Count > 0)
                 svc += "&$filter=" + UrlEncode(string.Join(" and ", filters));
 
