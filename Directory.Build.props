@@ -27,6 +27,21 @@
        key is ever replaced, and remember that replacing the key changes
        assembly identity for every consumer. -->
 
+  <!-- WARNINGS. The build is at zero and stays there, enforced on CI rather
+       than on every machine. Unconditionally, this property turns a warning a
+       newer Roslyn introduces into a build failure for a contributor on code
+       they did not write — friction exported to people who did nothing wrong,
+       on a repository with no global.json pinning the SDK. Conditioned, CI
+       holds the line and a local build only warns.
+
+       ci.yml passes -p:ContinuousIntegrationBuild=true, which is also what
+       SourceLink wants for deterministic path mapping, so the two travel
+       together. Add the same switch locally to reproduce a CI failure. -->
+
+  <PropertyGroup Condition="'$(ContinuousIntegrationBuild)' == 'true'">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
     <KeriPublicKey>00240000048000001401000006020000002400005253413100080000010001007188a5771d277fc26b63fdf6c10197daea688d912768066a9479731f508315861cf03b325a69247d6c8af7741ada5ead2842a8148107d0352c2aab4032894661f8084eb828b6b3d6c3e324a1d3d12adddb254f936ef94b14552878b34b2100d55d1ab4014929b78d7c41d9d51c1629430d99a2519d14658e62a367cccd4b054494880a60023e8b0656ce2018b5ad60197fb3d7cbabc6d57f02f7e4bd7bcad0bdf1711a161c33944666cc434efb5fc89148201d315bfea830cdd05e5db9933643ba6d760baeb428e0658e930d75771c88b7769772a4e90a1e7630b0e61499b7b28f12caa3f75961c7008cbe5f5c899b6bda0fafe77f4287d06b0331a2c4c2d2c3</KeriPublicKey>

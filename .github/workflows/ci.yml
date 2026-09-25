@@ -36,7 +36,7 @@ jobs:
         run: dotnet restore KineticRESTIntegrator.sln
 
       - name: Build
-        run: dotnet build KineticRESTIntegrator.sln --configuration Release --no-restore
+        run: dotnet build KineticRESTIntegrator.sln --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Test (offline, deterministic)
         run: dotnet test KineticRESTIntegrator.Tests --configuration Release --no-build --verbosity normal

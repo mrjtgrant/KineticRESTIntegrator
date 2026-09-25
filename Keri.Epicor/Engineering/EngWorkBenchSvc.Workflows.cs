@@ -61,9 +61,27 @@ namespace Keri.Epicor
                 return newOprResult.WithSteps(steps).Step("FAILED: GetNewECOOpr");
             JObject ds = newOprResult.Value;
 
+            // Both preceding calls reported success, so these are not the
+            // declined-step case — they are an HTTP 200 whose body is not the
+            // shape this method needs. HandleResponse falls through gracefully
+            // and the transport never inspects a 2xx body, so nothing upstream
+            // catches it; without these checks JArray.FromObject(null) throws
+            // ArgumentNullException, which tells the caller nothing.
+            JToken srcOprs = bom.Value == null ? null : bom.Value["ds"]?["PartOpr"];
+            if (srcOprs == null)
+                return MarkUncommitted(StepFailure<JObject>(
+                    bom.Value, "GetDatasetForTreeWithPartValidation", "a ds.PartOpr table"))
+                    .WithSteps(steps).Step($"FAILED: no operations on the BOM for '{sourcepart}'");
+
+            JToken oprTemplate = ds["ds"]?["ECOOpr"]?[0];
+            if (oprTemplate == null)
+                return MarkUncommitted(StepFailure<JObject>(
+                    ds, "GetNewECOOpr", "a ds.ECOOpr row"))
+                    .WithSteps(steps).Step("FAILED: GetNewECOOpr returned no row to copy onto");
+
             JArray newOprs = new JArray();
-            JArray srcBomOprs = JArray.FromObject(bom.Value["ds"]["PartOpr"]);
-            JObject newEcoOpr = JObject.FromObject(ds["ds"]["ECOOpr"][0]);
+            JArray srcBomOprs = JArray.FromObject(srcOprs);
+            JObject newEcoOpr = JObject.FromObject(oprTemplate);
 
             foreach (JObject opr in srcBomOprs)
             {
@@ -258,11 +276,17 @@ namespace Keri.Epicor
                 catch (Exception ex)
                 {
                     // The dataset did not carry the ECOMtl shape this step
-                    // expects. Capture the exception rather than swallowing it —
-                    // a bare catch left the caller with no way to learn why —
-                    // and stop, matching the GetNewECOMtl failure branch above.
-                    failure = OperationResult<JObject>.Failure(ex);
-                    failure.RawResponse = ds;
+                    // expects. Stop, matching the GetNewECOMtl failure branch
+                    // above, and let the group unlock below.
+                    //
+                    // Prefer Epicor's own words when the response carries them:
+                    // StepFailure reads ds["ErrorMessage"] and falls back to
+                    // naming the step and the shape expected. The exception is
+                    // kept either way, so nothing is lost for a caller that
+                    // wants it, but ErrorMessage reads as an explanation rather
+                    // than as a stack-trace artifact.
+                    failure = StepFailure<JObject>(ds, "GetNewECOMtl", "a ds.ECOMtl row");
+                    failure.Exception = ex;
                     break;
                 }
             }
@@ -321,8 +345,14 @@ namespace Keri.Epicor
                 return newGroup;
             JObject ds = newGroup.Value;
 
-            ds["ds"]["ECOGroup"][0]["GroupID"] = groupid;
-            ds["ds"]["ECOGroup"][0]["Description"] = "Auto generated from *";
+            // Same 200-with-an-unexpected-body case as the other templates: the
+            // call succeeded, so only the shape can be wrong here.
+            JToken groupRow = ds["ds"]?["ECOGroup"]?[0];
+            if (groupRow == null)
+                return StepFailure<JObject>(ds, "GetNewECOGroup", "a ds.ECOGroup row");
+
+            groupRow["GroupID"] = groupid;
+            groupRow["Description"] = "Auto generated from *";
 
             return await UpdateAsync(ds, ct).ConfigureAwait(false);
         }

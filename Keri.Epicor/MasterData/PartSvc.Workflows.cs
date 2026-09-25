@@ -69,9 +69,20 @@ namespace Keri.Epicor
                 return newRev.WithSteps(steps).Step("FAILED: GetNewPartRev");
             JObject ds = newRev.Value;
 
+            // GetNewPartRev reported success, so this is not the declined-step
+            // case — it is an HTTP 200 whose body is not the shape this method
+            // needs. HandleResponse falls through gracefully and the transport
+            // never inspects a 2xx body, so nothing upstream catches it; without
+            // this check JArray.FromObject(null) throws ArgumentNullException.
+            JToken revRows = ds["ds"]?["PartRev"];
+            if (revRows == null)
+                return MarkUncommitted(StepFailure<JObject>(
+                    ds, "GetNewPartRev", "a ds.PartRev table"))
+                    .WithSteps(steps).Step("FAILED: GetNewPartRev returned no template to stamp");
+
             // Stamp the caller's revision number and alternate method onto
             // the active row of the returned template.
-            int? activeRowIndex = GetActiveRowIndex(JArray.FromObject(ds["ds"]["PartRev"]));
+            int? activeRowIndex = GetActiveRowIndex(JArray.FromObject(revRows));
             if (activeRowIndex == null)
             {
                 steps.Add("No added or updated PartRev row to stamp — sending the template as returned");
