@@ -174,10 +174,24 @@ namespace Keri.RestTransport
         /// A transient failure is retried according to the session's
         /// <see cref="RetryPolicy"/>.
         /// </summary>
+        /// <param name="resource">The absolute URL to call.</param>
+        /// <param name="payload">
+        /// The request body. Null makes the call a GET, which is also what
+        /// decides whether a failed attempt may be retried.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <param name="rawBodyProperty">
+        /// When set, a successful response is returned as a single JObject
+        /// property of this name carrying the body verbatim, instead of being
+        /// parsed as JSON. Every failure path is unchanged — the retry policy,
+        /// the auth, the tracing and the error shape do not care what the
+        /// content type is, and only the success return did.
+        /// </param>
         private async Task<JObject> RestTransactionAsync(
             string resource,
             JObject payload,
-            CancellationToken ct)
+            CancellationToken ct,
+            string rawBodyProperty = null)
         {
             bool isGet = (payload == null);
             RetryPolicy policy = sesh.Retry ?? new RetryPolicy { Attempts = 1 };
@@ -312,6 +326,9 @@ namespace Keri.RestTransport
                         }
 
                         Trace(isGet, resource, (int)response.StatusCode, clock, attempt, false, null);
+
+                        if (rawBodyProperty != null)
+                            return new JObject(new JProperty(rawBodyProperty, body ?? ""));
 
                         return ParseSuccessBody(body);
                     }
@@ -543,6 +560,40 @@ namespace Keri.RestTransport
             if (result["ErrorMessage"] != null && payload != null)
                 result.AddFirst(new JProperty("payload", payload));
 
+            return result;
+        }
+
+        /// <summary>
+        /// GETs a resource whose body is not JSON — an OData <c>$metadata</c>
+        /// document, for instance — and returns it verbatim under
+        /// <paramref name="rawBodyProperty"/>.
+        /// </summary>
+        /// <remarks>
+        /// Everything else about the call is identical to
+        /// <see cref="RestCallAsync"/>: the same URL construction, credentials,
+        /// retry policy and trace events, and the same failure shape carrying
+        /// <c>ErrorMessage</c>, <c>statusCode</c> and <c>httpResponseBody</c>. A
+        /// caller therefore reads a failure the same way it reads any other, and
+        /// no second result shape enters the library.
+        /// </remarks>
+        /// <param name="svc">Service path appended after the session's URL modifier.</param>
+        /// <param name="rawBodyProperty">The property name to carry the body under.</param>
+        /// <param name="ct">Cancellation token.</param>
+        protected async Task<JObject> RestTextCallAsync(
+            string svc,
+            string rawBodyProperty,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(rawBodyProperty))
+                throw new ArgumentException("A property name is required.", nameof(rawBodyProperty));
+
+            string resource = BuildResourceUrl(
+                sesh.BaseUrl, sesh.AuthObject.DynamicUrlModifier, svc);
+
+            JObject result = await RestTransactionAsync(resource, null, ct, rawBodyProperty)
+                .ConfigureAwait(false);
+
+            result.AddFirst(new JProperty("resource", resource));
             return result;
         }
 
