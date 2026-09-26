@@ -2,89 +2,73 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Keri.Epicor;
 using Keri.Epicor.Dtos;
-using Keri.RestTransport;
 
 namespace KeriPocs
 {
     /// <summary>
-    /// <b>Read-only against Epicor.</b> Asks your server to describe the columns
-    /// behind an entity-set read, and — when the discovery pass is armed — does
-    /// it for every read in the SDK and offers to act on what it finds.
+    /// <b>Read-only against Epicor.</b> Asks your server what columns it has
+    /// behind an entity-set read, and reports which of them the DTO does not
+    /// model.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>Why this exists.</b> Every DTO models a subset of its Epicor table —
-    /// <c>Part</c> models 52 of 397 columns, and the rest arrive through
-    /// <c>ExtraData</c>. Choosing that subset is the one part of maintaining a
-    /// DTO that cannot be derived, and it is a better decision made with the
-    /// column definitions in hand than inferred from column names.
+    /// the rest arrives through <c>ExtraData</c>. Choosing that subset is the one
+    /// part of maintaining a DTO that cannot be derived, and it is a better
+    /// decision made with the column definitions in hand than inferred from
+    /// column names. Your server publishes those definitions.
     /// </para>
     /// <para>
-    /// <b>Two modes, because they are two different jobs.</b> By default this is
-    /// a demonstration: one entity, one schema read, a CSV you can open. The
-    /// discovery pass is maintenance — every entity, a scan of the source tree,
-    /// and an offer to generate DTOs — and it is armed separately because a
-    /// program someone runs to see how the SDK works should not walk their disk.
+    /// <b>It reports; it does not decide.</b> No proposals, no generated files,
+    /// nothing written into the source tree. An earlier version did all of that —
+    /// proposed additions and removals, screened its own proposals, scanned the
+    /// source to veto them, and kept a file of refusals so it would stop
+    /// re-proposing the same columns — and every defect it produced was in the
+    /// deciding. What is left is the part that was always right.
     /// </para>
     /// <para>
-    /// To arm it, set <c>KERI_POC_DISCOVER</c> to <c>true</c>, <c>1</c>,
-    /// <c>yes</c> or <c>on</c>.
+    /// <b>The schema read ships.</b> This calls
+    /// <c>EpicorSvc.GetSchemaAsync</c> — the same method a consumer of the
+    /// package has — so there is no second implementation here to drift out of
+    /// step with it.
     /// </para>
     /// <para>
-    /// <b>Nothing in your source tree is written.</b> Generated DTOs land in the
-    /// output directory as <c>&lt;Entity&gt;.generated.cs</c> for you to read and
-    /// move in yourself.
+    /// <b>Two modes.</b> By default, one entity: a demonstration you can read.
+    /// <c>KERI_POC_DISCOVER=true</c> covers every entity-set read in the SDK,
+    /// which is maintenance rather than demonstration and takes twenty round
+    /// trips.
     /// </para>
     /// <para>
-    /// The rules behind all of this live in <see cref="DtoDiscovery"/>, which is
-    /// where their tests are. <c>DTO_FIELD_SELECTION.md</c> is the procedure the
-    /// output is meant to be read with.
+    /// <c>DTO_FIELD_SELECTION.md</c> is the procedure this output is meant to be
+    /// read with.
     /// </para>
     /// </remarks>
     internal static class SchemaProbePoc
     {
         /// <summary>One entity-set read: the service, the path, and the DTO.</summary>
+        /// <remarks>
+        /// The service is the live object rather than its name, so
+        /// <c>GetSchemaAsync</c> takes the business-object path from the
+        /// library's own <c>ServiceName</c> instead of from a string here that
+        /// could disagree with it.
+        /// </remarks>
         private sealed class Target
         {
-            public string Service;        // "Erp.BO.PartSvc"
-            public string EntitySet;      // "Parts" — the path Keri reads
+            public EpicorSvc Service;
+            public string EntitySet;       // "Parts" — the path Keri reads
             public Type DtoType;
             public List<string> DtoColumns;
 
             public string Entity { get { return DtoType.Name; } }
 
-            public Target(string service, string entitySet, Type dtoType, List<string> dtoColumns)
+            public Target(EpicorSvc service, string entitySet, Type dtoType, List<string> dtoColumns)
             {
                 Service = service; EntitySet = entitySet; DtoType = dtoType;
                 DtoColumns = dtoColumns ?? new List<string>();
-            }
-        }
-
-        /// <summary>One candidate address and what came back from it.</summary>
-        private sealed class Attempt
-        {
-            public string Label;
-            public string Url;
-            public int Status;
-            public string ContentType;
-            public int Bytes;
-            public string Body;
-            public string Error;
-
-            public bool Ok
-            {
-                get { return Error == null && Status >= 200 && Status < 300 && Bytes > 0; }
-            }
-
-            public string Outcome
-            {
-                get { return Error ?? $"HTTP {Status} {ContentType}"; }
             }
         }
 
@@ -99,72 +83,40 @@ namespace KeriPocs
 
             public bool Parsed { get { return Columns.Count > 0; } }
 
-            public List<DtoDiscovery.ColumnDoc> WouldDrop
+            /// <summary>Columns on the server the DTO does not model.</summary>
+            public List<DtoDiscovery.ColumnDoc> Unmodelled
             {
-                get { return Columns.Where(c => c.InSchema && c.InDto && !c.Recommend).ToList(); }
-            }
-
-            public List<DtoDiscovery.ColumnDoc> WouldAdd
-            {
-                get { return Columns.Where(c => !c.InDto && c.Recommend).ToList(); }
+                get
+                {
+                    return Columns.Where(c => c.InSchema && !c.InDto
+                                         && !DtoDiscovery.IsInstallationSpecific(c.Name)).ToList();
+                }
             }
 
             /// <summary>
-            /// Properties the DTO carries that this server's schema does not
-            /// declare. Not a proposed removal — there is nothing to weigh —
-            /// but the DTO is asking for a column that will not come back.
+            /// Key columns the DTO does not model — a DTO that cannot identify a
+            /// row it read. The schema declares this, so it is not a judgement.
+            /// </summary>
+            public List<DtoDiscovery.ColumnDoc> KeyNotModelled
+            {
+                get { return Unmodelled.Where(c => c.IsKey).ToList(); }
+            }
+
+            /// <summary>
+            /// Properties the DTO models that the schema does not declare.
+            /// <c>$select</c> asks this server for them on every read and nothing
+            /// comes back.
             /// </summary>
             public List<DtoDiscovery.ColumnDoc> NotInSchema
             {
                 get { return Columns.Where(c => !c.InSchema).ToList(); }
             }
 
-            public List<DtoDiscovery.ColumnDoc> Unjudged
+            /// <summary>Columns this installation added.</summary>
+            public List<DtoDiscovery.ColumnDoc> InstallationSpecific
             {
-                get { return Columns.Where(c => !c.InDto && !c.Recommend && c.Described).ToList(); }
+                get { return Columns.Where(c => DtoDiscovery.IsInstallationSpecific(c.Name)).ToList(); }
             }
-
-            public bool NeedsDecision
-            {
-                get { return WouldDrop.Count > 0 || WouldAdd.Count > 0 || NotInSchema.Count > 0; }
-            }
-        }
-
-        /// <summary>
-        /// Every DTO-backed entity-set read in the SDK, paired with the
-        /// projection Keri would send for it.
-        /// </summary>
-        /// <remarks>
-        /// The DTO side is read from the live type through
-        /// <see cref="EpicorSvc.SelectFor{T}"/>, so it cannot drift. The service
-        /// and path are written down, because nothing in the type system ties a
-        /// service class to the OData path it reads.
-        /// </remarks>
-        private static List<Target> BuildTargets(EpicorSvc svc)
-        {
-            return new List<Target>
-            {
-                new Target("Erp.BO.PartSvc",         "Parts",          typeof(Part),         svc.SelectFor<Part>()),
-                new Target("Erp.BO.CustomerSvc",     "Customers",      typeof(Customer),     svc.SelectFor<Customer>()),
-                new Target("Erp.BO.JobEntrySvc",     "JobEntries",     typeof(JobHead),      svc.SelectFor<JobHead>()),
-                new Target("Erp.BO.JobEntrySvc",     "JobAsmbls",      typeof(JobAsmbl),     svc.SelectFor<JobAsmbl>()),
-                new Target("Erp.BO.JobEntrySvc",     "JobMtls",        typeof(JobMtl),       svc.SelectFor<JobMtl>()),
-                new Target("Erp.BO.JobEntrySvc",     "JobParts",       typeof(JobPart),      svc.SelectFor<JobPart>()),
-                new Target("Erp.BO.MiscShipSvc",     "MiscShips",      typeof(MscShpHd),     svc.SelectFor<MscShpHd>()),
-                new Target("Erp.BO.POSvc",           "POes",           typeof(POHeader),     svc.SelectFor<POHeader>()),
-                new Target("Erp.BO.POSvc",           "PODetails",      typeof(PODetail),     svc.SelectFor<PODetail>()),
-                new Target("Erp.BO.POSvc",           "PORels",         typeof(PORel),        svc.SelectFor<PORel>()),
-                new Target("Erp.BO.PayMethodSvc",    "PayMethods",     typeof(PayMethod),    svc.SelectFor<PayMethod>()),
-                new Target("Erp.BO.PaymentEntrySvc", "PaymentEntries", typeof(CheckHed),     svc.SelectFor<CheckHed>()),
-                new Target("Erp.BO.QuoteSvc",        "Quotes",         typeof(QuoteHed),     svc.SelectFor<QuoteHed>()),
-                new Target("Erp.BO.QuoteSvc",        "QuoteDtls",      typeof(QuoteDtl),     svc.SelectFor<QuoteDtl>()),
-                new Target("Erp.BO.ReceiptSvc",      "Receipts",       typeof(RcvHead),      svc.SelectFor<RcvHead>()),
-                new Target("Erp.BO.ReceiptSvc",      "RcvDtls",        typeof(RcvDtl),       svc.SelectFor<RcvDtl>()),
-                new Target("Erp.BO.ReceiptSvc",      "RcvHeadAttches", typeof(RcvHeadAttch), svc.SelectFor<RcvHeadAttch>()),
-                new Target("Erp.BO.SalesOrderSvc",   "SalesOrders",    typeof(OrderHed),     svc.SelectFor<OrderHed>()),
-                new Target("Erp.BO.SerialNoSvc",     "SerialNoes",     typeof(SerialNo),     svc.SelectFor<SerialNo>()),
-                new Target("Erp.BO.VendorSvc",       "Vendors",        typeof(Vendor),       svc.SelectFor<Vendor>()),
-            };
         }
 
         // -----------------------------------------------------------------
@@ -174,530 +126,309 @@ namespace KeriPocs
             bool full = PocConfig.DiscoverDtos;
 
             PocBanner.Section(full
-                ? "DTO discovery - every entity-set read, against your server's schema"
+                ? "Schema report - every entity-set read, against your server's columns"
                 : "Schema probe - what your server says about its columns");
 
             PrintPreamble(full);
 
-            RestAuthenticationObject auth = client.Session.AuthObject;
-            if (auth == null)
+            if (client.Session.AuthObject == null)
             {
                 Console.WriteLine();
                 Console.WriteLine("  No authentication object on the session - cannot probe.");
                 return;
             }
 
-            // The transport resolves this internally; a consumer outside the
-            // assembly has to apply the same rule, which is that setting an API
-            // key selects the v2 OData path.
-            bool keyed = !string.IsNullOrEmpty(auth.ApiKey);
-            string modifier = keyed ? auth.DynamicUrlModifierKeyed : auth.DynamicUrlModifierBasic;
-
-            Console.WriteLine();
-            Console.WriteLine("  Endpoint shape in use: " + (keyed ? "v2 OData (API key set)" : "v1 (Basic)"));
-
             string outDir = AppDomain.CurrentDomain.BaseDirectory;
             var results = new List<EntityResult>();
 
             using (var svc = new EpicorSvc(client.Session))
-            using (var http = new HttpClient())
             {
-                if (client.Session.Timeout > TimeSpan.Zero)
-                    http.Timeout = client.Session.Timeout;
-
-                List<Target> targets = BuildTargets(svc);
+                List<Target> targets = BuildTargets(client, svc);
                 if (!full) targets = targets.Take(1).ToList();   // Part, as the demonstration
 
-                Console.WriteLine($"  Probing {targets.Count} of {BuildTargets(svc).Count} entity-set reads.");
+                Console.WriteLine();
+                Console.WriteLine($"  Reading {targets.Count} of {BuildTargets(client, svc).Count} entity-set reads.");
                 Console.WriteLine();
 
                 foreach (Target t in targets)
-                    results.Add(await ProbeOneAsync(http, client, auth, modifier, t, outDir).ConfigureAwait(false));
+                    results.Add(await ProbeOneAsync(t, outDir).ConfigureAwait(false));
             }
 
+            WriteCsvs(results);
             ExplainTheCsv();
+            ReportFindings(results, outDir);
 
             if (!full)
             {
-                WriteCsvs(results);
-
                 Console.WriteLine();
-                Console.WriteLine("  This was the demonstration: one entity, read-only, nothing judged.");
-                Console.WriteLine("  The discovery pass covers every entity-set read, checks each proposed");
-                Console.WriteLine("  change against the source tree, and offers to generate DTOs. Arm it");
-                Console.WriteLine("  with KERI_POC_DISCOVER=true and re-run.");
-                return;
+                Console.WriteLine("  That was one entity. KERI_POC_DISCOVER=true covers every");
+                Console.WriteLine("  entity-set read in the SDK — twenty round trips, same output.");
             }
-
-            string repoRoot = DtoDiscovery.FindRepoRoot(outDir);
-            DtoDiscovery.VetoReferencedRemovals(
-                results.SelectMany(r => r.WouldDrop).ToList(), repoRoot);
-            DtoDiscovery.NoteReferencesToMissingColumns(
-                results.SelectMany(r => r.NotInSchema).ToList(), repoRoot);
-
-            // Only now, with every proposal settled, does the CSV record it.
-            WriteCsvs(results);
-
-            ReportFindings(results, outDir, repoRoot);
-
-            // A keep file edited on an earlier run is a decision already made —
-            // honour it before asking anything.
-            int fromKeep = GenerateFromKeepFiles(results, outDir);
-
-            Offer(results, outDir, fromKeep);
         }
 
         private static void PrintPreamble(bool full)
         {
             Console.WriteLine();
-            Console.WriteLine("  WHAT THIS MEASURES");
+            Console.WriteLine("  WHAT THIS READS");
             Console.WriteLine();
             Console.WriteLine("  Each Keri DTO models a chosen subset of its Epicor table; everything");
-            Console.WriteLine("  it does not model still reaches you through ExtraData. Choosing that");
-            Console.WriteLine("  subset is a judgement call, and it is a better one with the column");
-            Console.WriteLine("  definitions in front of you instead of inferred from names.");
+            Console.WriteLine("  it does not model still reaches you through ExtraData. Your server's");
+            Console.WriteLine("  OData schema carries a description per column, so this can say what");
+            Console.WriteLine("  the unmodelled ones are instead of leaving you to infer from names.");
             Console.WriteLine();
-            Console.WriteLine("  Your server's OData schema document carries a description per column.");
-            Console.WriteLine("  This reads it and writes a CSV of every column alongside what the DTO");
-            Console.WriteLine("  models today.");
+            Console.WriteLine("  It reports. It proposes nothing, writes no DTOs, and touches no file");
+            Console.WriteLine("  in the source tree — the CSV beside this executable is the output.");
+            Console.WriteLine();
+            Console.WriteLine("  The read itself is EpicorSvc.GetSchemaAsync, which ships in the");
+            Console.WriteLine("  package — so this exercises the same path a consumer has.");
 
             if (!full) return;
 
             Console.WriteLine();
-            Console.WriteLine("  DISCOVERY PASS ARMED (KERI_POC_DISCOVER)");
+            Console.WriteLine("  EVERY ENTITY (KERI_POC_DISCOVER)");
             Console.WriteLine();
-            Console.WriteLine("  Every entity-set read is probed, each proposed change is checked against");
-            Console.WriteLine("  the source tree, and you are offered a way to act on the result. No file");
-            Console.WriteLine("  under Keri.Epicor/Dtos is written either way.");
+            Console.WriteLine("  Twenty entity-set reads instead of one. Still read-only.");
         }
 
-        // -----------------------------------------------------------------
-        // One entity
-        // -----------------------------------------------------------------
+        /// <summary>
+        /// Every DTO-backed entity-set read in the SDK, paired with the service
+        /// that performs it and the projection Keri would send.
+        /// </summary>
+        /// <remarks>
+        /// Hand-written, and nothing fails when a service gains an entity-set read
+        /// without a line here. The DTO side is read from the live type through
+        /// <c>SelectFor&lt;T&gt;</c>, so at least that half cannot drift.
+        /// </remarks>
+        private static List<Target> BuildTargets(EpicorClient c, EpicorSvc svc)
+        {
+            return new List<Target>
+            {
+                new Target(c.Part,          "Parts",          typeof(Part),         svc.SelectFor<Part>()),
+                new Target(c.Customer,      "Customers",      typeof(Customer),     svc.SelectFor<Customer>()),
+                new Target(c.JobEntry,      "JobEntries",     typeof(JobHead),      svc.SelectFor<JobHead>()),
+                new Target(c.JobEntry,      "JobAsmbls",      typeof(JobAsmbl),     svc.SelectFor<JobAsmbl>()),
+                new Target(c.JobEntry,      "JobMtls",        typeof(JobMtl),       svc.SelectFor<JobMtl>()),
+                new Target(c.JobEntry,      "JobParts",       typeof(JobPart),      svc.SelectFor<JobPart>()),
+                new Target(c.MiscShip,      "MiscShips",      typeof(MscShpHd),     svc.SelectFor<MscShpHd>()),
+                new Target(c.PO,            "POes",           typeof(POHeader),     svc.SelectFor<POHeader>()),
+                new Target(c.PO,            "PODetails",      typeof(PODetail),     svc.SelectFor<PODetail>()),
+                new Target(c.PO,            "PORels",         typeof(PORel),        svc.SelectFor<PORel>()),
+                new Target(c.PayMethod,     "PayMethods",     typeof(PayMethod),    svc.SelectFor<PayMethod>()),
+                new Target(c.PaymentEntry,  "PaymentEntries", typeof(CheckHed),     svc.SelectFor<CheckHed>()),
+                new Target(c.Quote,         "Quotes",         typeof(QuoteHed),     svc.SelectFor<QuoteHed>()),
+                new Target(c.Quote,         "QuoteDtls",      typeof(QuoteDtl),     svc.SelectFor<QuoteDtl>()),
+                new Target(c.Receipt,       "Receipts",       typeof(RcvHead),      svc.SelectFor<RcvHead>()),
+                new Target(c.Receipt,       "RcvDtls",        typeof(RcvDtl),       svc.SelectFor<RcvDtl>()),
+                new Target(c.Receipt,       "RcvHeadAttches", typeof(RcvHeadAttch), svc.SelectFor<RcvHeadAttch>()),
+                new Target(c.SalesOrder,    "SalesOrders",    typeof(OrderHed),     svc.SelectFor<OrderHed>()),
+                new Target(c.SerialNo,      "SerialNoes",     typeof(SerialNo),     svc.SelectFor<SerialNo>()),
+                new Target(c.Vendor,        "Vendors",        typeof(Vendor),       svc.SelectFor<Vendor>()),
+            };
+        }
 
-        private static async Task<EntityResult> ProbeOneAsync(
-            HttpClient http,
-            EpicorClient client,
-            RestAuthenticationObject auth,
-            string modifier,
-            Target target,
-            string outDir)
+        private static async Task<EntityResult> ProbeOneAsync(Target target, string outDir)
         {
             var result = new EntityResult { Target = target };
 
-            string baseUrl = (client.Session.BaseUrl ?? "").TrimEnd('/');
-            string company = client.Session.Company;
+            OperationResult<EpicorSchema> read =
+                await target.Service.GetSchemaAsync(target.EntitySet).ConfigureAwait(false);
 
-            var candidates = new List<Attempt>
+            if (read.IsFailure)
             {
-                new Attempt {
-                    Label = "OData schema",
-                    Url = Join(baseUrl, modifier, target.Service + "/$metadata") },
-                new Attempt {
-                    Label = "REST help, OpenAPI v2",
-                    Url = $"{baseUrl}/api/help/v2/odata/{company}/{target.Service}/swagger.json" },
-                new Attempt {
-                    Label = "REST help, OpenAPI v1",
-                    Url = $"{baseUrl}/api/help/v1/{target.Service}/swagger.json" },
-            };
-
-            Attempt parsed = null;
-            foreach (Attempt a in candidates)
-            {
-                await FetchAsync(http, auth, a).ConfigureAwait(false);
-                if (a.Ok) { parsed = a; break; }
-            }
-
-            if (parsed == null)
-            {
-                result.Note = "no schema document answered ("
-                            + string.Join("; ", candidates.Select(c => c.Outcome)) + ")";
-                Console.WriteLine($"    {target.Entity,-14} {result.Note}");
+                result.Note = read.ErrorMessage;
+                Console.WriteLine($"    {target.Entity,-14} could not be read: {result.Note}");
                 return result;
             }
 
-            // The raw document is written before anything is parsed out of it.
-            // When a lookup misses, the document is the only thing that settles
-            // what the entity is actually called here.
-            string rawExt = parsed.Body.TrimStart().StartsWith("{", StringComparison.Ordinal) ? "json" : "xml";
-            TryWrite(Path.Combine(outDir, $"schema-{target.Entity}-raw.{rawExt}"), parsed.Body);
+            EpicorSchema schema = read.Value;
+            result.ResolvedTypeName = schema.ResolvedTypeName;
 
-            DtoDiscovery.ParseOutcome outcome =
-                DtoDiscovery.ParseColumns(parsed.Body, target.EntitySet, target.Entity);
+            // The document, kept whatever the parse made of it — it is what to
+            // open when the column list is empty or a shape looks wrong.
+            TryWrite(Path.Combine(outDir, $"schema-{target.Entity}-raw.xml"), schema.RawDocument);
 
-            result.Columns = outcome.Columns;
-            result.ResolvedTypeName = outcome.ResolvedTypeName;
-
-            if (!result.Parsed)
+            if (!schema.Found)
             {
-                result.Note = $"{parsed.Label} answered, but no definition for '{target.EntitySet}' was found";
+                result.Note = "the document parsed to no columns for entity set " + target.EntitySet;
                 Console.WriteLine($"    {target.Entity,-14} {result.Note}");
-
-                if (outcome.TypesPresent != null && outcome.TypesPresent.Count > 0)
-                    Console.WriteLine("                   types present: " + string.Join(", ", outcome.TypesPresent.Take(8)));
-
+                if (schema.TypesPresent != null && schema.TypesPresent.Count > 0)
+                {
+                    Console.WriteLine("                   types present: "
+                                    + string.Join(", ", schema.TypesPresent.Take(8)));
+                }
                 return result;
             }
 
+            result.Columns = DtoDiscovery.FromSchema(schema);
             result.CsvPath = Path.Combine(outDir, $"schema-{target.Entity}-columns.csv");
 
             // Read the previous run before overwriting it: a column that was not
-            // there last time is what an upgrade added, and that is where a
-            // review starts.
+            // there last time is what an upgrade added.
             DtoDiscovery.MarkNewSinceLastRun(result.Columns, result.CsvPath);
             DtoDiscovery.Annotate(result.Columns, target.DtoColumns);
 
-            // The CSV is written once every entity has been probed and the
-            // proposed removals have been checked against the source tree.
-            // Writing it here would record a recommendation the run then
-            // changes, and the CSV is the copy that outlives the console.
-
             int described = result.Columns.Count(c => c.Described);
             int modelled = result.Columns.Count(c => c.InDto);
+            int onServer = result.Columns.Count(c => c.InSchema);
 
-            // This line is printed while probing, before any removal has been
-            // checked against the source tree, so the removal count is what was
-            // proposed and not necessarily what survives. The summary at the end
-            // is the settled one.
             var notes = new List<string>();
-            if (result.WouldAdd.Count > 0) notes.Add($"+{result.WouldAdd.Count} suggested");
-            if (result.WouldDrop.Count > 0) notes.Add($"-{result.WouldDrop.Count} proposed");
-
+            if (result.KeyNotModelled.Count > 0) notes.Add($"{result.KeyNotModelled.Count} key column(s) not modelled");
+            if (result.NotInSchema.Count > 0) notes.Add($"{result.NotInSchema.Count} not on this server");
             int fresh = result.Columns.Count(c => c.IsNew);
             if (fresh > 0) notes.Add($"{fresh} new since last run");
 
-            Console.WriteLine($"    {target.Entity,-14} {result.Columns.Count,4} columns, {described,4} described, " +
-                              $"{modelled,4} modelled" + (notes.Count > 0 ? "   " + string.Join(", ", notes) : ""));
+            Console.WriteLine($"    {target.Entity,-14} {onServer,4} columns, {described,4} described, "
+                            + $"{modelled,4} modelled"
+                            + (notes.Count > 0 ? "   " + string.Join(", ", notes) : ""));
 
             if (!string.IsNullOrEmpty(result.ResolvedTypeName) &&
                 !string.Equals(result.ResolvedTypeName, target.Entity, StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"                   the {target.EntitySet} set is backed by type '{result.ResolvedTypeName}'");
+                Console.WriteLine($"                   the {target.EntitySet} set is backed by type "
+                                + $"'{result.ResolvedTypeName}'");
             }
 
             return result;
         }
-
-        // -----------------------------------------------------------------
-        // Reporting
-        // -----------------------------------------------------------------
 
         private static void ExplainTheCsv()
         {
             Console.WriteLine();
             Console.WriteLine("  WHAT THE CSV CONTAINS");
             Console.WriteLine();
-            Console.WriteLine("  One row per column, with what the server said and four columns added:");
+            Console.WriteLine("  One row per column, with what the server said and these added:");
             Console.WriteLine();
             Console.WriteLine("    Key         the schema declares it part of the entity's key");
             Console.WriteLine("    Described   Epicor supplied prose for it");
             Console.WriteLine("    InDto       the Keri DTO models it today");
-            Console.WriteLine("    Signal      modelled / drop suggested / add suggested / missing key /");
-            Console.WriteLine("                candidate / view field / not in schema /");
-            Console.WriteLine("                installation-specific, with Why giving the reason");
+            Console.WriteLine("    New         absent from the previous run's CSV");
+            Console.WriteLine("    RelatedTo   a modelled column this one shares a currency prefix");
+            Console.WriteLine("                or a leading stem with, where there is one");
+            Console.WriteLine("    Signal      modelled / not modelled / key, not modelled /");
+            Console.WriteLine("                not in schema / installation-specific");
             Console.WriteLine();
-            Console.WriteLine("  An 'installation-specific' row is a column your site added — Epicor's");
-            Console.WriteLine("  _c suffix. It is listed so you can see it, never proposed, and never");
-            Console.WriteLine("  written into a generated DTO: it does not exist on anyone else's");
-            Console.WriteLine("  server. Reach it through ExtraData, or name it in additionalColumns.");
-            Console.WriteLine();
-            Console.WriteLine("  A 'not in schema' row is the one the server did not supply: a property");
-            Console.WriteLine("  the DTO models that this Epicor has no column for. It carries no type");
-            Console.WriteLine("  and no description because there is nothing on the server to read.");
+            Console.WriteLine("  RelatedTo is a fact, not a suggestion. Thousands of described columns");
+            Console.WriteLine("  go unmodelled on a wide table, and it is there so you can filter the");
+            Console.WriteLine("  list down to the ones near something you already model.");
             Console.WriteLine();
             Console.WriteLine("  An undescribed column is usually not a stored column. The business");
             Console.WriteLine("  object adds fields no table holds: values denormalized from a related");
             Console.WriteLine("  table (VendorNumName) and flags that drive a screen (EnableVoidLN).");
             Console.WriteLine("  Epicor documents tables, so those arrive with nothing said about them.");
-            Console.WriteLine();
-            Console.WriteLine("  The standard user-defined columns (Character01, ShortChar02, ...) are");
-            Console.WriteLine("  undescribed by design and are never treated as view fields.");
         }
 
-        /// <summary>
-        /// Writes one annotated CSV per entity that parsed.
-        /// </summary>
-        /// <remarks>
-        /// Called after the reference check, never during the probe. The CSV is
-        /// the copy that outlives the console, so it has to carry the run's
-        /// final answer rather than the one it held halfway through.
-        /// </remarks>
+        private static void ReportFindings(List<EntityResult> results, string outDir)
+        {
+            var parsed = results.Where(r => r.Parsed).ToList();
+            var failed = results.Where(r => !r.Parsed).ToList();
+
+            Console.WriteLine();
+            Console.WriteLine($"  {parsed.Count} of {results.Count} entities read.");
+
+            foreach (EntityResult r in failed)
+                Console.WriteLine($"    {r.Target.Entity,-14} {r.Note}");
+
+            // Facts worth acting on, in order of how much they matter.
+
+            var missingKeys = parsed.Where(r => r.KeyNotModelled.Count > 0).ToList();
+            if (missingKeys.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine("  KEY COLUMNS NOT MODELLED");
+                Console.WriteLine();
+                Console.WriteLine("  The schema declares these part of the entity's key, so a DTO without");
+                Console.WriteLine("  them cannot identify a row it read.");
+                foreach (EntityResult r in missingKeys)
+                {
+                    Console.WriteLine($"    {r.Target.Entity}: "
+                        + string.Join(", ", r.KeyNotModelled.Select(c => c.Name)));
+                }
+            }
+
+            var phantom = parsed.Where(r => r.NotInSchema.Count > 0).ToList();
+            if (phantom.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine("  MODELLED, BUT NOT ON THIS SERVER");
+                Console.WriteLine();
+                Console.WriteLine("  The DTO declares these and the schema does not. Keri builds $select");
+                Console.WriteLine("  from the DTO's properties, so each is being asked for on every read");
+                Console.WriteLine("  of that entity and nothing comes back for it.");
+                Console.WriteLine();
+                Console.WriteLine("  An absence can mean the column was renamed or retired, or that this");
+                Console.WriteLine("  installation does not license the module that surfaces it. The schema");
+                Console.WriteLine("  cannot tell those apart — check against your Epicor version.");
+                foreach (EntityResult r in phantom)
+                {
+                    Console.WriteLine($"    {r.Target.Entity}: "
+                        + string.Join(", ", r.NotInSchema.Select(c => c.Name)));
+                }
+            }
+
+            int unmodelled = parsed.Sum(r => r.Unmodelled.Count(c => c.Described));
+            int related = parsed.Sum(r => r.Unmodelled.Count(c => c.Described && c.RelatedTo != null));
+            int newOnes = parsed.Sum(r => r.Unmodelled.Count(c => c.Described && c.IsNew));
+
+            Console.WriteLine();
+            Console.WriteLine($"  {unmodelled} described column(s) are not modelled. Of those, {related}");
+            Console.WriteLine( "  relate to a column that is — a currency counterpart, or a shared stem.");
+            Console.WriteLine( "  Those are the ones to read first; RelatedTo in the CSV is how to");
+            Console.WriteLine( "  filter to them.");
+
+            foreach (EntityResult r in parsed.Where(x => x.Unmodelled.Any(c => c.Described && c.RelatedTo != null)))
+            {
+                Console.WriteLine();
+                Console.WriteLine($"    {r.Target.Entity}");
+                foreach (DtoDiscovery.ColumnDoc c in r.Unmodelled
+                             .Where(c => c.Described && c.RelatedTo != null)
+                             .Take(10))
+                {
+                    Console.WriteLine($"      {c.Name,-28} near modelled {c.RelatedTo}");
+                }
+            }
+
+            if (newOnes > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"  {newOnes} of them are new since the last run — what this Epicor");
+                Console.WriteLine( "  version added, and where a review should start.");
+            }
+
+            int custom = parsed.Sum(r => r.InstallationSpecific.Count);
+            if (custom > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"  {custom} column(s) are this installation's own (_c). No shared DTO");
+                Console.WriteLine( "  models one — reach them through ExtraData, or name them in");
+                Console.WriteLine( "  additionalColumns on an entity-set read.");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("  CSVs written to: " + outDir);
+            Console.WriteLine();
+            Console.WriteLine("  Nothing was changed. Deciding which of these belong on a DTO is a");
+            Console.WriteLine("  person's job — DTO_FIELD_SELECTION.md is the procedure.");
+        }
+
+        /// <summary>Writes one CSV per entity that was read.</summary>
         private static void WriteCsvs(List<EntityResult> results)
         {
             foreach (EntityResult r in results)
             {
                 if (r.CsvPath == null || !r.Parsed) continue;
-                TryWrite(r.CsvPath, DtoDiscovery.RenderCsv(r.Columns, keepColumn: false));
-            }
-        }
-
-        private static void ReportFindings(List<EntityResult> results, string outDir, string repoRoot)
-        {
-            var needing = results.Where(r => r.NeedsDecision).ToList();
-            var failed = results.Where(r => !r.Parsed).ToList();
-
-            Console.WriteLine();
-            Console.WriteLine($"  {results.Count(r => r.Parsed)} of {results.Count} entities described; "
-                            + $"{needing.Count} have something to decide.");
-
-            foreach (EntityResult r in failed)
-                Console.WriteLine($"    {r.Target.Entity,-14} not described: {r.Note}");
-
-            foreach (EntityResult r in needing)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"    {r.Target.Entity}");
-
-                foreach (DtoDiscovery.ColumnDoc c in r.WouldAdd)
-                    Console.WriteLine($"      + {c.Name,-28} {c.Why}");
-
-                foreach (DtoDiscovery.ColumnDoc c in r.WouldDrop)
-                    Console.WriteLine($"      - {c.Name,-28} {c.Why}");
-
-                foreach (DtoDiscovery.ColumnDoc c in r.NotInSchema)
-                    Console.WriteLine($"      ! {c.Name,-28} {c.Why}");
-            }
-
-            // Not a judgement the probe made — a disagreement between the DTO
-            // and the server. It gets its own paragraph because the reader's
-            // next move is different: verify against the server, not weigh.
-            var missing = results.Where(r => r.Parsed && r.NotInSchema.Count > 0).ToList();
-            if (missing.Count > 0)
-            {
-                int total = missing.Sum(r => r.NotInSchema.Count);
-                Console.WriteLine();
-                Console.WriteLine($"  ! {total} modelled propert(ies) are not in this server's schema at all.");
-                Console.WriteLine( "  Keri puts every modelled column into $select, so each one is being");
-                Console.WriteLine( "  asked for on every read of that entity and nothing comes back for");
-                Console.WriteLine( "  it. Generating the DTO drops the property, which is a breaking");
-                Console.WriteLine( "  change for anyone holding the package.");
-                Console.WriteLine();
-                Console.WriteLine( "  Check the column against your Epicor version before accepting: an");
-                Console.WriteLine( "  absence can mean the column was renamed or retired, or that this");
-                Console.WriteLine( "  installation does not license the module that surfaces it. Those");
-                Console.WriteLine( "  are different problems and the schema cannot tell them apart.");
-            }
-
-            // Described columns nothing mechanical can judge. Listed, never
-            // recommended — after an upgrade this is the list that matters.
-            var parsed = results.Where(r => r.Parsed).ToList();
-            int candidates = parsed.Sum(r => r.Unjudged.Count);
-            int newCandidates = parsed.Sum(r => r.Unjudged.Count(c => c.IsNew));
-
-            if (candidates > 0)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"  {candidates} described column(s) are not modelled and have no relation to");
-                Console.WriteLine( "  anything that is. Nothing in the schema says whether they matter, so");
-                Console.WriteLine( "  the probe does not guess — read them in the CSV under 'candidate'.");
-
-                if (newCandidates > 0)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"  {newCandidates} of those are new since the last run — what this Epicor");
-                    Console.WriteLine( "  version added, and where a review should start:");
-
-                    foreach (EntityResult r in parsed.Where(x => x.Unjudged.Any(c => c.IsNew)))
-                    {
-                        Console.WriteLine($"    {r.Target.Entity}: "
-                            + string.Join(", ", r.Unjudged.Where(c => c.IsNew).Select(c => c.Name).Take(10)));
-                    }
-                }
-            }
-
-            Console.WriteLine();
-            if (repoRoot == null)
-            {
-                Console.WriteLine("  No solution file was found above this executable, so nothing could be");
-                Console.WriteLine("  checked for references. Every proposed removal has been withheld.");
-            }
-            else
-            {
-                Console.WriteLine("  Proposed removals were checked against every .cs file under");
-                Console.WriteLine("  " + repoRoot + " — a text scan, not a compiler. A column referenced");
-                Console.WriteLine("  anywhere keeps its place and says where, above.");
-                Console.WriteLine();
-                Console.WriteLine("  It cannot see code outside this repository. These DTOs ship on NuGet,");
-                Console.WriteLine("  so removing a public property is a breaking change for anyone holding");
-                Console.WriteLine("  the package, however clean the scan is.");
-            }
-
-            Console.WriteLine();
-            Console.WriteLine("  CSVs written to: " + outDir);
-        }
-
-        // -----------------------------------------------------------------
-        // The one question
-        // -----------------------------------------------------------------
-
-        private static void Offer(List<EntityResult> results, string outDir, int generatedFromKeep)
-        {
-            var needing = results.Where(r => r.NeedsDecision).ToList();
-
-            if (generatedFromKeep > 0)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"  {generatedFromKeep} DTO(s) generated from keep files you had already edited.");
-                Console.WriteLine("  Delete a keep file once you have moved its DTO in, or it regenerates");
-                Console.WriteLine("  on every run.");
-            }
-
-            if (needing.Count == 0)
-            {
-                Console.WriteLine();
-                Console.WriteLine("  Nothing to decide. To change a DTO anyway: copy");
-                Console.WriteLine("  schema-<Entity>-columns.csv to schema-<Entity>-keep.csv, add a Keep");
-                Console.WriteLine("  column, and re-run.");
-                return;
-            }
-
-            Console.WriteLine();
-            Console.WriteLine("  WHAT WOULD YOU LIKE TO DO");
-            Console.WriteLine();
-            Console.WriteLine("    review   write an editable schema-<Entity>-keep.csv for each entity,");
-            Console.WriteLine("             pre-filled with the recommendation. Edit the Keep column and");
-            Console.WriteLine("             re-run to generate from your answers.");
-            Console.WriteLine("    accept   generate <Entity>.generated.cs now — exactly the + and - lines");
-            Console.WriteLine("             listed above, nothing else.");
-            Console.WriteLine("    nothing  stop here. The CSVs stay for you to read.");
-            Console.WriteLine();
-            Console.WriteLine("  Either way, generated files land beside the CSVs for you to review and");
-            Console.WriteLine("  move in yourself.");
-            Console.WriteLine();
-
-            string answer = PocConfig.AskChoice(
-                "  Choose", new[] { "review", "accept", "nothing" }, "nothing");
-
-            if (answer == "nothing")
-            {
-                Console.WriteLine("  Nothing generated. The CSVs are in " + outDir);
-                return;
-            }
-
-            if (answer == "review")
-            {
-                foreach (EntityResult r in needing)
-                {
-                    string keep = Path.Combine(outDir, $"schema-{r.Target.Entity}-keep.csv");
-                    TryWrite(keep, DtoDiscovery.RenderCsv(r.Columns, keepColumn: true));
-                    Console.WriteLine("    wrote " + keep);
-                }
-
-                Console.WriteLine();
-                Console.WriteLine("  Set Keep to yes or no per row, then re-run. Any keep file present at");
-                Console.WriteLine("  the start of a run is generated from before you are asked anything.");
-                return;
-            }
-
-            foreach (EntityResult r in needing)
-            {
-                var keepNames = r.Columns.Where(c => c.Recommend).Select(c => c.Name).ToList();
-                Write(r, keepNames, outDir, "the probe's recommendation");
-            }
-
-            Console.WriteLine();
-            Console.WriteLine("  Read each file before moving it into Keri.Epicor/Dtos. The generated doc");
-            Console.WriteLine("  comments are Epicor's own text, which is not always a sentence.");
-        }
-
-        private static int GenerateFromKeepFiles(List<EntityResult> results, string outDir)
-        {
-            int count = 0;
-
-            foreach (EntityResult r in results.Where(x => x.Parsed))
-            {
-                string keepPath = Path.Combine(outDir, $"schema-{r.Target.Entity}-keep.csv");
-                if (!File.Exists(keepPath)) continue;
-
-                List<string> keep = DtoDiscovery.ReadKeepColumn(keepPath);
-                if (keep == null)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"  {keepPath} has no Keep column — skipped.");
-                    continue;
-                }
-
-                Console.WriteLine();
-                Console.WriteLine($"  {Path.GetFileName(keepPath)} found.");
-                Write(r, keep, outDir, Path.GetFileName(keepPath));
-                count++;
-            }
-
-            return count;
-        }
-
-        private static void Write(EntityResult r, List<string> keep, string outDir, string source)
-        {
-            string path = Path.Combine(outDir, $"{r.Target.Entity}.generated.cs");
-
-            TryWrite(path, DtoDiscovery.RenderDto(
-                r.Target.Entity, r.Target.Service, r.Target.EntitySet, r.Columns, keep, source));
-
-            Console.WriteLine($"    wrote {path}  ({keep.Count} properties)");
-        }
-
-        // -----------------------------------------------------------------
-        // Transport
-        // -----------------------------------------------------------------
-
-        private static async Task FetchAsync(HttpClient http, RestAuthenticationObject auth, Attempt a)
-        {
-            try
-            {
-                using (var request = new HttpRequestMessage(HttpMethod.Get, a.Url))
-                {
-                    // The same rule the transport applies: Bearer wins over
-                    // Basic because both use the Authorization header, and the
-                    // API key rides alongside either.
-                    if (!string.IsNullOrEmpty(auth.BearerToken))
-                    {
-                        request.Headers.Authorization =
-                            new AuthenticationHeaderValue("Bearer", auth.BearerToken);
-                    }
-                    else if (!string.IsNullOrEmpty(auth.Username) && !string.IsNullOrEmpty(auth.Password))
-                    {
-                        string raw = auth.Username + ":" + auth.Password;
-                        string creds = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
-                        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", creds);
-                    }
-
-                    if (!string.IsNullOrEmpty(auth.ApiKey))
-                    {
-                        string header = string.IsNullOrWhiteSpace(auth.ApiKeyHeaderName)
-                            ? "X-API-Key"
-                            : auth.ApiKeyHeaderName.Trim();
-                        request.Headers.Add(header, auth.ApiKey);
-                    }
-
-                    using (HttpResponseMessage response = await http.SendAsync(request).ConfigureAwait(false))
-                    {
-                        a.Status = (int)response.StatusCode;
-                        a.ContentType = response.Content?.Headers?.ContentType?.MediaType ?? "(none)";
-                        a.Body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                        a.Bytes = a.Body == null ? 0 : a.Body.Length;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                a.Error = ex.GetType().Name + ": " + ex.Message;
+                TryWrite(r.CsvPath, DtoDiscovery.RenderCsv(r.Columns));
             }
         }
 
         private static void TryWrite(string path, string content)
         {
-            try { File.WriteAllText(path, content, new UTF8Encoding(true)); }
-            catch (Exception ex) { Console.WriteLine($"    could not write {path}: {ex.Message}"); }
-        }
+            if (content == null) return;
 
-        /// <summary>Joins base, modifier and path with exactly one slash at each seam.</summary>
-        private static string Join(string baseUrl, string modifier, string tail)
-        {
-            string mid = (modifier ?? "").Trim('/');
-            var sb = new StringBuilder(baseUrl.TrimEnd('/'));
-            if (mid.Length > 0) sb.Append('/').Append(mid);
-            sb.Append('/').Append((tail ?? "").TrimStart('/'));
-            return sb.ToString();
+            try { File.WriteAllText(path, content, new UTF8Encoding(true)); }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"    could not write {Path.GetFileName(path)}: {ex.Message}");
+            }
         }
     }
 }
