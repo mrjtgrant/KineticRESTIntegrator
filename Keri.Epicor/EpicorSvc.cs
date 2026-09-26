@@ -487,9 +487,9 @@ namespace Keri.Epicor
         /// described. Treat the result as a fact about the server it came from.
         /// </para>
         /// <para>
-        /// A response that could not be parsed is still a success carrying
-        /// <see cref="EpicorSchema.RawDocument"/> and, where the document listed
-        /// them, <see cref="EpicorSchema.TypesPresent"/> — the call worked and the
+        /// A response that could not be parsed is still a success, carrying no
+        /// columns and, where the document listed them,
+        /// <see cref="EpicorSchema.TypesPresent"/> — the call worked and the
         /// document arrived, so the honest report is what came back rather than a
         /// failure. Check <see cref="EpicorSchema.Found"/>.
         /// </para>
@@ -498,8 +498,8 @@ namespace Keri.Epicor
         /// var schema = await client.Part.GetSchemaAsync("Parts");
         /// if (schema.IsSuccess)
         /// {
-        ///     foreach (var c in schema.Value.InstallationSpecific)
-        ///         Console.WriteLine($"{c.Name}  {c.Description}");
+        ///     foreach (var c in schema.Value.Columns)
+        ///         Console.WriteLine($"{c.Name}  {c.EdmType}  {c.Description}");
         /// }
         /// </code>
         /// </example>
@@ -530,12 +530,11 @@ namespace Keri.Epicor
 
                 // The entity set is the reliable lookup; the singular is only a
                 // fallback for a document that does not declare the set.
-                EpicorSchema schema = SchemaParser.Parse(
+                EpicorSchema schema = SchemaParser.ParseCsdl(
                     document, entitySet, Singularize(entitySet));
 
                 schema.Service = service;
                 schema.EntitySet = entitySet;
-                schema.RawDocument = document;
                 return schema;
             });
         }

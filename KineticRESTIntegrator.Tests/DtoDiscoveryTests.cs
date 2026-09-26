@@ -2,10 +2,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Keri.Epicor;
 using KeriPocs;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests
@@ -16,12 +16,10 @@ namespace KineticRESTIntegrator.Tests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>What this covers now.</b> The comparison states facts: which columns
-    /// the DTO models, which modelled property the server has no column for, and
-    /// what an unmodelled column relates to. An earlier version of this class
-    /// proposed additions and removals, screened its own proposals and scanned the
-    /// source tree to veto them; all of that is gone, and so are the tests for it.
-    /// Every defect that work produced was in the judging.
+    /// <b>Four differences are reported.</b> A column the DTO does not model, a
+    /// key column it does not model, a property the schema declares no column
+    /// for, and a property whose C# type disagrees with the schema's. Nothing
+    /// here proposes a change to a DTO.
     /// </para>
     /// <para>
     /// <b>Reading the schema is not tested here.</b> It lives in the library as
@@ -53,6 +51,13 @@ namespace KineticRESTIntegrator.Tests
             return cols.First(c => c.Name == name);
         }
 
+        private static Dictionary<string, string> Types(params string[] pairs)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i + 1 < pairs.Length; i += 2) map[pairs[i]] = pairs[i + 1];
+            return map;
+        }
+
         /// <summary>
         /// The CSV's lines, split on the line break the renderer actually emits.
         /// Splitting on '\n' alone leaves a '\r' on every last field, which makes
@@ -61,6 +66,18 @@ namespace KineticRESTIntegrator.Tests
         private static List<string> Lines(string csv)
         {
             return csv.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+
+        /// <summary>The row whose Column field is <paramref name="name"/>.</summary>
+        /// <remarks>
+        /// By name, never by row number: the rows are sorted, so adding a column
+        /// to a fixture moves the others.
+        /// </remarks>
+        private static List<string> Row(List<string> lines, List<string> header, string name)
+        {
+            return lines.Skip(1)
+                        .Select(DtoDiscovery.SplitCsvLine)
+                        .First(r => r[header.IndexOf("Column")] == name);
         }
 
         // ---------------------------------------------------------------
@@ -118,100 +135,6 @@ namespace KineticRESTIntegrator.Tests
             Assert.False(DtoDiscovery.IsInstallationSpecific("PartNum"));
         }
 
-        [Fact]
-        public void AStandardUserDefinedColumnIsRecognised()
-        {
-            Assert.True(DtoDiscovery.IsStandardUserDefined("Character01"));
-            Assert.True(DtoDiscovery.IsStandardUserDefined("ShortChar20"));
-            Assert.True(DtoDiscovery.IsStandardUserDefined("CheckBox05"));
-            Assert.False(DtoDiscovery.IsStandardUserDefined("Character1"));
-            Assert.False(DtoDiscovery.IsStandardUserDefined("PartNum"));
-        }
-
-        // ---------------------------------------------------------------
-        // Relatedness — recorded, never acted on
-        // ---------------------------------------------------------------
-
-        [Fact]
-        public void AnUnmodelledCurrencyCounterpartNamesTheModelledOne()
-        {
-            // DocFreight is modelled, so the Doc dimension is one the DTO uses.
-            // That is what makes DocCheckAmt a half-modelled pair rather than a
-            // column from a dimension deliberately left alone.
-            var cols = new List<DtoDiscovery.ColumnDoc>
-            {
-                Col("CheckAmt", "Amount in base currency.", edm: "Edm.Decimal"),
-                Col("DocFreight", "Freight in document currency.", edm: "Edm.Decimal"),
-                Col("DocCheckAmt", "Amount in document currency.", edm: "Edm.Decimal"),
-            };
-
-            DtoDiscovery.Annotate(cols, new List<string> { "CheckAmt", "DocFreight" });
-
-            Assert.Null(Find(cols, "CheckAmt").RelatedTo);      // modelled
-            Assert.Null(Find(cols, "DocFreight").RelatedTo);    // modelled
-            Assert.Equal("CheckAmt", Find(cols, "DocCheckAmt").RelatedTo);
-        }
-
-        [Fact]
-        public void ACurrencyDimensionTheDtoUsesNowhereRelatesNothing()
-        {
-            // The whole point: dropping every Rpt1/2/3 column is a decision, and
-            // relating each one back to its base would undo it a row at a time.
-            var cols = new List<DtoDiscovery.ColumnDoc>
-            {
-                Col("CheckAmt", "Amount in base currency.", edm: "Edm.Decimal"),
-                Col("Rpt1CheckAmt", "Amount in reporting currency 1.", edm: "Edm.Decimal"),
-            };
-
-            DtoDiscovery.Annotate(cols, new List<string> { "CheckAmt" });
-
-            Assert.Null(Find(cols, "Rpt1CheckAmt").RelatedTo);
-        }
-
-        [Fact]
-        public void AnUnmodelledColumnSharingAStemNamesTheModelledOne()
-        {
-            var cols = new List<DtoDiscovery.ColumnDoc>
-            {
-                Col("ClearedCheck", "True if the check has cleared."),
-                Col("ClearedPending", "True if clearance is pending."),
-            };
-
-            DtoDiscovery.Annotate(cols, new List<string> { "ClearedCheck" });
-
-            Assert.Equal("ClearedCheck", Find(cols, "ClearedPending").RelatedTo);
-        }
-
-        [Fact]
-        public void AnUnrelatedColumnRelatesToNothing()
-        {
-            var cols = new List<DtoDiscovery.ColumnDoc>
-            {
-                Col("PartNum", "The part number."),
-                Col("VoidDate", "When the payment was voided.", edm: "Edm.DateTimeOffset"),
-            };
-
-            DtoDiscovery.Annotate(cols, new List<string> { "PartNum" });
-
-            Assert.Null(Find(cols, "VoidDate").RelatedTo);
-        }
-
-        [Fact]
-        public void AStemShorterThanTheThresholdIsNotARelation()
-        {
-            // Two columns starting "Ship" share four characters. That is a
-            // coincidence, not a family.
-            var cols = new List<DtoDiscovery.ColumnDoc>
-            {
-                Col("ShipVia", "How it ships."),
-                Col("ShipDate", "When it shipped.", edm: "Edm.DateTimeOffset"),
-            };
-
-            DtoDiscovery.Annotate(cols, new List<string> { "ShipVia" });
-
-            Assert.Null(Find(cols, "ShipDate").RelatedTo);
-        }
-
         // ---------------------------------------------------------------
         // A property the server has no column for
         // ---------------------------------------------------------------
@@ -240,6 +163,23 @@ namespace KineticRESTIntegrator.Tests
         }
 
         [Fact]
+        public void APropertyTheSchemaLacksIsNeverReportedAsMistyped()
+        {
+            // There is no server type to disagree with, and "not in schema" is
+            // the more useful thing to say about it.
+            var cols = new List<DtoDiscovery.ColumnDoc> { Col("QuoteNum", "The quote number.") };
+
+            DtoDiscovery.Annotate(cols,
+                new List<string> { "QuoteNum", "UnitPrice" },
+                Types("QuoteNum", "string", "UnitPrice", "decimal"));
+
+            DtoDiscovery.ColumnDoc phantom = Find(cols, "UnitPrice");
+            Assert.False(phantom.TypeDiffers);
+            Assert.Equal("not in schema", phantom.Signal);
+            Assert.Equal("decimal", phantom.DtoType);
+        }
+
+        [Fact]
         public void AFailedProbeDoesNotReportEveryPropertyAsMissing()
         {
             // Nothing parsed. Reporting all three properties as absent from the
@@ -249,6 +189,169 @@ namespace KineticRESTIntegrator.Tests
             DtoDiscovery.Annotate(cols, new List<string> { "QuoteNum", "UnitPrice", "Company" });
 
             Assert.Empty(cols);
+        }
+
+        // ---------------------------------------------------------------
+        // The declared type
+        // ---------------------------------------------------------------
+
+        [Fact]
+        public void ATypeThatDisagreesWithTheSchemaIsReported()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("PartNum", "The part number."),
+                Col("UnitPrice", "Unit price.", edm: "Edm.Decimal"),
+            };
+
+            DtoDiscovery.Annotate(cols,
+                new List<string> { "PartNum", "UnitPrice" },
+                Types("PartNum", "string", "UnitPrice", "int"));
+
+            Assert.Equal("modelled", Find(cols, "PartNum").Signal);
+
+            DtoDiscovery.ColumnDoc wrong = Find(cols, "UnitPrice");
+            Assert.True(wrong.TypeDiffers);
+            Assert.Equal("type differs", wrong.Signal);
+            Assert.Equal("int", wrong.DtoType);
+            Assert.Equal("decimal", wrong.ExpectedType);
+        }
+
+        [Fact]
+        public void AnEdmTypeWithNoSettledMappingIsLeftAlone()
+        {
+            // Reporting an unfamiliar type as wrong would cry wolf on a correct
+            // DTO, so no opinion is the answer.
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("Location", "A point.", edm: "Edm.GeographyPoint"),
+            };
+
+            DtoDiscovery.Annotate(cols,
+                new List<string> { "Location" },
+                Types("Location", "string"));
+
+            DtoDiscovery.ColumnDoc c = Find(cols, "Location");
+            Assert.Null(c.ExpectedType);
+            Assert.False(c.TypeDiffers);
+            Assert.Equal("modelled", c.Signal);
+        }
+
+        [Fact]
+        public void WithoutTheDtoTypesNothingIsReportedAsMistyped()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("UnitPrice", "Unit price.", edm: "Edm.Decimal"),
+            };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "UnitPrice" });
+
+            Assert.Null(Find(cols, "UnitPrice").DtoType);
+            Assert.False(Find(cols, "UnitPrice").TypeDiffers);
+            Assert.Equal("modelled", Find(cols, "UnitPrice").Signal);
+        }
+
+        [Theory]
+        [InlineData("Edm.String", "string")]
+        [InlineData("Edm.Int32", "int")]
+        [InlineData("Edm.Int64", "long")]
+        [InlineData("Edm.Decimal", "decimal")]
+        [InlineData("Edm.Boolean", "bool")]
+        [InlineData("Edm.DateTimeOffset", "DateTime")]
+        [InlineData("Edm.Binary", "byte[]")]
+        // Deliberate: Epicor returns GUIDs as strings, and a Guid property fails
+        // to deserialize an empty one.
+        [InlineData("Edm.Guid", "string")]
+        // No settled answer rather than a guess.
+        [InlineData("Edm.GeographyPoint", null)]
+        [InlineData(null, null)]
+        public void AnEdmTypeMapsToTheTypeTheseDtosUse(string edm, string expected)
+        {
+            Assert.Equal(expected, DtoDiscovery.ExpectedType(edm));
+        }
+
+        [Fact]
+        public void ADeclaredTypeIsNamedWithNullabilityUnwrapped()
+        {
+            // Epicor marks numerics non-nullable whether or not that means
+            // anything, so comparing nullability would be noise.
+            Assert.Equal("decimal", DtoDiscovery.TypeName(typeof(decimal)));
+            Assert.Equal("decimal", DtoDiscovery.TypeName(typeof(decimal?)));
+            Assert.Equal("DateTime", DtoDiscovery.TypeName(typeof(DateTime?)));
+            Assert.Equal("string", DtoDiscovery.TypeName(typeof(string)));
+            Assert.Equal("byte[]", DtoDiscovery.TypeName(typeof(byte[])));
+
+            // Not in the table: the type's own name, so it shows in the report
+            // rather than vanishing.
+            Assert.Equal("TimeSpan", DtoDiscovery.TypeName(typeof(TimeSpan)));
+            Assert.Null(DtoDiscovery.TypeName(null));
+        }
+
+        private sealed class SampleDto
+        {
+            public string PartNum { get; set; }
+            public decimal? UnitPrice { get; set; }
+            public DateTime? DueDate { get; set; }
+
+            [JsonProperty("Company")]
+            public string CompanyId { get; set; }
+        }
+
+        [Fact]
+        public void ADtosPropertyTypesAreKeyedByTheColumnNameItReads()
+        {
+            Dictionary<string, string> map = DtoDiscovery.PropertyTypes(typeof(SampleDto));
+
+            Assert.Equal("string", map["PartNum"]);
+            Assert.Equal("decimal", map["UnitPrice"]);
+            Assert.Equal("DateTime", map["DueDate"]);
+
+            // A renamed property is keyed by the name it reads and writes, which
+            // is what SelectFor<T> emits and what the schema calls it.
+            Assert.Equal("string", map["Company"]);
+            Assert.False(map.ContainsKey("CompanyId"));
+
+            Assert.Equal("string", map["partnum"]);   // case does not matter
+            Assert.Empty(DtoDiscovery.PropertyTypes(null));
+        }
+
+        // ---------------------------------------------------------------
+        // Order
+        // ---------------------------------------------------------------
+
+        [Fact]
+        public void CurrencyVariantsOfOneAmountAreAdjacent()
+        {
+            var cols = new List<DtoDiscovery.ColumnDoc>
+            {
+                Col("Rpt1CheckAmt", edm: "Edm.Decimal"),
+                Col("PartNum"),
+                Col("DocCheckAmt", edm: "Edm.Decimal"),
+                Col("CheckAmt", edm: "Edm.Decimal"),
+                Col("BankCheckAmt", edm: "Edm.Decimal"),
+            };
+
+            DtoDiscovery.Sort(cols);
+
+            Assert.Equal(
+                new List<string> { "BankCheckAmt", "CheckAmt", "DocCheckAmt", "Rpt1CheckAmt", "PartNum" },
+                cols.Select(c => c.Name).ToList());
+        }
+
+        [Theory]
+        [InlineData("DocCheckAmt", "CheckAmt")]
+        [InlineData("Rpt1CheckAmt", "CheckAmt")]
+        [InlineData("BankAcctID", "AcctID")]
+        [InlineData("PartNum", "PartNum")]
+        [InlineData("Doc", "Doc")]          // the prefix alone is not a prefix
+        [InlineData("", "")]
+        [InlineData(null, "")]
+        public void AStemIsTheNameWithoutItsCurrencyPrefix(string name, string expected)
+        {
+            // BankAcctID is not an amount in bank currency. It costs nothing:
+            // this decides where a row prints, not what it says.
+            Assert.Equal(expected, DtoDiscovery.Stem(name));
         }
 
         // ---------------------------------------------------------------
@@ -298,31 +401,33 @@ namespace KineticRESTIntegrator.Tests
         // ---------------------------------------------------------------
 
         [Fact]
-        public void TheCsvCarriesTheSignalAndTheRelation()
+        public void TheCsvCarriesTheSignalAndTheDeclaredType()
         {
             var cols = new List<DtoDiscovery.ColumnDoc>
             {
                 Col("CheckAmt", "Amount in base currency.", edm: "Edm.Decimal"),
-                Col("DocFreight", "Freight in document currency.", edm: "Edm.Decimal"),
                 Col("DocCheckAmt", "Amount in document currency.", edm: "Edm.Decimal"),
             };
 
-            DtoDiscovery.Annotate(cols, new List<string> { "CheckAmt", "DocFreight" });
+            DtoDiscovery.Annotate(cols,
+                new List<string> { "CheckAmt" },
+                Types("CheckAmt", "int"));
 
             List<string> rows = Lines(DtoDiscovery.RenderCsv(cols));
             List<string> header = DtoDiscovery.SplitCsvLine(rows[0]);
 
-            Assert.Contains("RelatedTo", header);
+            Assert.Contains("DtoType", header);
             Assert.Contains("Signal", header);
 
-            // By name, not by row number — a row added to the fixture should not
-            // break an assertion about a different column.
-            List<string> doc = rows.Skip(1)
-                .Select(DtoDiscovery.SplitCsvLine)
-                .First(r => r[header.IndexOf("Column")] == "DocCheckAmt");
-            Assert.Equal("not modelled", doc[header.IndexOf("Signal")]);
-            Assert.Equal("CheckAmt", doc[header.IndexOf("RelatedTo")]);
-            Assert.Equal("no", doc[header.IndexOf("InDto")]);
+            List<string> modelled = Row(rows, header, "CheckAmt");
+            Assert.Equal("type differs", modelled[header.IndexOf("Signal")]);
+            Assert.Equal("int", modelled[header.IndexOf("DtoType")]);
+            Assert.Equal("Edm.Decimal", modelled[header.IndexOf("Type")]);
+
+            List<string> absent = Row(rows, header, "DocCheckAmt");
+            Assert.Equal("not modelled", absent[header.IndexOf("Signal")]);
+            Assert.Equal("no", absent[header.IndexOf("InDto")]);
+            Assert.Equal("", absent[header.IndexOf("DtoType")]);
         }
 
         [Fact]
@@ -353,57 +458,12 @@ namespace KineticRESTIntegrator.Tests
 
             List<string> rows = Lines(DtoDiscovery.RenderCsv(cols));
             List<string> header = DtoDiscovery.SplitCsvLine(rows[0]);
-            List<string> phantom = DtoDiscovery.SplitCsvLine(rows[2]);
+            List<string> phantom = Row(rows, header, "JobComment");
 
-            Assert.Equal("JobComment", phantom[header.IndexOf("Column")]);
             Assert.Equal("not in schema", phantom[header.IndexOf("Signal")]);
             Assert.Equal("", phantom[header.IndexOf("Type")]);
             Assert.Equal("", phantom[header.IndexOf("Description")]);
             Assert.Equal("yes", phantom[header.IndexOf("InDto")]);
-        }
-
-        // ---------------------------------------------------------------
-        // What an upgrade added
-        // ---------------------------------------------------------------
-
-        [Fact]
-        public void AColumnAbsentFromThePreviousRunIsMarkedNew()
-        {
-            string path = Path.Combine(Path.GetTempPath(), "keri-prev-" + Guid.NewGuid().ToString("N") + ".csv");
-
-            var before = new List<DtoDiscovery.ColumnDoc> { Col("PartNum", "The part number.") };
-            DtoDiscovery.Annotate(before, new List<string> { "PartNum" });
-            File.WriteAllText(path, DtoDiscovery.RenderCsv(before));
-
-            try
-            {
-                var now = new List<DtoDiscovery.ColumnDoc>
-                {
-                    Col("PartNum", "The part number."),
-                    Col("CommoditySchemeID", "Added by a later Epicor version."),
-                };
-
-                DtoDiscovery.MarkNewSinceLastRun(now, path);
-
-                Assert.False(Find(now, "PartNum").IsNew);
-                Assert.True(Find(now, "CommoditySchemeID").IsNew);
-            }
-            finally
-            {
-                try { File.Delete(path); } catch { }
-            }
-        }
-
-        [Fact]
-        public void WithNoPreviousRunNothingIsNew()
-        {
-            // Otherwise a first run reports every column as an upgrade's addition.
-            var cols = new List<DtoDiscovery.ColumnDoc> { Col("PartNum", "The part number.") };
-
-            DtoDiscovery.MarkNewSinceLastRun(
-                cols, Path.Combine(Path.GetTempPath(), "keri-no-such-" + Guid.NewGuid().ToString("N") + ".csv"));
-
-            Assert.False(Find(cols, "PartNum").IsNew);
         }
     }
 }

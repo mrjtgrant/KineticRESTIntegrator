@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Linq;
-using Newtonsoft.Json.Linq;
 
 namespace Keri.Epicor
 {
@@ -19,41 +18,25 @@ namespace Keri.Epicor
     /// and the prose Epicor attached to them.
     /// </para>
     /// <para>
-    /// Two document shapes are handled because Epicor serves both: OData CSDL
-    /// (XML) from a service's <c>$metadata</c>, and OpenAPI (JSON) from the REST
-    /// help endpoints. The shape is detected from the first character rather than
-    /// from a content type, because the caller may have fetched it from anywhere.
+    /// The document is the OData CSDL (XML) a service serves from its
+    /// <c>$metadata</c>. A body that will not parse yields a schema with no
+    /// columns rather than an exception, so a caller reads a surprising document
+    /// the same way it reads a missing entity set.
     /// </para>
     /// </remarks>
     internal static class SchemaParser
     {
         /// <summary>
-        /// Parses whichever document shape <paramref name="body"/> holds.
+        /// Reads an OData CSDL document. Element names are matched without their
+        /// namespace, because it differs between OData versions and the shape
+        /// this needs does not.
         /// </summary>
-        /// <param name="body">The schema document.</param>
+        /// <param name="xml">The schema document.</param>
         /// <param name="entitySet">The entity set to resolve, e.g. <c>Parts</c>.</param>
         /// <param name="entity">
         /// A fallback type name to match when the entity set is not declared —
         /// usually the table name.
         /// </param>
-        internal static EpicorSchema Parse(string body, string entitySet, string entity)
-        {
-            string text = (body ?? "").TrimStart();
-
-            if (text.StartsWith("<", StringComparison.Ordinal))
-                return ParseCsdl(text, entitySet, entity);
-
-            if (text.StartsWith("{", StringComparison.Ordinal))
-                return ParseOpenApi(text, entity);
-
-            return new EpicorSchema();
-        }
-
-        /// <summary>
-        /// Reads an OData CSDL document. Element names are matched without their
-        /// namespace, because it differs between OData versions and the shape
-        /// this needs does not.
-        /// </summary>
         internal static EpicorSchema ParseCsdl(string xml, string entitySet, string entity)
         {
             var schema = new EpicorSchema();
@@ -132,56 +115,6 @@ namespace Keri.Epicor
                     Nullable = (string)p.Attribute("Nullable") ?? "",
                     Description = desc,
                     IsKey = pname != null && keyNames.Contains(pname)
-                });
-            }
-
-            return schema;
-        }
-
-        /// <summary>
-        /// Reads an OpenAPI document, from either the v2 (<c>definitions</c>) or
-        /// v3 (<c>components/schemas</c>) layout.
-        /// </summary>
-        internal static EpicorSchema ParseOpenApi(string json, string entity)
-        {
-            var schema = new EpicorSchema();
-
-            JObject doc;
-            try { doc = JObject.Parse(json); }
-            catch { return schema; }
-
-            JObject schemas = (doc["definitions"] as JObject)
-                           ?? (doc["components"]?["schemas"] as JObject);
-
-            if (schemas == null) return schema;
-
-            JProperty match =
-                schemas.Properties().FirstOrDefault(p =>
-                    string.Equals(p.Name, entity, StringComparison.OrdinalIgnoreCase))
-                ?? schemas.Properties().FirstOrDefault(p =>
-                    p.Name.EndsWith("." + entity, StringComparison.OrdinalIgnoreCase) ||
-                    p.Name.EndsWith(entity + "Row", StringComparison.OrdinalIgnoreCase));
-
-            JObject props = match?.Value?["properties"] as JObject;
-            if (props == null) return schema;
-
-            schema.ResolvedTypeName = match.Name;
-
-            var required = new HashSet<string>(
-                (match.Value["required"] as JArray)?.Select(t => (string)t)
-                    ?? Enumerable.Empty<string>(),
-                StringComparer.OrdinalIgnoreCase);
-
-            foreach (JProperty p in props.Properties())
-            {
-                JToken v = p.Value;
-                schema.Columns.Add(new EpicorColumn
-                {
-                    Name = p.Name,
-                    EdmType = (string)v["type"] ?? "",
-                    Nullable = (string)v["x-nullable"] ?? (string)v["nullable"] ?? "",
-                    Description = (string)v["description"],
-                    IsKey = required.Contains(p.Name)
                 });
             }
 

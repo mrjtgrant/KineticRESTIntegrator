@@ -23,8 +23,9 @@ namespace KeriPocs
     /// column names. Your server publishes those definitions.
     /// </para>
     /// <para>
-    /// <b>It reports; it does not decide.</b> No proposals, no generated files,
-    /// nothing written into the source tree. An earlier version did all of that —
+    /// <b>It reports; it does not decide.</b> No proposals and no generated DTOs.
+    /// It writes one CSV per entity into the tracked <c>schema</c> folder and
+    /// touches nothing else. An earlier version did all of that —
     /// proposed additions and removals, screened its own proposals, scanned the
     /// source to veto them, and kept a file of refusals so it would stop
     /// re-proposing the same columns — and every defect it produced was in the
@@ -63,12 +64,19 @@ namespace KeriPocs
             public Type DtoType;
             public List<string> DtoColumns;
 
+            /// <summary>
+            /// The C# type the DTO declares per column, so the report can compare
+            /// it against the type the schema declares.
+            /// </summary>
+            public Dictionary<string, string> DtoTypes;
+
             public string Entity { get { return DtoType.Name; } }
 
             public Target(EpicorSvc service, string entitySet, Type dtoType, List<string> dtoColumns)
             {
                 Service = service; EntitySet = entitySet; DtoType = dtoType;
                 DtoColumns = dtoColumns ?? new List<string>();
+                DtoTypes = DtoDiscovery.PropertyTypes(dtoType);
             }
         }
 
@@ -117,6 +125,26 @@ namespace KeriPocs
             {
                 get { return Columns.Where(c => DtoDiscovery.IsInstallationSpecific(c.Name)).ToList(); }
             }
+
+            /// <summary>
+            /// Columns the DTO models with a C# type that disagrees with the one
+            /// the schema declares.
+            /// </summary>
+            public List<DtoDiscovery.ColumnDoc> TypeDiffers
+            {
+                get { return Columns.Where(c => c.TypeDiffers).ToList(); }
+            }
+
+            /// <summary>
+            /// What is written to the tracked CSV: everything except this
+            /// installation's own columns. Their names can carry site information,
+            /// and no shared DTO models one, so they are reported to the console
+            /// and kept out of the file that gets committed.
+            /// </summary>
+            public List<DtoDiscovery.ColumnDoc> Shareable
+            {
+                get { return Columns.Where(c => !DtoDiscovery.IsInstallationSpecific(c.Name)).ToList(); }
+            }
         }
 
         // -----------------------------------------------------------------
@@ -138,7 +166,7 @@ namespace KeriPocs
                 return;
             }
 
-            string outDir = AppDomain.CurrentDomain.BaseDirectory;
+            string outDir = OutputDirectory();
             var results = new List<EntityResult>();
 
             using (var svc = new EpicorSvc(client.Session))
@@ -166,6 +194,45 @@ namespace KeriPocs
             }
         }
 
+        /// <summary>
+        /// The tracked <c>schema</c> folder at the top of the repository, or the
+        /// directory beside the executable when this is run from outside a clone.
+        /// </summary>
+        /// <remarks>
+        /// The CSVs belong under version control: the diff between two runs is
+        /// what an Epicor upgrade changed, which is the drift report, and it needs
+        /// no previous-run file of its own. Writing them beside the executable put
+        /// them in <c>bin</c>, where <c>.gitignore</c> excludes them and each run
+        /// silently replaced the last.
+        /// </remarks>
+        private static string OutputDirectory()
+        {
+            var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+
+            while (dir != null)
+            {
+                if (File.Exists(Path.Combine(dir.FullName, "KineticRESTIntegrator.sln")))
+                {
+                    string schema = Path.Combine(dir.FullName, "schema");
+                    try
+                    {
+                        Directory.CreateDirectory(schema);
+                        return schema;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"  could not create {schema}: {ex.Message}");
+                        break;
+                    }
+                }
+
+                dir = dir.Parent;
+            }
+
+            Console.WriteLine("  not inside a clone — writing beside the executable instead.");
+            return AppDomain.CurrentDomain.BaseDirectory;
+        }
+
         private static void PrintPreamble(bool full)
         {
             Console.WriteLine();
@@ -176,8 +243,9 @@ namespace KeriPocs
             Console.WriteLine("  OData schema carries a description per column, so this can say what");
             Console.WriteLine("  the unmodelled ones are instead of leaving you to infer from names.");
             Console.WriteLine();
-            Console.WriteLine("  It reports. It proposes nothing, writes no DTOs, and touches no file");
-            Console.WriteLine("  in the source tree — the CSV beside this executable is the output.");
+            Console.WriteLine("  It reports. It proposes nothing and writes no DTOs. The output is one");
+            Console.WriteLine("  CSV per entity in the tracked schema folder, so the diff between two");
+            Console.WriteLine("  runs is what your Epicor upgrade changed.");
             Console.WriteLine();
             Console.WriteLine("  The read itself is EpicorSvc.GetSchemaAsync, which ships in the");
             Console.WriteLine("  package — so this exercises the same path a consumer has.");
@@ -243,10 +311,6 @@ namespace KeriPocs
             EpicorSchema schema = read.Value;
             result.ResolvedTypeName = schema.ResolvedTypeName;
 
-            // The document, kept whatever the parse made of it — it is what to
-            // open when the column list is empty or a shape looks wrong.
-            TryWrite(Path.Combine(outDir, $"schema-{target.Entity}-raw.xml"), schema.RawDocument);
-
             if (!schema.Found)
             {
                 result.Note = "the document parsed to no columns for entity set " + target.EntitySet;
@@ -260,12 +324,9 @@ namespace KeriPocs
             }
 
             result.Columns = DtoDiscovery.FromSchema(schema);
-            result.CsvPath = Path.Combine(outDir, $"schema-{target.Entity}-columns.csv");
+            result.CsvPath = Path.Combine(outDir, $"{target.Entity}.csv");
 
-            // Read the previous run before overwriting it: a column that was not
-            // there last time is what an upgrade added.
-            DtoDiscovery.MarkNewSinceLastRun(result.Columns, result.CsvPath);
-            DtoDiscovery.Annotate(result.Columns, target.DtoColumns);
+            DtoDiscovery.Annotate(result.Columns, target.DtoColumns, target.DtoTypes);
 
             int described = result.Columns.Count(c => c.Described);
             int modelled = result.Columns.Count(c => c.InDto);
@@ -274,8 +335,7 @@ namespace KeriPocs
             var notes = new List<string>();
             if (result.KeyNotModelled.Count > 0) notes.Add($"{result.KeyNotModelled.Count} key column(s) not modelled");
             if (result.NotInSchema.Count > 0) notes.Add($"{result.NotInSchema.Count} not on this server");
-            int fresh = result.Columns.Count(c => c.IsNew);
-            if (fresh > 0) notes.Add($"{fresh} new since last run");
+            if (result.TypeDiffers.Count > 0) notes.Add($"{result.TypeDiffers.Count} type mismatch(es)");
 
             Console.WriteLine($"    {target.Entity,-14} {onServer,4} columns, {described,4} described, "
                             + $"{modelled,4} modelled"
@@ -301,15 +361,14 @@ namespace KeriPocs
             Console.WriteLine("    Key         the schema declares it part of the entity's key");
             Console.WriteLine("    Described   Epicor supplied prose for it");
             Console.WriteLine("    InDto       the Keri DTO models it today");
-            Console.WriteLine("    New         absent from the previous run's CSV");
-            Console.WriteLine("    RelatedTo   a modelled column this one shares a currency prefix");
-            Console.WriteLine("                or a leading stem with, where there is one");
+            Console.WriteLine("    DtoType     the C# type the DTO declares, against Type from the server");
             Console.WriteLine("    Signal      modelled / not modelled / key, not modelled /");
-            Console.WriteLine("                not in schema / installation-specific");
+            Console.WriteLine("                type differs / not in schema / installation-specific");
             Console.WriteLine();
-            Console.WriteLine("  RelatedTo is a fact, not a suggestion. Thousands of described columns");
-            Console.WriteLine("  go unmodelled on a wide table, and it is there so you can filter the");
-            Console.WriteLine("  list down to the ones near something you already model.");
+            Console.WriteLine("  Rows are ordered so an amount's currency variants sit together -");
+            Console.WriteLine("  CheckAmt, BankCheckAmt, DocCheckAmt, Rpt1CheckAmt on consecutive");
+            Console.WriteLine("  lines rather than scattered across the alphabet. That is the sort,");
+            Console.WriteLine("  not a claim that one implies the others.");
             Console.WriteLine();
             Console.WriteLine("  An undescribed column is usually not a stored column. The business");
             Console.WriteLine("  object adds fields no table holds: values denormalized from a related");
@@ -365,34 +424,31 @@ namespace KeriPocs
                 }
             }
 
-            int unmodelled = parsed.Sum(r => r.Unmodelled.Count(c => c.Described));
-            int related = parsed.Sum(r => r.Unmodelled.Count(c => c.Described && c.RelatedTo != null));
-            int newOnes = parsed.Sum(r => r.Unmodelled.Count(c => c.Described && c.IsNew));
-
-            Console.WriteLine();
-            Console.WriteLine($"  {unmodelled} described column(s) are not modelled. Of those, {related}");
-            Console.WriteLine( "  relate to a column that is — a currency counterpart, or a shared stem.");
-            Console.WriteLine( "  Those are the ones to read first; RelatedTo in the CSV is how to");
-            Console.WriteLine( "  filter to them.");
-
-            foreach (EntityResult r in parsed.Where(x => x.Unmodelled.Any(c => c.Described && c.RelatedTo != null)))
+            var mistyped = parsed.Where(r => r.TypeDiffers.Count > 0).ToList();
+            if (mistyped.Count > 0)
             {
                 Console.WriteLine();
-                Console.WriteLine($"    {r.Target.Entity}");
-                foreach (DtoDiscovery.ColumnDoc c in r.Unmodelled
-                             .Where(c => c.Described && c.RelatedTo != null)
-                             .Take(10))
+                Console.WriteLine("  MODELLED WITH THE WRONG TYPE");
+                Console.WriteLine();
+                Console.WriteLine("  The DTO declares a C# type the schema disagrees with. This is the one");
+                Console.WriteLine("  difference that fails at runtime rather than quietly: a number read");
+                Console.WriteLine("  into too small a type truncates, and a mismatched shape throws on");
+                Console.WriteLine("  deserialization.");
+                foreach (EntityResult r in mistyped)
                 {
-                    Console.WriteLine($"      {c.Name,-28} near modelled {c.RelatedTo}");
+                    Console.WriteLine();
+                    Console.WriteLine($"    {r.Target.Entity}");
+                    foreach (DtoDiscovery.ColumnDoc c in r.TypeDiffers)
+                        Console.WriteLine($"      {c.Name,-28} server {c.EdmType,-20} dto {c.DtoType}");
                 }
             }
 
-            if (newOnes > 0)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"  {newOnes} of them are new since the last run — what this Epicor");
-                Console.WriteLine( "  version added, and where a review should start.");
-            }
+            int unmodelled = parsed.Sum(r => r.Unmodelled.Count(c => c.Described));
+
+            Console.WriteLine();
+            Console.WriteLine($"  {unmodelled} described column(s) are not modelled. Each is reachable");
+            Console.WriteLine( "  through ExtraData or by naming it in additionalColumns; whether any");
+            Console.WriteLine( "  belongs on a DTO is a decision this makes no attempt at.");
 
             int custom = parsed.Sum(r => r.InstallationSpecific.Count);
             if (custom > 0)
@@ -400,23 +456,38 @@ namespace KeriPocs
                 Console.WriteLine();
                 Console.WriteLine($"  {custom} column(s) are this installation's own (_c). No shared DTO");
                 Console.WriteLine( "  models one — reach them through ExtraData, or name them in");
-                Console.WriteLine( "  additionalColumns on an entity-set read.");
+                Console.WriteLine( "  additionalColumns on an entity-set read. They are listed here and");
+                Console.WriteLine( "  left out of the CSVs, because their names describe your site.");
             }
 
             Console.WriteLine();
             Console.WriteLine("  CSVs written to: " + outDir);
             Console.WriteLine();
-            Console.WriteLine("  Nothing was changed. Deciding which of these belong on a DTO is a");
-            Console.WriteLine("  person's job — DTO_FIELD_SELECTION.md is the procedure.");
+            Console.WriteLine("  These files are tracked. Run this after an Epicor upgrade and the");
+            Console.WriteLine("  diff is what changed — that is the drift report, and it needs no");
+            Console.WriteLine("  state of its own.");
+            Console.WriteLine();
+            Console.WriteLine("  Nothing was changed in the source tree. Deciding which of these");
+            Console.WriteLine("  belong on a DTO is a person's job — DTO_FIELD_SELECTION.md is the");
+            Console.WriteLine("  procedure.");
         }
 
-        /// <summary>Writes one CSV per entity that was read.</summary>
+        /// <summary>
+        /// Writes one CSV per entity that was read, without this installation's
+        /// own <c>_c</c> columns.
+        /// </summary>
+        /// <remarks>
+        /// The files are committed so that a later run's diff is the drift report.
+        /// That only works if what they contain is true of any installation, and
+        /// <c>_c</c> column names are not — they describe the site that added
+        /// them. The console reports them; the file does not.
+        /// </remarks>
         private static void WriteCsvs(List<EntityResult> results)
         {
             foreach (EntityResult r in results)
             {
                 if (r.CsvPath == null || !r.Parsed) continue;
-                TryWrite(r.CsvPath, DtoDiscovery.RenderCsv(r.Columns));
+                TryWrite(r.CsvPath, DtoDiscovery.RenderCsv(r.Shareable));
             }
         }
 

@@ -26,9 +26,10 @@ namespace Keri.Epicor
     /// does not exist.
     /// </para>
     /// <para>
-    /// <see cref="RawDocument"/> is the document verbatim, for anything this type
-    /// does not model — the business object's actions, or a shape the parser did
-    /// not expect.
+    /// When <see cref="Found"/> is false the document was read but the entity set
+    /// was not in it; <see cref="TypesPresent"/> then lists what it did declare,
+    /// which is the list to check a name against rather than guessing at a second
+    /// one.
     /// </para>
     /// </remarks>
     public class EpicorSchema
@@ -51,13 +52,6 @@ namespace Keri.Epicor
         public List<EpicorColumn> Columns { get; set; } = new List<EpicorColumn>();
 
         /// <summary>
-        /// The schema document exactly as the server returned it. Kept because a
-        /// parser that meets an unfamiliar shape should not also lose the
-        /// evidence — this is what to open when <see cref="Columns"/> is empty.
-        /// </summary>
-        public string RawDocument { get; set; }
-
-        /// <summary>
         /// Every entity and complex type the document declared, populated only
         /// when the requested entity set could not be resolved. It is the list to
         /// read when a name is wrong, rather than guessing at a second one.
@@ -68,31 +62,6 @@ namespace Keri.Epicor
         public bool Found
         {
             get { return Columns != null && Columns.Count > 0; }
-        }
-
-        /// <summary>
-        /// The columns Epicor supplies prose for — generally the ones its tables
-        /// hold, as opposed to the fields a business object adds to its dataset.
-        /// </summary>
-        public IEnumerable<EpicorColumn> Described
-        {
-            get { return Columns.Where(c => c.IsDescribed); }
-        }
-
-        /// <summary>
-        /// The columns this installation added, by Epicor's <c>_c</c> convention.
-        /// </summary>
-        public IEnumerable<EpicorColumn> InstallationSpecific
-        {
-            get { return Columns.Where(c => c.IsInstallationSpecific); }
-        }
-
-        /// <summary>
-        /// The columns the schema declares part of the entity's key.
-        /// </summary>
-        public IEnumerable<EpicorColumn> Key
-        {
-            get { return Columns.Where(c => c.IsKey); }
         }
 
         /// <summary>Finds one column by name, case-insensitively, or null.</summary>

@@ -1,43 +1,40 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using Keri.Epicor;
+using Newtonsoft.Json;
 
 namespace KeriPocs
 {
     /// <summary>
-    /// Reports what a DTO does not model, against the columns the server
-    /// actually declares.
+    /// Reports how a DTO differs from the columns its server actually declares.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>This reports; it does not decide.</b> An earlier version proposed
     /// additions and removals, screened its own proposals, scanned the source
-    /// tree to veto them, kept a file of refusals to stop re-proposing the same
-    /// columns, and generated replacement DTOs. Every defect that work produced
-    /// was in the judging, and none was in the reading — so the judging is gone.
-    /// What is left states facts about the difference between a DTO and its
-    /// server, and leaves the choice where it belongs.
+    /// tree to veto them, kept a file of refusals, and generated replacement
+    /// DTOs. Every defect that work produced was in the judging and none was in
+    /// the reading, so the judging is gone.
     /// </para>
     /// <para>
-    /// <b>Three of those facts are worth having.</b> A column the schema declares
-    /// part of the entity key that the DTO does not model — a DTO that cannot
-    /// identify a row it read. A property the DTO models that the schema does not
-    /// declare at all, which is invisible from the code and means <c>$select</c>
-    /// has been asking this server for a column it does not have. And a column
-    /// this installation added, by Epicor's <c>_c</c> convention, which no shared
-    /// DTO can model because it exists nowhere else.
+    /// <b>Four facts are worth having.</b> A column the schema declares part of
+    /// the entity key that the DTO does not model — a DTO that cannot identify a
+    /// row it read. A property the DTO models that the schema does not declare at
+    /// all, which is invisible from the code and means <c>$select</c> has been
+    /// asking this server for a column it does not have. A property whose C#
+    /// type disagrees with the type the schema declares, which surfaces as a
+    /// deserialization failure or a silently truncated number. And a column this
+    /// installation added, by Epicor's <c>_c</c> convention, which no shared DTO
+    /// can model because it exists nowhere else.
     /// </para>
     /// <para>
-    /// <b>Relatedness is recorded, not acted on.</b> Thousands of described
-    /// columns go unmodelled on a wide table, and a flat list of them is
-    /// unreadable. So each unmodelled column carries the modelled column it
-    /// shares a currency prefix or a leading stem with, where there is one. That
-    /// is a fact you can check and filter on in the CSV — not a recommendation,
-    /// and nothing to accept or refuse.
+    /// <b>Nothing here asserts a relationship between columns.</b> Rows are
+    /// ordered so that Epicor's currency variants of one amount sit together —
+    /// <c>CheckAmt</c>, <c>DocCheckAmt</c>, <c>Rpt1CheckAmt</c> — which is a fact
+    /// about the sort rather than a claim that you ought to model the others.
     /// </para>
     /// <para>
     /// The schema itself comes from <c>EpicorSvc.GetSchemaAsync</c>, which ships
@@ -58,16 +55,7 @@ namespace KeriPocs
             public string Nullable;
             public string Description;
             public bool IsKey;          // declared in the entity's <Key>
-            public bool IsNew;          // absent from the previous run's CSV
             public bool InDto;
-
-            /// <summary>
-            /// The modelled column this one relates to — a currency counterpart
-            /// or a shared leading stem — or null. Recorded so the CSV can be
-            /// filtered on it; it carries no opinion about whether to model this
-            /// column.
-            /// </summary>
-            public string RelatedTo;
 
             /// <summary>
             /// False for a column the DTO models that the server's schema does
@@ -77,13 +65,44 @@ namespace KeriPocs
             /// </summary>
             public bool InSchema = true;
 
+            /// <summary>
+            /// The C# type the DTO declares for this column, when the DTO models
+            /// it — <c>string</c>, <c>decimal</c>, <c>DateTime</c>. Nullability is
+            /// not carried: Epicor marks numerics non-nullable whether or not that
+            /// means anything, so comparing it produces noise rather than signal.
+            /// </summary>
+            public string DtoType;
+
+            /// <summary>
+            /// The C# type <see cref="EdmType"/> maps to, or null where this has no
+            /// opinion. An Edm type not in the table is left alone rather than
+            /// guessed at, so an unfamiliar column is never reported as wrong.
+            /// </summary>
+            public string ExpectedType;
+
             public bool Described
             {
                 get { return !string.IsNullOrWhiteSpace(Description); }
             }
 
             /// <summary>
-            /// What this column is, in five states. None of them is advice.
+            /// True when the DTO's declared type disagrees with the schema's, and
+            /// both are known.
+            /// </summary>
+            public bool TypeDiffers
+            {
+                get
+                {
+                    return InSchema
+                        && InDto
+                        && !string.IsNullOrEmpty(DtoType)
+                        && !string.IsNullOrEmpty(ExpectedType)
+                        && !string.Equals(DtoType, ExpectedType, StringComparison.Ordinal);
+                }
+            }
+
+            /// <summary>
+            /// What this column is, in six states. None of them is advice.
             /// </summary>
             public string Signal
             {
@@ -91,6 +110,7 @@ namespace KeriPocs
                 {
                     if (!InSchema) return "not in schema";
                     if (IsInstallationSpecific(Name)) return "installation-specific";
+                    if (TypeDiffers) return "type differs";
                     if (InDto) return "modelled";
                     if (IsKey) return "key, not modelled";
                     return "not modelled";
@@ -103,18 +123,24 @@ namespace KeriPocs
         // -----------------------------------------------------------------
 
         /// <summary>
-        /// Marks each column against the DTO and records what an unmodelled
-        /// column relates to.
+        /// Marks each column against the DTO, compares the declared types, and
+        /// gives a property the schema does not declare a row of its own.
         /// </summary>
         /// <remarks>
         /// Pure, and therefore testable offline: it reads no files and makes no
-        /// calls. The only thing it adds beyond <c>InDto</c> is
-        /// <see cref="ColumnDoc.RelatedTo"/>, and a property the schema does not
-        /// declare, appended as its own row.
+        /// calls.
         /// </remarks>
         /// <param name="cols">The server's columns, from the schema.</param>
         /// <param name="dtoColumns">The DTO's column names, from <c>SelectFor&lt;T&gt;</c>.</param>
-        internal static void Annotate(List<ColumnDoc> cols, List<string> dtoColumns)
+        /// <param name="dtoTypes">
+        /// Column name to C# type for the DTO, from <see cref="PropertyTypes"/>.
+        /// Optional: without it no type is compared and no column is reported as
+        /// differing.
+        /// </param>
+        internal static void Annotate(
+            List<ColumnDoc> cols,
+            List<string> dtoColumns,
+            Dictionary<string, string> dtoTypes = null)
         {
             // No schema means no comparison. Annotating an empty list would
             // report every property the DTO has as missing from the server,
@@ -126,23 +152,10 @@ namespace KeriPocs
             var allNames = new HashSet<string>(cols.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
 
             foreach (ColumnDoc c in cols)
-                c.InDto = inDto.Contains(c.Name);
-
-            var modelled = cols.Where(c => c.InDto).Select(c => c.Name).ToList();
-
-            // A currency dimension the DTO uses nowhere is a deliberate absence,
-            // so only prefixes already in use can relate anything — otherwise
-            // every Rpt1/2/3 column on the table would point at its base.
-            var usedPrefixes = CurrencyPrefixes
-                .Where(p => modelled.Any(m => m.StartsWith(p, StringComparison.Ordinal) && m.Length > p.Length))
-                .ToList();
-
-            foreach (ColumnDoc c in cols)
             {
-                if (c.InDto) continue;
-
-                c.RelatedTo = CurrencyCounterpart(c.Name, modelled, usedPrefixes)
-                           ?? FamilyMember(c.Name, modelled);
+                c.InDto = c.Name != null && inDto.Contains(c.Name);
+                c.ExpectedType = ExpectedType(c.EdmType);
+                c.DtoType = c.InDto ? DeclaredType(dtoTypes, c.Name) : null;
             }
 
             // Everything above walks the server's columns, so a property the DTO
@@ -156,79 +169,80 @@ namespace KeriPocs
                 {
                     Name = name,
                     InSchema = false,
-                    InDto = true
+                    InDto = true,
+                    DtoType = DeclaredType(dtoTypes, name)
                 });
             }
+
+            Sort(cols);
         }
 
+        private static string DeclaredType(Dictionary<string, string> dtoTypes, string name)
+        {
+            string declared;
+            if (dtoTypes == null || name == null) return null;
+            return dtoTypes.TryGetValue(name, out declared) ? declared : null;
+        }
+
+        // -----------------------------------------------------------------
+        // Order
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// The prefixes Epicor puts in front of an amount to carry it in another
+        /// currency. Used only to order the rows.
+        /// </summary>
         internal static readonly string[] CurrencyPrefixes = { "Doc", "Rpt1", "Rpt2", "Rpt3", "Bank" };
 
         /// <summary>
-        /// The modelled column this one is a currency counterpart of, or null.
-        /// Epicor carries an amount in base, document and reporting currencies
-        /// under one stem, and modelling one of a set is rarely deliberate.
+        /// Orders columns so that the currency variants of one amount are
+        /// adjacent. <c>CheckAmt</c>, <c>BankCheckAmt</c>, <c>DocCheckAmt</c> and
+        /// <c>Rpt1CheckAmt</c> land on consecutive lines instead of scattering
+        /// across four letters of the alphabet.
         /// </summary>
-        internal static string CurrencyCounterpart(string name, List<string> modelled, List<string> usedPrefixes)
+        /// <param name="cols">The columns to order, in place.</param>
+        internal static void Sort(List<ColumnDoc> cols)
         {
-            if (string.IsNullOrEmpty(name) || modelled == null || usedPrefixes == null) return null;
+            if (cols == null) return;
 
-            foreach (string p in usedPrefixes)
+            // The full name breaks ties, so the order does not depend on the
+            // sort being stable.
+            cols.Sort((a, b) =>
             {
-                // DocCheckAmt -> CheckAmt
-                if (name.StartsWith(p, StringComparison.Ordinal) && name.Length > p.Length)
-                {
-                    string stem = name.Substring(p.Length);
-                    string hit = modelled.FirstOrDefault(m => string.Equals(m, stem, StringComparison.OrdinalIgnoreCase));
-                    if (hit != null) return hit;
-                }
-
-                // CheckAmt -> DocCheckAmt
-                string prefixed = p + name;
-                string hit2 = modelled.FirstOrDefault(m => string.Equals(m, prefixed, StringComparison.OrdinalIgnoreCase));
-                if (hit2 != null) return hit2;
-            }
-
-            return null;
+                int byStem = string.Compare(Stem(a.Name), Stem(b.Name), StringComparison.OrdinalIgnoreCase);
+                return byStem != 0
+                    ? byStem
+                    : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+            });
         }
-
-        internal const int FamilyStem = 7;
 
         /// <summary>
-        /// A modelled column sharing a leading stem of at least
-        /// <see cref="FamilyStem"/> characters, or null. Relates
-        /// <c>ClearedPending</c> to <c>ClearedCheck</c>.
+        /// The column name with a currency prefix removed, which is what the sort
+        /// orders on.
         /// </summary>
-        internal static string FamilyMember(string name, List<string> modelled)
+        /// <remarks>
+        /// Crude on purpose, and occasionally wrong: <c>Bank</c> is a currency
+        /// prefix on an amount and an ordinary word elsewhere, so
+        /// <c>BankAcctID</c> sorts under <c>AcctID</c>. It costs nothing — this
+        /// decides where a row prints, not what it says.
+        /// </remarks>
+        /// <param name="name">The column name.</param>
+        internal static string Stem(string name)
         {
-            if (string.IsNullOrEmpty(name) || modelled == null) return null;
+            if (string.IsNullOrEmpty(name)) return "";
 
-            string best = null;
-            int bestLen = FamilyStem - 1;
-
-            foreach (string m in modelled)
+            foreach (string p in CurrencyPrefixes)
             {
-                int n = 0;
-                int max = Math.Min(m.Length, name.Length);
-                while (n < max && char.ToLowerInvariant(m[n]) == char.ToLowerInvariant(name[n])) n++;
-
-                if (n > bestLen) { bestLen = n; best = m; }
+                if (name.Length > p.Length && name.StartsWith(p, StringComparison.Ordinal))
+                    return name.Substring(p.Length);
             }
 
-            return best;
+            return name;
         }
 
-        private static readonly Regex StandardUd =
-            new Regex(@"^(Character|ShortChar|Number|Date|CheckBox)\d{2}$", RegexOptions.Compiled);
-
-        /// <summary>
-        /// True for Epicor's standard user-defined columns, which exist on every
-        /// installation and are undescribed because their meaning belongs to the
-        /// installation rather than to Epicor.
-        /// </summary>
-        internal static bool IsStandardUserDefined(string name)
-        {
-            return name != null && StandardUd.IsMatch(name);
-        }
+        // -----------------------------------------------------------------
+        // Types
+        // -----------------------------------------------------------------
 
         /// <summary>
         /// True for a column this installation added — Epicor's <c>_c</c> suffix.
@@ -240,10 +254,104 @@ namespace KeriPocs
         /// column they do not have. Reach it through a DTO's <c>ExtraData</c>, or
         /// name it in <c>additionalColumns</c> on an entity-set read.
         /// </remarks>
+        /// <param name="name">The column name.</param>
         internal static bool IsInstallationSpecific(string name)
         {
             return !string.IsNullOrEmpty(name)
                 && name.EndsWith("_c", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// The C# type these DTOs use for an Edm type, or null where there is no
+        /// settled answer.
+        /// </summary>
+        /// <remarks>
+        /// Two entries look wrong and are not. <c>Edm.Guid</c> maps to
+        /// <c>string</c> because Epicor returns GUIDs as strings and a
+        /// <c>Guid</c> property would fail to deserialize an empty one.
+        /// <c>Edm.DateTimeOffset</c> maps to <c>DateTime</c> because that is what
+        /// the DTOs declare; nullability is compared nowhere.
+        /// </remarks>
+        /// <param name="edmType">The schema's declared type, e.g. <c>Edm.Int32</c>.</param>
+        internal static string ExpectedType(string edmType)
+        {
+            switch (edmType)
+            {
+                case "Edm.String":         return "string";
+                case "Edm.Guid":           return "string";
+                case "Edm.Boolean":        return "bool";
+                case "Edm.Byte":           return "byte";
+                case "Edm.Int16":          return "short";
+                case "Edm.Int32":          return "int";
+                case "Edm.Int64":          return "long";
+                case "Edm.Single":         return "float";
+                case "Edm.Double":         return "double";
+                case "Edm.Decimal":        return "decimal";
+                case "Edm.DateTimeOffset": return "DateTime";
+                case "Edm.Date":           return "DateTime";
+                case "Edm.Binary":         return "byte[]";
+                default:                   return null;
+            }
+        }
+
+        private static readonly Dictionary<Type, string> Keywords = new Dictionary<Type, string>
+        {
+            { typeof(string),   "string"   },
+            { typeof(bool),     "bool"     },
+            { typeof(byte),     "byte"     },
+            { typeof(short),    "short"    },
+            { typeof(int),      "int"      },
+            { typeof(long),     "long"     },
+            { typeof(float),    "float"    },
+            { typeof(double),   "double"   },
+            { typeof(decimal),  "decimal"  },
+            { typeof(DateTime), "DateTime" },
+            { typeof(Guid),     "Guid"     },
+            { typeof(byte[]),   "byte[]"   }
+        };
+
+        /// <summary>
+        /// A C# type as the DTOs spell it, with <c>Nullable&lt;T&gt;</c> unwrapped.
+        /// </summary>
+        /// <param name="t">The declared property type.</param>
+        internal static string TypeName(Type t)
+        {
+            if (t == null) return null;
+
+            Type u = Nullable.GetUnderlyingType(t) ?? t;
+
+            string keyword;
+            return Keywords.TryGetValue(u, out keyword) ? keyword : u.Name;
+        }
+
+        /// <summary>
+        /// Every public instance property of a DTO, keyed by the column name it
+        /// reads and writes, with the C# type it declares.
+        /// </summary>
+        /// <remarks>
+        /// Keyed on the <see cref="JsonPropertyAttribute"/> name where one is
+        /// present, so the keys match what <c>SelectFor&lt;T&gt;</c> emits and a
+        /// renamed property is still compared.
+        /// </remarks>
+        /// <param name="dtoType">The DTO type.</param>
+        internal static Dictionary<string, string> PropertyTypes(Type dtoType)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (dtoType == null) return map;
+
+            foreach (PropertyInfo p in dtoType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var named = (JsonPropertyAttribute)Attribute.GetCustomAttribute(
+                    p, typeof(JsonPropertyAttribute));
+
+                string name = named != null && !string.IsNullOrEmpty(named.PropertyName)
+                    ? named.PropertyName
+                    : p.Name;
+
+                map[name] = TypeName(p.PropertyType);
+            }
+
+            return map;
         }
 
         // -----------------------------------------------------------------
@@ -285,14 +393,14 @@ namespace KeriPocs
         // -----------------------------------------------------------------
 
         /// <summary>
-        /// Writes one row per column: what the server said, whether the DTO
-        /// models it, and what an unmodelled column relates to.
+        /// Writes one row per column: what the server said, what the DTO declares,
+        /// and one word for the difference.
         /// </summary>
         /// <param name="cols">The annotated columns.</param>
         internal static string RenderCsv(List<ColumnDoc> cols)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Column,Type,Nullable,Key,New,Described,InDto,Signal,RelatedTo,Description");
+            sb.AppendLine("Column,Type,Nullable,Key,Described,InDto,DtoType,Signal,Description");
 
             if (cols == null) return sb.ToString();
 
@@ -304,11 +412,10 @@ namespace KeriPocs
                     Quote(c.EdmType),
                     Quote(c.Nullable),
                     Quote(c.IsKey ? "yes" : ""),
-                    Quote(c.IsNew ? "yes" : ""),
                     Quote(c.Described ? "yes" : "no"),
                     Quote(c.InDto ? "yes" : "no"),
+                    Quote(c.DtoType),
                     Quote(c.Signal),
-                    Quote(c.RelatedTo),
                     Quote(c.Description)
                 };
 
@@ -325,44 +432,10 @@ namespace KeriPocs
         }
 
         /// <summary>
-        /// Marks columns absent from the previous run's CSV. Does nothing when
-        /// there is no previous run, where every column would otherwise look new.
+        /// Splits one CSV line, honouring double-quoted fields. The counterpart to
+        /// <see cref="RenderCsv"/>, and what the tests read its output with.
         /// </summary>
-        internal static void MarkNewSinceLastRun(List<ColumnDoc> cols, string previousCsvPath)
-        {
-            if (cols == null || !File.Exists(previousCsvPath)) return;
-
-            string[] lines;
-            try { lines = File.ReadAllLines(previousCsvPath); }
-            catch { return; }
-
-            HashSet<string> before = ColumnNamesIn(lines);
-            if (before == null || before.Count == 0) return;
-
-            foreach (ColumnDoc c in cols)
-                c.IsNew = !before.Contains(c.Name);
-        }
-
-        private static HashSet<string> ColumnNamesIn(string[] lines)
-        {
-            if (lines == null || lines.Length < 2) return null;
-
-            List<string> header = SplitCsvLine(lines[0]);
-            int nameAt = header.FindIndex(h => string.Equals(h.Trim(), "Column", StringComparison.OrdinalIgnoreCase));
-            if (nameAt < 0) return null;
-
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 1; i < lines.Length; i++)
-            {
-                if (string.IsNullOrWhiteSpace(lines[i])) continue;
-                List<string> f = SplitCsvLine(lines[i]);
-                if (f.Count > nameAt) names.Add(f[nameAt].Trim());
-            }
-
-            return names;
-        }
-
-        /// <summary>Splits one CSV line, honouring double-quoted fields.</summary>
+        /// <param name="line">One line of CSV.</param>
         internal static List<string> SplitCsvLine(string line)
         {
             var fields = new List<string>();
