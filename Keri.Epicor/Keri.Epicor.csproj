@@ -95,6 +95,14 @@
     <Reference Include="System.Net.Http" />
   </ItemGroup>
 
+  <!-- System.Xml.Linq is the same case as System.Net.Http: built in on .NET
+       Framework but not auto-referenced by the SDK. GetSchemaAsync reads an
+       OData $metadata document with XDocument. On netstandard2.0 and .NET 8 it
+       is part of the BCL and needs no Reference. -->
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Keri.RestTransport\Keri.RestTransport.csproj" />
   </ItemGroup>

@@ -26,6 +26,15 @@ namespace Keri.Epicor
     /// </remarks>
     public partial class UserCodesSvc : EpicorSvc
     {
+
+        /// <summary>
+        /// <c>Ice.BO.UserCodesSvc</c> — a platform business object, not an ERP one, so
+        /// the <c>Erp.BO.</c> prefix the base class derives does not apply.
+        /// </summary>
+        protected override string ServiceName
+        {
+            get { return "Ice.BO." + GetType().Name; }
+        }
         /// <summary>Construct with a programmatic session — bypasses config-file lookup.</summary>
         /// <param name="session">A fully-configured session.</param>
         public UserCodesSvc(EpicorRestSessionKey session) : base(session) { }

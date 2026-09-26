@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Keri.RestTransport;
@@ -426,6 +428,139 @@ namespace Keri.Epicor
         }
 
 
+
+        // -----------------------------------------------------------------
+        // Reading the server's own schema
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// The Epicor business object this service wraps, e.g.
+        /// <c>Erp.BO.PartSvc</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Derived from the class name, because every service in this library is
+        /// named after the business object it wraps — <see cref="PartSvc"/> wraps
+        /// <c>Erp.BO.PartSvc</c>. That convention holds for eighteen of the
+        /// twenty-one services; the three that wrap Epicor's platform objects
+        /// rather than its ERP ones (<c>UserCodesSvc</c>, <c>MenuSvc</c>,
+        /// <c>GenxDataSvc</c>) override this with the <c>Ice.BO.</c> prefix.
+        /// </para>
+        /// <para>
+        /// It exists so <see cref="GetSchemaAsync"/> does not ask a caller for
+        /// something the service already knows. Three services build their URLs
+        /// differently and are not business objects in this sense —
+        /// <c>BAQSvc</c>, <c>FunctionSvc</c> and <c>UDTableSvc</c> — so the value
+        /// derived for them is not meaningful and nothing reads it.
+        /// </para>
+        /// </remarks>
+        protected virtual string ServiceName
+        {
+            get { return "Erp.BO." + GetType().Name; }
+        }
+
+        /// <summary>
+        /// Reads what this Epicor server says about one of its entities — the
+        /// columns it declares, their types and keys, and Epicor's own
+        /// description of each.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Reads the service's OData <c>$metadata</c> document through the same
+        /// transport as every other call, so it honours the session's
+        /// credentials, retry policy and trace handler. It writes nothing.
+        /// </para>
+        /// <para>
+        /// <b>What it is for.</b> A DTO models a practical core of its table and
+        /// everything else reaches you through <c>ExtraData</c> — but nothing in
+        /// this library can tell you what the unmodelled columns *are*. This can,
+        /// because it asks your server. Use it to choose what to name in
+        /// <c>additionalColumns</c>, to confirm the spelling of a custom
+        /// <c>_c</c> column, or to explain a typed property that is always null:
+        /// if the DTO models a column your server does not declare, it will not
+        /// appear in <see cref="EpicorSchema.Columns"/>, and the <c>$select</c>
+        /// built from that DTO has been asking for a column that does not exist.
+        /// </para>
+        /// <para>
+        /// <b>It answers for one installation.</b> Column sets differ by Epicor
+        /// version and by licensed module, and so does whether a column is
+        /// described. Treat the result as a fact about the server it came from.
+        /// </para>
+        /// <para>
+        /// A response that could not be parsed is still a success carrying
+        /// <see cref="EpicorSchema.RawDocument"/> and, where the document listed
+        /// them, <see cref="EpicorSchema.TypesPresent"/> — the call worked and the
+        /// document arrived, so the honest report is what came back rather than a
+        /// failure. Check <see cref="EpicorSchema.Found"/>.
+        /// </para>
+        /// <example>
+        /// <code>
+        /// var schema = await client.Part.GetSchemaAsync("Parts");
+        /// if (schema.IsSuccess)
+        /// {
+        ///     foreach (var c in schema.Value.InstallationSpecific)
+        ///         Console.WriteLine($"{c.Name}  {c.Description}");
+        /// }
+        /// </code>
+        /// </example>
+        /// </remarks>
+        /// <param name="entitySet">
+        /// The entity set to read, e.g. <c>Parts</c>. Epicor's own plural —
+        /// <c>POes</c>, <c>SerialNoes</c>, <c>PaymentEntries</c> — as the REST
+        /// help spells it. The business object comes from
+        /// <see cref="ServiceName"/>.
+        /// </param>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task<OperationResult<EpicorSchema>> GetSchemaAsync(
+            string entitySet,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(entitySet))
+                throw new ArgumentException("An entity set name is required.", nameof(entitySet));
+
+            string service = ServiceName;
+            const string bodyProperty = "schemaDocument";
+
+            JObject response = await RestTextCallAsync(
+                service + "/$metadata", bodyProperty, ct).ConfigureAwait(false);
+
+            return response.ToOperationResult(r =>
+            {
+                string document = (string)r[bodyProperty];
+
+                // The entity set is the reliable lookup; the singular is only a
+                // fallback for a document that does not declare the set.
+                EpicorSchema schema = SchemaParser.Parse(
+                    document, entitySet, Singularize(entitySet));
+
+                schema.Service = service;
+                schema.EntitySet = entitySet;
+                schema.RawDocument = document;
+                return schema;
+            });
+        }
+
+        /// <summary>
+        /// A rough singular for an entity-set name, used only as a fallback when
+        /// the document does not declare the set. Epicor's plurals are not
+        /// regular — <c>POes</c>, <c>SerialNoes</c>, <c>PaymentEntries</c> — so
+        /// this is deliberately crude: the entity-set lookup is what is relied on.
+        /// </summary>
+        internal static string Singularize(string entitySet)
+        {
+            if (string.IsNullOrEmpty(entitySet)) return entitySet;
+
+            if (entitySet.EndsWith("ies", StringComparison.OrdinalIgnoreCase) && entitySet.Length > 3)
+                return entitySet.Substring(0, entitySet.Length - 3) + "y";
+
+            if (entitySet.EndsWith("es", StringComparison.OrdinalIgnoreCase) && entitySet.Length > 2)
+                return entitySet.Substring(0, entitySet.Length - 2);
+
+            if (entitySet.EndsWith("s", StringComparison.OrdinalIgnoreCase) && entitySet.Length > 1)
+                return entitySet.Substring(0, entitySet.Length - 1);
+
+            return entitySet;
+        }
 
         /// <summary>
         /// Normalizes the three response shapes Epicor returns into a
