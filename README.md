@@ -42,10 +42,10 @@ That snippet is the whole shape: construct a client from a session, await an asy
 
 | Project | Version |
 |---|---|
-| `Keri.Epicor` | <!--VER:Keri.Epicor-->1.0.0-rc.2<!--/VER--> |
-| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.2<!--/VER--> |
-| `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.2<!--/VER--> |
-| `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.2<!--/VER--> |
+| `Keri.Epicor` | <!--VER:Keri.Epicor-->1.0.0-rc.3<!--/VER--> |
+| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.3<!--/VER--> |
+| `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.3<!--/VER--> |
+| `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.3<!--/VER--> |
 
 The repo's own tooling is versioned separately and is not published:
 
