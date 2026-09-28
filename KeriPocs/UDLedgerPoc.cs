@@ -3,54 +3,43 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Keri.Epicor;
-using Newtonsoft.Json.Linq;
 
 namespace KeriPocs
 {
     /// <summary>
-    /// <b>Read-only against Epicor.</b> Says which UD tables this installation
-    /// has not claimed yet, and what the claimed ones are being used for.
+    /// <b>Read-only against Epicor.</b> Shows how to ask which UD tables this
+    /// installation has claimed.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The question it answers.</b> Epicor gives every installation the same
-    /// fixed set of UD tables and says nothing about which of them anyone is
-    /// using. Choosing one for a new purpose means finding an empty one, and
-    /// there is no screen that lists them. An empty table is free; a table with
-    /// rows is somebody's, and the report says whose by showing the key columns
-    /// in use and the column legend.
+    /// <b>The question.</b> Epicor gives every installation the same fixed set of
+    /// UD tables and no screen that says which are in use. Choosing one for a new
+    /// purpose means finding an empty one.
     /// </para>
     /// <para>
-    /// <b>One read per table.</b> <c>$count=true&amp;$top=1</c> returns the row
-    /// count and one row together, and that row carries everything else worth
-    /// knowing: which of <c>Key1</c>–<c>Key5</c> the table populates, the column
-    /// legend, and the newest change date when the rows are ordered.
+    /// <b>The answer is one call.</b> <c>UDTableSvc.GetLedgerAsync()</c> ships in
+    /// the package and reads every UD table; <c>GetUsageAsync</c> reads one. This
+    /// file only prints what they return, so everything shown here is available
+    /// to any consumer without this project.
     /// </para>
     /// <para>
-    /// <b>What a response means lives in <see cref="UDLedger"/></b>, which makes
-    /// no calls and is covered by offline tests. This file owns the reading and
-    /// the printing.
-    /// </para>
-    /// <para>
-    /// <b>Nothing here is private to the POC.</b> The read is
-    /// <c>RestCallAsync</c> on the UD table service — the same public method a
-    /// consumer of the package has.
+    /// It reads a sample so the output stays readable. The whole set is one
+    /// argument away, and the closing lines say so.
     /// </para>
     /// </remarks>
     internal static class UDLedgerPoc
     {
-        /// <summary>How many tables a run reads when it has not been armed.</summary>
-        private const int Demonstration = 10;
+        /// <summary>
+        /// How many tables this reads. An example: enough to show the call and
+        /// what comes back, and the rest teach nothing new.
+        /// </summary>
+        private const int Sample = 10;
 
         public static async Task RunAsync(EpicorClient client)
         {
-            bool full = PocConfig.UDLedger;
+            PocBanner.Section("UD table ledger - is a UD table claimed, and by what");
 
-            PocBanner.Section(full
-                ? "UD table ledger - every UD table, against your server"
-                : "UD table ledger - which UD tables are unclaimed");
-
-            PrintPreamble(full);
+            PrintPreamble();
 
             if (client.Session.AuthObject == null)
             {
@@ -59,69 +48,52 @@ namespace KeriPocs
                 return;
             }
 
-            List<string> all = UDLedger.TableNames();
-            List<string> tables = full ? all : all.Take(Demonstration).ToList();
+            List<string> sample = UDTableSvc.TableNames.Take(Sample).ToList();
 
             Console.WriteLine();
-            Console.WriteLine($"  Reading {tables.Count} of {all.Count} UD tables.");
+            Console.WriteLine($"  Reading {sample.Count} of this installation's "
+                            + $"{UDTableSvc.TableNames.Count} UD tables.");
             Console.WriteLine();
 
-            bool ordering = await OrderingWorksAsync(client, tables[0]).ConfigureAwait(false);
-            var results = new List<UDLedger.Entry>();
+            // The whole POC, in one line. Passing no tables reads every one.
+            OperationResult<List<UDTableUsage>> ledger =
+                await client.UDTable.GetLedgerAsync(sample).ConfigureAwait(false);
 
-            foreach (string table in tables)
+            if (ledger.IsFailure)
             {
-                UDLedger.Entry e = await ReadOneAsync(client, table, ordering).ConfigureAwait(false);
-                results.Add(e);
-
-                Console.WriteLine("    " + UDLedger.Describe(e));
-                if (e.Legend != null)
-                    Console.WriteLine($"    {"",6} {"",12}   {e.Legend}");
+                Console.WriteLine("  Could not read: " + ledger.ErrorMessage);
+                return;
             }
 
-            Report(results, ordering, full);
+            foreach (UDTableUsage t in ledger.Value)
+            {
+                Console.WriteLine("    " + Describe(t));
+                if (t.Legend != null)
+                    Console.WriteLine($"    {"",6} {"",12}   {t.Legend}");
+            }
+
+            Report(ledger.Value);
         }
 
         // -----------------------------------------------------------------
 
-        /// <summary>
-        /// Whether this server accepts ordering on the audit column, decided by
-        /// trying it rather than by reading the error text.
-        /// </summary>
-        /// <remarks>
-        /// A UD table is mostly <c>Key1</c>–<c>Key5</c> and the numbered user
-        /// columns, and whether it carries an audit column is a question about
-        /// this server rather than about Epicor in general. Matching on the
-        /// wording of a rejection would be a guess that a version or a locale
-        /// could break; two reads of one table are an answer. Ordered read
-        /// succeeds — ordering works. Ordered read fails where the unordered one
-        /// succeeds — the column is the problem. Both fail — the table is, and
-        /// ordering stays on so the failure is reported as itself.
-        /// </remarks>
-        /// <param name="client">The connected client.</param>
-        /// <param name="probe">The table to decide it on.</param>
-        private static async Task<bool> OrderingWorksAsync(EpicorClient client, string probe)
+        private static string Describe(UDTableUsage t)
         {
-            UDLedger.Entry ordered = await ReadOneAsync(client, probe, true).ConfigureAwait(false);
-            if (ordered.Readable) return true;
+            if (!t.IsReadable)
+                return string.Format("{0,-6} {1,12}   {2}", t.Table, "-", t.Note);
 
-            UDLedger.Entry plain = await ReadOneAsync(client, probe, false).ConfigureAwait(false);
-            return !plain.Readable;
+            if (t.IsUnclaimed)
+                return string.Format("{0,-6} {1,12:N0}   unclaimed", t.Table, 0);
+
+            var parts = new List<string>();
+            if (t.Keys.Count > 0) parts.Add(string.Join(", ", t.Keys));
+            if (t.LastChanged != null) parts.Add(t.LastChanged);
+
+            return string.Format("{0,-6} {1,12:N0}   {2}",
+                t.Table, t.Rows.Value, string.Join("   ", parts)).TrimEnd();
         }
 
-        private static async Task<UDLedger.Entry> ReadOneAsync(
-            EpicorClient client, string table, bool ordering)
-        {
-            string svc = string.Format("Ice.BO.{0}Svc/{0}s?$count=true&$top=1", table);
-            if (ordering) svc += "&$orderby=" + UDLedger.OrderColumn + " desc";
-
-            JObject response = await client.UDTable.RestCallAsync(svc).ConfigureAwait(false);
-            return UDLedger.FromResponse(table, response);
-        }
-
-        // -----------------------------------------------------------------
-
-        private static void PrintPreamble(bool full)
+        private static void PrintPreamble()
         {
             Console.WriteLine();
             Console.WriteLine("  WHAT THIS READS");
@@ -131,70 +103,62 @@ namespace KeriPocs
             Console.WriteLine("  is unclaimed and free to take; a table with rows belongs to something,");
             Console.WriteLine("  and its key columns and column legend say what.");
             Console.WriteLine();
-            Console.WriteLine("  One read per table - $count=true&$top=1 - so the count, the keys in");
-            Console.WriteLine("  use, the legend and the newest change date all come back together.");
-            Console.WriteLine("  Nothing is written.");
-
-            if (!full) return;
-
+            Console.WriteLine("  One call: client.UDTable.GetLedgerAsync(). It ships in the package, so");
+            Console.WriteLine("  this program is only printing what it returned. Nothing is written.");
             Console.WriteLine();
-            Console.WriteLine("  EVERY TABLE (KERI_POC_UDLEDGER)");
-            Console.WriteLine();
-            Console.WriteLine($"  {UDLedger.TableNames().Count} reads instead of {Demonstration}. Still read-only.");
+            Console.WriteLine($"  This is an example, so it asks for the first {Sample} tables. Calling");
+            Console.WriteLine("  GetLedgerAsync() with no arguments reads every one.");
         }
 
-        private static void Report(List<UDLedger.Entry> results, bool ordering, bool full)
+        private static void Report(List<UDTableUsage> ledger)
         {
-            List<UDLedger.Entry> available = results.Where(r => r.Available).ToList();
-            List<UDLedger.Entry> inUse = results.Where(r => r.InUse).ToList();
-            List<UDLedger.Entry> unread = results.Where(r => !r.Readable).ToList();
+            List<UDTableUsage> unclaimed = ledger.Where(t => t.IsUnclaimed).ToList();
+            int inUse = ledger.Count(t => t.IsInUse);
+            int unread = ledger.Count(t => !t.IsReadable);
 
             Console.WriteLine();
-            Console.WriteLine($"  {available.Count} unclaimed, {inUse.Count} in use, "
-                            + $"{unread.Count} not readable on this server.");
+            Console.WriteLine($"  Of the {ledger.Count} read: {unclaimed.Count} unclaimed, "
+                            + $"{inUse} in use, {unread} not readable on this server.");
 
-            if (available.Count > 0)
+            if (unclaimed.Count > 0)
             {
                 Console.WriteLine();
-                Console.WriteLine("  FREE TO TAKE");
-                Console.WriteLine();
-                Console.WriteLine("    " + string.Join(", ", available.Select(r => r.Table)));
-                Console.WriteLine();
-                Console.WriteLine("  No rows today. That is the whole test - an empty UD table is one");
-                Console.WriteLine("  nobody has claimed.");
+                Console.WriteLine("  No rows means nobody has claimed it. Here that is true of: "
+                                + string.Join(", ", unclaimed.Select(t => t.Table)));
             }
 
-            if (ordering && inUse.Any(r => r.LastChanged != null))
+            if (ledger.Any(t => t.LastChanged != null))
             {
                 Console.WriteLine();
                 Console.WriteLine("  The date is the newest row's, and what it means is yours to decide.");
                 Console.WriteLine("  A year of quiet is abandoned in one shop and ordinary in another, so");
                 Console.WriteLine("  nothing here calls a table stale.");
             }
-
-            if (!ordering)
+            else if (ledger.Any(t => t.IsInUse))
             {
                 Console.WriteLine();
-                Console.WriteLine($"  This server would not order on {UDLedger.OrderColumn}, so no date is");
-                Console.WriteLine("  shown. Counts, keys and legends are unaffected; the row each table");
-                Console.WriteLine("  returned is simply whichever one came first.");
+                Console.WriteLine("  No dates: this server would not order on Epicor's audit column, so");
+                Console.WriteLine("  the row each table returned is whichever one came first. Counts,");
+                Console.WriteLine("  keys and legends are unaffected.");
             }
 
-            int noLegend = inUse.Count(r => r.Legend == null);
+            int noLegend = ledger.Count(t => t.IsInUse && t.Legend == null);
             if (noLegend > 0)
             {
                 Console.WriteLine();
                 Console.WriteLine($"  {noLegend} table(s) in use carry no column legend, so what their");
                 Console.WriteLine("  columns mean is written down somewhere other than the data.");
-                Console.WriteLine("  UDTableSvc.BuildColumnLegend writes one into " + UDLedger.LegendColumn + ".");
+                Console.WriteLine("  UDTableSvc.BuildColumnLegend writes one into Character10.");
             }
 
-            if (!full)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"  That was {Demonstration} tables. KERI_POC_UDLEDGER=true reads all");
-                Console.WriteLine($"  {UDLedger.TableNames().Count}, which is what answering \"which are free\" needs.");
-            }
+            Console.WriteLine();
+            Console.WriteLine($"  That was {ledger.Count} of {UDTableSvc.TableNames.Count} UD tables, so");
+            Console.WriteLine("  it is not a complete answer for this installation. The complete one is");
+            Console.WriteLine("  the same call with no argument:");
+            Console.WriteLine();
+            Console.WriteLine("    var ledger = await client.UDTable.GetLedgerAsync();");
+            Console.WriteLine("    foreach (var t in ledger.Value.Where(t => t.IsUnclaimed))");
+            Console.WriteLine("        Console.WriteLine(t.Table);");
         }
     }
 }

@@ -106,6 +106,30 @@ Those four are the packages. The repo also carries runnable companions, which ar
 
 ---
 
+## Worth knowing about
+
+Capabilities a caller would otherwise have to find by reading source.
+
+**Ask the server what it has.** `GetSchemaAsync` returns every column an entity declares — its type, whether the schema makes it part of the key, and Epicor's own description of it. [`InstallationSpecific`](#finding-your-installations-custom-columns) narrows that to your own `_c` columns, by name, which is exactly what `additionalColumns` and `ExtraData` need and nothing else will tell you.
+
+**Type a UD table instead of remembering which column is which.** Put `[UDTableColumn("ShortChar01")]` on your own class and [`GetByIDAsync<T>`, `QueryAsync<T>`, `SaveAsync<T>` and `DeleteByIDAsync<T>`](#typed-ud-table-access) read and write it as that type. `Number01` stops being `Number01` in your code.
+
+**Record what the columns mean, in the data.** `BuildColumnLegend` writes a `column:meaning` map into `Character10` and `ParseColumnLegend` reads it back, so the mapping travels with the table rather than living in one developer's head.
+
+**Find out which UD tables are free.** `GetLedgerAsync` reads every UD table and reports which hold no rows — unclaimed, and available for something new. For the ones in use it shows the key columns and, for any table managed through Keri, the column legend: a table set up with this SDK tells you its shape, while one filled in by hand tells you only that it is occupied.
+
+**Know whether a failed write committed.** [`FailureStage`](#the-operationresultt-pattern) distinguishes `Uncommitted` from `Indeterminate` — the difference between safe to retry and needs a person. Almost nothing else against an ERP tells you which one you have.
+
+**See what an orchestrator did before it stopped.** [`OperationResult<T>.Steps`](#the-operationresultt-pattern) carries the trail with the result, including out of a BPM where there is nowhere to log.
+
+**Trace every request without taking a logging dependency.** [`OnTrace`](#connections-and-transient-failures) fires as each attempt completes with the method, URL, status, elapsed milliseconds and whether a retry follows. One line wires it to `ILogger`, Serilog or `Console.WriteLine`.
+
+**Build filters that cannot be malformed.** `ODataFilter` composes them, instead of interpolating strings into a query.
+
+**Turn off the projection when it costs you.** `SkipDefaultSelect` — on a DTO that models its whole table, naming every column explicitly makes Epicor emit *more*, not less.
+
+---
+
 ## Install
 
 The packages are on [nuget.org](https://www.nuget.org/profiles/mrjtgrant). Add the ones you need — `Keri.Epicor` brings `Keri.RestTransport` with it.
@@ -727,7 +751,7 @@ The SDK has a real test project. From the command line:
 dotnet test KineticRESTIntegrator.Tests
 ```
 
-The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->464<!--/TESTS--> tests, run on both `net48` and `net8.0`.
+The tests are **offline and deterministic** — no Epicor server, no network. They cover the SDK's testable surface: `OperationResult<T>` factories and extensions, `UDRow` serialization behavior, and the `UDTableSvc.ParseColumnLegend` / `BuildColumnLegend` helpers. Currently <!--TESTS-->461<!--/TESTS--> tests, run on both `net48` and `net8.0`.
 
 Test Explorer in Visual Studio also discovers and runs them.
 

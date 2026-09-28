@@ -1,15 +1,14 @@
-#if NET48
-
 using System.Collections.Generic;
 using System.Linq;
-using KeriPocs;
+using Keri.Epicor;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace KineticRESTIntegrator.Tests
 {
     /// <summary>
-    /// Tests for <see cref="UDLedger"/> — what one UD table's response means.
+    /// Tests for <see cref="UDTableSvc"/>'s ledger — what one UD table's
+    /// response means.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -19,9 +18,8 @@ namespace KineticRESTIntegrator.Tests
     /// legend. Nothing here decides whether a table is stale.
     /// </para>
     /// <para>
-    /// <b>net48 only</b>, like <c>DtoDiscoveryTests</c>: <c>KeriPocs</c> targets
-    /// .NET Framework, so the test project references it on that target alone.
-    /// The code is framework-independent; covering it once covers it.
+    /// Library code, so these run on both target frameworks. Nothing here makes
+    /// a call: <c>ReadUsage</c> is handed the JSON a read would have returned.
     /// </para>
     /// </remarks>
     public class UDLedgerTests
@@ -49,11 +47,11 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void ATableWithNoRowsIsAvailable()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD07", Response(0));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response(0));
 
-            Assert.True(e.Readable);
-            Assert.True(e.Available);
-            Assert.False(e.InUse);
+            Assert.True(e.IsReadable);
+            Assert.True(e.IsUnclaimed);
+            Assert.False(e.IsInUse);
             Assert.Equal(0, e.Rows);
             Assert.Null(e.Note);
         }
@@ -61,11 +59,11 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void ATableWithRowsIsInUse()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD02",
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02",
                 Response(1184, Row("Key1", "PART", "Key2", "REV")));
 
-            Assert.True(e.InUse);
-            Assert.False(e.Available);
+            Assert.True(e.IsInUse);
+            Assert.False(e.IsUnclaimed);
             Assert.Equal(1184, e.Rows);
         }
 
@@ -76,10 +74,10 @@ namespace KineticRESTIntegrator.Tests
             // this server would not talk about are not the same answer.
             var failure = new JObject { ["ErrorMessage"] = "Service not found." };
 
-            UDLedger.Entry e = UDLedger.FromResponse("UD99", failure);
+            UDTableUsage e = UDTableSvc.ReadUsage("UD99", failure);
 
-            Assert.False(e.Readable);
-            Assert.False(e.Available);
+            Assert.False(e.IsReadable);
+            Assert.False(e.IsUnclaimed);
             Assert.Null(e.Rows);
             Assert.Equal("Service not found.", e.Note);
         }
@@ -87,9 +85,9 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void ACountWithNoRowIsStillAnAnswer()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD07", Response(0));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response(0));
 
-            Assert.True(e.Readable);
+            Assert.True(e.IsReadable);
             Assert.Empty(e.Keys);
             Assert.Null(e.Legend);
             Assert.Null(e.LastChanged);
@@ -98,18 +96,18 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void NeitherACountNorARowIsReportedRatherThanGuessed()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD07", Response(null));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response(null));
 
-            Assert.False(e.Readable);
+            Assert.False(e.IsReadable);
             Assert.Equal("no count and no row in the response", e.Note);
         }
 
         [Fact]
         public void NoResponseAtAllIsReported()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD07", null);
+            UDTableUsage e = UDTableSvc.ReadUsage("UD07", null);
 
-            Assert.False(e.Readable);
+            Assert.False(e.IsReadable);
             Assert.Equal("no response", e.Note);
         }
 
@@ -120,7 +118,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void OnlyThePopulatedKeyColumnsAreReported()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD02", Response(5,
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5,
                 Row("Key1", "PART", "Key2", "", "Key3", "   ", "Key4", "LOT")));
 
             Assert.Equal(new List<string> { "Key1", "Key4" }, e.Keys);
@@ -129,8 +127,8 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void TheLegendIsReadFromTheColumnTheConventionUses()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD02", Response(5,
-                Row("Key1", "PART", UDLedger.LegendColumn, "  ShortChar02:PartNum|Number05:Qty  ")));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5,
+                Row("Key1", "PART", "Character10", "  ShortChar02:PartNum|Number05:Qty  ")));
 
             Assert.Equal("ShortChar02:PartNum|Number05:Qty", e.Legend);
         }
@@ -138,7 +136,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void ATableWithNoLegendSaysNothingRatherThanEmpty()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD02", Response(5, Row("Key1", "PART")));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5, Row("Key1", "PART")));
 
             Assert.Null(e.Legend);
         }
@@ -152,14 +150,14 @@ namespace KineticRESTIntegrator.Tests
         [InlineData("not a date", null)]
         public void AChangeDateIsReducedToTheDay(string raw, string expected)
         {
-            Assert.Equal(expected, UDLedger.DateOnly(raw));
+            Assert.Equal(expected, UDTableSvc.DateOnly(raw));
         }
 
         [Fact]
         public void AnUnparseableDateDoesNotCostTheRestOfTheRow()
         {
-            UDLedger.Entry e = UDLedger.FromResponse("UD02", Response(5,
-                Row("Key1", "PART", UDLedger.OrderColumn, "whenever")));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5,
+                Row("Key1", "PART", "ChangeDate", "whenever")));
 
             Assert.Null(e.LastChanged);
             Assert.Equal(new List<string> { "Key1" }, e.Keys);
@@ -173,7 +171,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void TheTableListIsEpicorsFixedSetOfParents()
         {
-            List<string> names = UDLedger.TableNames();
+            IReadOnlyList<string> names = UDTableSvc.TableNames;
 
             Assert.Equal(51, names.Count);
             Assert.Equal("UD01", names.First());
@@ -186,49 +184,13 @@ namespace KineticRESTIntegrator.Tests
             Assert.Equal(names.Count, names.Distinct().Count());
         }
 
-        // ---------------------------------------------------------------
-        // The line it prints
-        // ---------------------------------------------------------------
-
-        [Fact]
-        public void AnAvailableTablePrintsAsAvailable()
-        {
-            string line = UDLedger.Describe(UDLedger.FromResponse("UD07", Response(0)));
-
-            Assert.Contains("UD07", line);
-            Assert.Contains("available", line);
-        }
-
-        [Fact]
-        public void AnInUseTablePrintsItsCountKeysAndDate()
-        {
-            string line = UDLedger.Describe(UDLedger.FromResponse("UD02", Response(1184,
-                Row("Key1", "PART", "Key2", "REV", UDLedger.OrderColumn, "2024-03-11T09:00:00Z"))));
-
-            Assert.Contains("1,184", line);
-            Assert.Contains("Key1, Key2", line);
-            Assert.Contains("2024-03-11", line);
-        }
-
-        [Fact]
-        public void AnUnreadableTablePrintsWhyRatherThanANumber()
-        {
-            var failure = new JObject { ["ErrorMessage"] = "Service not found." };
-
-            string line = UDLedger.Describe(UDLedger.FromResponse("UD99", failure));
-
-            Assert.Contains("Service not found.", line);
-            Assert.DoesNotContain("available", line);
-            Assert.DoesNotContain("0", line);
-        }
-
         [Fact]
         public void ALongMessageIsShortenedToOneLine()
         {
             string message = "A server message that runs on well past the width of the column "
                            + "it has to sit in,\r\nacross more than one line.";
 
-            string shortened = UDLedger.Shorten(message);
+            string shortened = UDTableSvc.OneLine(message);
 
             Assert.Equal(70, shortened.Length);
             Assert.EndsWith("...", shortened);
@@ -239,10 +201,8 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void AnEmptyMessageStillSaysSomething()
         {
-            Assert.Equal("unreadable", UDLedger.Shorten(""));
-            Assert.Equal("unreadable", UDLedger.Shorten(null));
+            Assert.Equal("unreadable", UDTableSvc.OneLine(""));
+            Assert.Equal("unreadable", UDTableSvc.OneLine(null));
         }
     }
 }
-
-#endif
