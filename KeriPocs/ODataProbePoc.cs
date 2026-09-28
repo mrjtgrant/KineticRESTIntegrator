@@ -79,9 +79,9 @@ namespace KeriPocs
             Probe configured = await RunProbe(client, configuredLabel).ConfigureAwait(false);
             Report(configuredLabel, configured);
 
-            // Asked here rather than at the end because RunAsync returns early on
-            // two of the paths below, and this question has an answer on every
-            // session shape.
+            // Asked here rather than at the end, because the answer matters most
+            // on the session shape that turns out not to be OData — and the paths
+            // below return early on exactly those.
             await ProbeCountAsync(client).ConfigureAwait(false);
 
             if (!apiKeySet)
@@ -158,8 +158,10 @@ namespace KeriPocs
         /// <para>
         /// <b>Why it is worth asking.</b> A report of which UD tables are unused
         /// has to tell an empty table from an occupied one, and a count answers
-        /// that without transferring any rows. If the count is unavailable, the
-        /// question still has an answer — read one row — but the number does not.
+        /// that in a single read. Whether it also saves transferring the rows
+        /// depends on <c>$top</c> being honoured, which is the second thing this
+        /// reports. If the count is unavailable the question still has an answer
+        /// — read one row — but the number does not.
         /// On a session whose endpoints are not OData, neither form works, which
         /// is the same finding this POC already reports for <c>$filter</c>.
         /// </para>
@@ -206,8 +208,20 @@ namespace KeriPocs
             Console.WriteLine($"    @odata.count = {(string)count}");
             Console.WriteLine($"    $top=0 returned {rows} row(s).");
             Console.WriteLine();
-            Console.WriteLine("    A count is available. ?$count=true&$top=0 answers how many rows a");
-            Console.WriteLine("    table holds in one read, without transferring them.");
+
+            if (rows == 0)
+            {
+                Console.WriteLine("    A count is available and $top=0 was honoured, so it costs one read");
+                Console.WriteLine("    and no rows.");
+                return;
+            }
+
+            // Epicor reads $top=0 as unset rather than as none, so the count
+            // arrives with the whole collection behind it.
+            Console.WriteLine("    A count is available, but $top=0 was not honoured - every row came");
+            Console.WriteLine("    with it. Ask with $top=1 instead. The count is exact either way, and");
+            Console.WriteLine("    one row is usually what a caller asking for a count wants beside it:");
+            Console.WriteLine("    the key columns in use, and whatever the newest row says.");
         }
 
         // -----------------------------------------------------------------
