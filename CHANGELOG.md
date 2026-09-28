@@ -104,6 +104,12 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ### Changed
 
+- **`SysRevID` is `long` on nine more DTOs, and `RcvHeadAttch`'s two row identifiers are `string`.** *Breaking.* Epicor declares `SysRevID` as `Edm.Int64`, and the values it holds exceed `int.MaxValue` in ordinary use, so `JobAsmbl`, `Menu`, `OrderDtl`, `Project`, `SalesRep`, `UDCodeType`, `UDCodes`, `Vendor` and `VendorCnt` could fail to deserialize a row that the eleven DTOs already declaring `long` read without complaint. `RcvHeadAttch.SysRowID` and `ForeignSysRowID` were `Guid` where every other DTO uses `string`, which is deliberate rather than sloppy: Epicor sends an unset row identifier as an empty string, and a `Guid` property cannot bind that.
+
+  *Migration:* a local, field or parameter holding one of these widens to `long`; code that compared a `Guid` compares the string, or parses it. Nothing else about the DTOs changed.
+
+  Found by the schema report's type comparison, which flagged `JobAsmbl` and `Vendor` against a live server. The other seven carry the same Epicor column and were not in the report's target list — which is worth knowing about the report as much as about the DTOs.
+
 - **Warnings are errors on CI.** `TreatWarningsAsErrors` is set in `Directory.Build.props` under a `ContinuousIntegrationBuild` condition, and `ci.yml` passes `-p:ContinuousIntegrationBuild=true` on the build step. Unconditionally the property would turn a warning a newer Roslyn introduces into a build failure for a contributor on code they did not write, on a repository with no `global.json` pinning the SDK; conditioned, CI holds the line and a local build only warns. Add the same switch locally to reproduce a CI failure. The switch is also what SourceLink wants for deterministic path mapping, so the two travel together.
 
 - **The POCs ask before they write, and clean up after themselves where they can.** `KERI_POC_ALLOW_WRITES` was the only thing standing between running the examples and a record in Epicor. It is read once at startup, so someone who set it to watch a sales order get created had also armed every other write POC in the project — including any added later — and it stays set for the rest of their shell session. It answers "this program may write," which is not "write this, now."

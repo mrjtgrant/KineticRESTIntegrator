@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -58,8 +57,11 @@ namespace Keri.Epicor.Dtos
         /// <summary>Document type code (e.g. PDF, drawing, photo).</summary>
         public string DocTypeID { get; set; }
 
-        /// <summary>The foreign-system row identifier when the attachment originated outside Epicor.</summary>
-        public Guid ForeignSysRowID { get; set; }
+        /// <summary>
+        /// The foreign-system row identifier when the attachment originated
+        /// outside Epicor. The value is a GUID.
+        /// </summary>
+        public string ForeignSysRowID { get; set; }
 
         // ----- Plumbing -----
 
@@ -69,8 +71,8 @@ namespace Keri.Epicor.Dtos
         /// </summary>
         public string RowMod { get; set; }
 
-        /// <summary>Epicor row identifier (GUID).</summary>
-        public Guid SysRowID { get; set; }
+        /// <summary>Unique identifier for this row. The value is a GUID.</summary>
+        public string SysRowID { get; set; }
 
         /// <summary>
         /// Unmodeled columns on this row. Attachment tables are small and

@@ -165,8 +165,10 @@ namespace Keri.Epicor.Dtos
         /// <summary>Estimated subcontract unit cost.</summary>
         public decimal EstSubUnitCost { get; set; }
 
-        /// <summary>Epicor row-version identifier.</summary>
-        public int SysRevID { get; set; }
+        /// <summary>
+        /// Revision identifier for this row. It is incremented upon each write.
+        /// </summary>
+        public long SysRevID { get; set; }
 
         /// <summary>Epicor system row GUID (as a string).</summary>
         public string SysRowID { get; set; }
