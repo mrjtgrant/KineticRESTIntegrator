@@ -31,13 +31,30 @@ namespace Keri.Epicor
         /// namespace, because it differs between OData versions and the shape
         /// this needs does not.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The document's own entity set is the lookup.</b> A CSDL container
+        /// declares each set and points it at the type backing it, whatever that
+        /// type is called — Epicor does not name the type after the table, and
+        /// the <c>PaymentEntries</c> set is backed by a type of its own rather
+        /// than by <c>CheckHed</c>. A name the container does not declare is
+        /// matched against the type names directly, so a caller can pass a name
+        /// from <see cref="EpicorSchema.TypesPresent"/> straight back in.
+        /// </para>
+        /// <para>
+        /// <b>A name that matches neither is reported, not guessed at.</b> The
+        /// schema comes back with no columns and <c>TypesPresent</c> listing what
+        /// the document did declare. Resolving a near-miss would hand the caller
+        /// another entity's columns under the name it asked for, and nothing in
+        /// the result would say so.
+        /// </para>
+        /// </remarks>
         /// <param name="xml">The schema document.</param>
-        /// <param name="entitySet">The entity set to resolve, e.g. <c>Parts</c>.</param>
-        /// <param name="entity">
-        /// A fallback type name to match when the entity set is not declared —
-        /// usually the table name.
+        /// <param name="name">
+        /// The entity set to resolve, e.g. <c>Parts</c>, or the exact name of a
+        /// type the document declares.
         /// </param>
-        internal static EpicorSchema ParseCsdl(string xml, string entitySet, string entity)
+        internal static EpicorSchema ParseCsdl(string xml, string name)
         {
             var schema = new EpicorSchema();
 
@@ -49,15 +66,13 @@ namespace Keri.Epicor
                 .Where(e => e.Name.LocalName == "EntityType" || e.Name.LocalName == "ComplexType")
                 .ToList();
 
-            // The reliable route is the entity set that is actually read: the
-            // container names it and points at its type, whatever that type is
-            // called. Epicor does not name the type after the table — the
-            // PaymentEntries set is backed by a type of its own, not "CheckHed".
             string fromSet = doc.Descendants()
-                .Where(e => e.Name.LocalName == "EntitySet" && Named(e, entitySet))
+                .Where(e => e.Name.LocalName == "EntitySet" && Named(e, name))
                 .Select(e => (string)e.Attribute("EntityType"))
                 .FirstOrDefault(n => !string.IsNullOrEmpty(n));
 
+            // The set points at a namespace-qualified type; only the last
+            // segment names it among the document's declarations.
             if (fromSet != null)
             {
                 int dot = fromSet.LastIndexOf('.');
@@ -66,9 +81,7 @@ namespace Keri.Epicor
 
             XElement type =
                 (fromSet == null ? null : types.FirstOrDefault(e => Named(e, fromSet)))
-                ?? types.FirstOrDefault(e => Named(e, entity))
-                ?? types.FirstOrDefault(e => Named(e, entity + "Row"))
-                ?? types.FirstOrDefault(e => Ends(e, entity));
+                ?? types.FirstOrDefault(e => Named(e, name));
 
             if (type == null)
             {
@@ -124,12 +137,6 @@ namespace Keri.Epicor
         private static bool Named(XElement e, string name)
         {
             return string.Equals((string)e.Attribute("Name"), name, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool Ends(XElement e, string name)
-        {
-            string n = (string)e.Attribute("Name");
-            return n != null && n.EndsWith(name, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

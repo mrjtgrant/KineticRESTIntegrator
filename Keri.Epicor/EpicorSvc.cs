@@ -528,37 +528,14 @@ namespace Keri.Epicor
             {
                 string document = (string)r[bodyProperty];
 
-                // The entity set is the reliable lookup; the singular is only a
-                // fallback for a document that does not declare the set.
-                EpicorSchema schema = SchemaParser.ParseCsdl(
-                    document, entitySet, Singularize(entitySet));
+                // The document's own entity set is the lookup. A name it does
+                // not declare comes back as not found, with the names it does.
+                EpicorSchema schema = SchemaParser.ParseCsdl(document, entitySet);
 
                 schema.Service = service;
                 schema.EntitySet = entitySet;
                 return schema;
             });
-        }
-
-        /// <summary>
-        /// A rough singular for an entity-set name, used only as a fallback when
-        /// the document does not declare the set. Epicor's plurals are not
-        /// regular — <c>POes</c>, <c>SerialNoes</c>, <c>PaymentEntries</c> — so
-        /// this is deliberately crude: the entity-set lookup is what is relied on.
-        /// </summary>
-        internal static string Singularize(string entitySet)
-        {
-            if (string.IsNullOrEmpty(entitySet)) return entitySet;
-
-            if (entitySet.EndsWith("ies", StringComparison.OrdinalIgnoreCase) && entitySet.Length > 3)
-                return entitySet.Substring(0, entitySet.Length - 3) + "y";
-
-            if (entitySet.EndsWith("es", StringComparison.OrdinalIgnoreCase) && entitySet.Length > 2)
-                return entitySet.Substring(0, entitySet.Length - 2);
-
-            if (entitySet.EndsWith("s", StringComparison.OrdinalIgnoreCase) && entitySet.Length > 1)
-                return entitySet.Substring(0, entitySet.Length - 1);
-
-            return entitySet;
         }
 
         /// <summary>

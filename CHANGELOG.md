@@ -82,6 +82,8 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
   It changes nothing a caller asked for: an explicit `select`, or any `additionalColumns`, projects as it always did. It cannot cost a caller data — an unprojected read returns at least the columns the DTO models and often more, and the surplus lands in `ExtraData`. No DTO in this library carries it; it exists for consumers defining their own DTOs on top of `EpicorSvc`, and `ADDING_A_SERVICE.md` says when to reach for it. Covered by six tests.
 
+- **The schema parser has a suite.** `SchemaParserTests` drives `ParseCsdl` with CSDL written by hand: resolution through the entity-set container and by type name, keys and their casing, Epicor's descriptions and the elements they fall back to, a foreign OData namespace, and the bodies a server should never send — truncated XML, JSON, nothing at all. A live server serves one version's idea of a well-formed document and will not produce a missing key or a truncated body on request, which is why the fixtures are written rather than captured.
+
 ### Fixed
 
 - **An inner service no longer creates its own `HttpClient`.** `EngWorkBenchSvc` and `InvTransferSvc` are the only services that build another service — a `BomSearchSvc` for the source BOM in `AddOprsAsync`, a `SelectedSerialNumbersSvc` for the serial-number steps in `MoveInventoryAsync`. Both used the single-argument constructor, so the inner service built a client of its own. A caller supplying a client from `IHttpClientFactory`, or one carrying a proxy, logging or retry handler, did not get it used for those calls, and each service held a second connection pool. `EpicorClient` already passed its client to all 24 top-level services; these two inner ones were missed.
@@ -113,6 +115,12 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
   A caller could always sidestep it by passing a shorter `select`, or an empty list to send no `$select` at all. What failed was the default, which is the path anyone takes first.
 
 ### Changed
+
+- **The schema read resolves a name from the document alone.** `GetSchemaAsync` asks the entity-set container which type backs the name it was given, and otherwise matches a type declared under that exact name. Epicor names the set and the type independently — the `PaymentEntries` set is backed by a type of its own rather than by `CheckHed` — so the container is where the answer lives. A name the document carries neither way comes back with `Found` false and `TypesPresent` listing what it does declare, which is the list to pass a name back from.
+
+  Resolving a near-miss instead returns another entity's columns under the name that was asked for, and nothing in the result says which entity they came from. Reporting the miss costs a caller one more call; guessing costs a wrong schema that reads as a right one.
+
+  `SchemaParser.ParseCsdl` takes the name alone and `EpicorSvc.Singularize` is gone. Both are internal; `GetSchemaAsync`'s signature is unchanged.
 
 - **`SysRevID` is `long` on nine more DTOs, and `RcvHeadAttch`'s two row identifiers are `string`.** *Breaking.* Epicor declares `SysRevID` as `Edm.Int64`, and the values it holds exceed `int.MaxValue` in ordinary use, so `JobAsmbl`, `Menu`, `OrderDtl`, `Project`, `SalesRep`, `UDCodeType`, `UDCodes`, `Vendor` and `VendorCnt` could fail to deserialize a row that the eleven DTOs already declaring `long` read without complaint. `RcvHeadAttch.SysRowID` and `ForeignSysRowID` were `Guid` where every other DTO uses `string`, which is deliberate rather than sloppy: Epicor sends an unset row identifier as an empty string, and a `Guid` property cannot bind that.
 
