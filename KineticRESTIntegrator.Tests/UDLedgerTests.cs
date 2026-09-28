@@ -18,18 +18,23 @@ namespace KineticRESTIntegrator.Tests
     /// legend. Nothing here decides whether a table is stale.
     /// </para>
     /// <para>
+    /// The set of rows carries the answer. Present and empty, present with a row,
+    /// and absent are three different things, and most of what follows is about
+    /// keeping them three.
+    /// </para>
+    /// <para>
     /// Library code, so these run on both target frameworks. Nothing here makes
     /// a call: <c>ReadUsage</c> is handed the JSON a read would have returned.
     /// </para>
     /// </remarks>
     public class UDLedgerTests
     {
-        private static JObject Response(int? count, JObject row = null)
+        private static JObject Response(JObject row = null)
         {
-            var o = new JObject();
-            if (count.HasValue) o["@odata.count"] = count.Value;
-            o["value"] = row == null ? new JArray() : new JArray(row);
-            return o;
+            return new JObject
+            {
+                ["value"] = row == null ? new JArray() : new JArray(row)
+            };
         }
 
         private static JObject Row(params object[] pairs)
@@ -45,26 +50,25 @@ namespace KineticRESTIntegrator.Tests
         // ---------------------------------------------------------------
 
         [Fact]
-        public void ATableWithNoRowsIsAvailable()
+        public void ATableWithNoRowsIsUnclaimed()
         {
-            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response(0));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response());
 
             Assert.True(e.IsReadable);
             Assert.True(e.IsUnclaimed);
             Assert.False(e.IsInUse);
-            Assert.Equal(0, e.Rows);
             Assert.Null(e.Note);
         }
 
         [Fact]
-        public void ATableWithRowsIsInUse()
+        public void ATableWithARowIsInUse()
         {
             UDTableUsage e = UDTableSvc.ReadUsage("UD02",
-                Response(1184, Row("Key1", "PART", "Key2", "REV")));
+                Response(Row("Key1", "PART", "Key2", "REV")));
 
+            Assert.True(e.IsReadable);
             Assert.True(e.IsInUse);
             Assert.False(e.IsUnclaimed);
-            Assert.Equal(1184, e.Rows);
         }
 
         [Fact]
@@ -78,28 +82,30 @@ namespace KineticRESTIntegrator.Tests
 
             Assert.False(e.IsReadable);
             Assert.False(e.IsUnclaimed);
-            Assert.Null(e.Rows);
+            Assert.False(e.IsInUse);
             Assert.Equal("Service not found.", e.Note);
         }
 
         [Fact]
-        public void ACountWithNoRowIsStillAnAnswer()
+        public void AnEmptyTableCarriesNothingElse()
         {
-            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response(0));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response());
 
-            Assert.True(e.IsReadable);
             Assert.Empty(e.Keys);
             Assert.Null(e.Legend);
             Assert.Null(e.LastChanged);
         }
 
         [Fact]
-        public void NeitherACountNorARowIsReportedRatherThanGuessed()
+        public void AResponseWithNoRowSetIsReportedRatherThanGuessed()
         {
-            UDTableUsage e = UDTableSvc.ReadUsage("UD07", Response(null));
+            // No "value" at all is not an empty table — reading it as one would
+            // offer a table this never saw as free to take.
+            UDTableUsage e = UDTableSvc.ReadUsage("UD07", new JObject());
 
             Assert.False(e.IsReadable);
-            Assert.Equal("no count and no row in the response", e.Note);
+            Assert.False(e.IsUnclaimed);
+            Assert.Equal("no row set in the response", e.Note);
         }
 
         [Fact]
@@ -108,6 +114,7 @@ namespace KineticRESTIntegrator.Tests
             UDTableUsage e = UDTableSvc.ReadUsage("UD07", null);
 
             Assert.False(e.IsReadable);
+            Assert.False(e.IsUnclaimed);
             Assert.Equal("no response", e.Note);
         }
 
@@ -118,7 +125,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void OnlyThePopulatedKeyColumnsAreReported()
         {
-            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5,
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(
                 Row("Key1", "PART", "Key2", "", "Key3", "   ", "Key4", "LOT")));
 
             Assert.Equal(new List<string> { "Key1", "Key4" }, e.Keys);
@@ -127,7 +134,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void TheLegendIsReadFromTheColumnTheConventionUses()
         {
-            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5,
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(
                 Row("Key1", "PART", "Character10", "  ShortChar02:PartNum|Number05:Qty  ")));
 
             Assert.Equal("ShortChar02:PartNum|Number05:Qty", e.Legend);
@@ -136,7 +143,7 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void ATableWithNoLegendSaysNothingRatherThanEmpty()
         {
-            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5, Row("Key1", "PART")));
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(Row("Key1", "PART")));
 
             Assert.Null(e.Legend);
         }
@@ -156,12 +163,23 @@ namespace KineticRESTIntegrator.Tests
         [Fact]
         public void AnUnparseableDateDoesNotCostTheRestOfTheRow()
         {
-            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(5,
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(
                 Row("Key1", "PART", "ChangeDate", "whenever")));
 
             Assert.Null(e.LastChanged);
             Assert.Equal(new List<string> { "Key1" }, e.Keys);
-            Assert.Equal(5, e.Rows);
+            Assert.True(e.IsInUse);
+        }
+
+        [Fact]
+        public void ARowWithNothingInItStillMeansTheTableIsInUse()
+        {
+            // A row whose keys are all blank is still a row somebody put there.
+            UDTableUsage e = UDTableSvc.ReadUsage("UD02", Response(new JObject()));
+
+            Assert.True(e.IsInUse);
+            Assert.False(e.IsUnclaimed);
+            Assert.Empty(e.Keys);
         }
 
         // ---------------------------------------------------------------

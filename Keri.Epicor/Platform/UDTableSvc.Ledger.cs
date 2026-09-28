@@ -63,9 +63,11 @@ namespace Keri.Epicor
         /// </summary>
         /// <remarks>
         /// <para>
-        /// One request: the row count and a single row together. That row carries
-        /// everything else worth knowing — which of <c>Key1</c>–<c>Key5</c> the
-        /// table populates, the column legend, and the change date.
+        /// One request for one row. A row came back or it did not, and that alone
+        /// settles whether the table is claimed — no count is asked for, so no
+        /// server's limit on counting can change the answer. The row itself
+        /// carries the rest: which of <c>Key1</c>–<c>Key5</c> the table populates,
+        /// the column legend, and the change date.
         /// </para>
         /// <para>
         /// A table this server does not have comes back as a success with
@@ -97,7 +99,7 @@ namespace Keri.Epicor
                 throw new ArgumentException("A UD table name is required.", nameof(table));
 
             string svc = string.Format(
-                CultureInfo.InvariantCulture, "Ice.BO.{0}Svc/{0}s?$count=true&$top=1", table);
+                CultureInfo.InvariantCulture, "Ice.BO.{0}Svc/{0}s?$top=1", table);
 
             if (newestFirst) svc += "&$orderby=" + LedgerOrderColumn + " desc";
 
@@ -111,10 +113,14 @@ namespace Keri.Epicor
         /// </summary>
         /// <remarks>
         /// <para>
-        /// One request per table. Whether this server accepts ordering on the
-        /// audit column is settled once, by trying it on the first table rather
-        /// than by reading the wording of a rejection, and the answer applies to
-        /// the rest of the run.
+        /// One request per table, in sequence — the default list is fifty-one of
+        /// them, so a full run takes as long as fifty-one round trips to your
+        /// server. Pass a narrower list when that matters.
+        /// </para>
+        /// <para>
+        /// Whether this server accepts ordering on the audit column is settled
+        /// once, by trying it on the first table rather than by reading the
+        /// wording of a rejection, and the answer applies to the rest of the run.
         /// </para>
         /// <para>
         /// The result is in the order read, and always has one entry per name
@@ -188,8 +194,14 @@ namespace Keri.Epicor
         }
 
         /// <summary>
-        /// Reads a <c>$count</c>-with-one-row response into a usage record.
+        /// Reads a one-row response into a usage record.
         /// </summary>
+        /// <remarks>
+        /// The set of rows is the answer: present and empty means the table was
+        /// read and holds nothing; present with a row means something is using it;
+        /// absent means the read did not happen, which is a third answer and is
+        /// kept as one.
+        /// </remarks>
         /// <param name="table">The table the response came from.</param>
         /// <param name="response">What the transport returned.</param>
         internal static UDTableUsage ReadUsage(string table, JObject response)
@@ -209,16 +221,19 @@ namespace Keri.Epicor
                 return usage;
             }
 
-            usage.Rows = (int?)response["@odata.count"];
-
-            var row = (response["value"] as JArray)?.FirstOrDefault() as JObject;
-            if (row == null)
+            var rows = response["value"] as JArray;
+            if (rows == null)
             {
-                // A count with no row is an empty table. Neither is a response
-                // this does not understand, which is worth saying.
-                if (!usage.Rows.HasValue) usage.Note = "no count and no row in the response";
+                usage.Note = "no row set in the response";
                 return usage;
             }
+
+            usage.IsReadable = true;
+
+            var row = rows.FirstOrDefault() as JObject;
+            if (row == null) return usage;
+
+            usage.IsInUse = true;
 
             for (int k = 1; k <= 5; k++)
             {

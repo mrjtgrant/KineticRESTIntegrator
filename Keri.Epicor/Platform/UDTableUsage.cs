@@ -17,14 +17,20 @@ namespace Keri.Epicor
     /// </para>
     /// <para>
     /// <b>It states; it does not judge.</b> No table is reported as stale or
-    /// abandoned. <see cref="LastChanged"/> is the newest row's date and what it
+    /// abandoned. <see cref="LastChanged"/> is the sampled row's date and what it
     /// means is the caller's to decide — a year of quiet is abandoned in one shop
     /// and ordinary in another.
     /// </para>
     /// <para>
-    /// Everything but <see cref="Rows"/> comes from a single sampled row, so
-    /// <see cref="Keys"/> and <see cref="Legend"/> describe how that table is
-    /// used rather than proving anything about every row in it.
+    /// <b>There is no row count here.</b> Whether a table is claimed is settled by
+    /// asking for one row and seeing whether one comes back, which needs no count
+    /// and cannot be capped by a server. A caller who wants the size of a table it
+    /// has already decided to care about can ask for that table's count directly.
+    /// </para>
+    /// <para>
+    /// <see cref="Keys"/>, <see cref="Legend"/> and <see cref="LastChanged"/> all
+    /// come from that single sampled row, so they describe how the table is used
+    /// rather than proving anything about every row in it.
     /// </para>
     /// </remarks>
     public class UDTableUsage
@@ -33,12 +39,7 @@ namespace Keri.Epicor
         public string Table { get; set; }
 
         /// <summary>
-        /// How many rows the table holds, or null when it could not be read.
-        /// </summary>
-        public int? Rows { get; set; }
-
-        /// <summary>
-        /// Why the table could not be read, when <see cref="Rows"/> is null.
+        /// Why the table could not be read, when <see cref="IsReadable"/> is false.
         /// </summary>
         /// <remarks>
         /// A table this server does not have and a table with nothing in it are
@@ -64,28 +65,34 @@ namespace Keri.Epicor
         public string Legend { get; set; }
 
         /// <summary>
-        /// The newest row's change date as <c>yyyy-MM-dd</c>, or null when the
+        /// The sampled row's change date as <c>yyyy-MM-dd</c>, or null when the
         /// server would not order on it or did not supply one.
         /// </summary>
         public string LastChanged { get; set; }
 
-        /// <summary>True when the server answered with a row count.</summary>
-        public bool IsReadable { get { return Rows.HasValue; } }
-
         /// <summary>
-        /// True for a table with no rows — nobody has claimed it, and it is free
-        /// to use for something new.
+        /// True when the server answered with a set of rows — empty or not.
         /// </summary>
-        public bool IsUnclaimed { get { return Rows.HasValue && Rows.Value == 0; } }
+        /// <remarks>
+        /// False means the read did not happen: the table is not on this server,
+        /// or the account cannot see it. <see cref="Note"/> says which.
+        /// </remarks>
+        public bool IsReadable { get; internal set; }
 
         /// <summary>True for a table something is already keeping rows in.</summary>
-        public bool IsInUse { get { return Rows.HasValue && Rows.Value > 0; } }
+        public bool IsInUse { get; internal set; }
+
+        /// <summary>
+        /// True for a table that was read and holds no rows — nobody has claimed
+        /// it, and it is free to use for something new.
+        /// </summary>
+        public bool IsUnclaimed { get { return IsReadable && !IsInUse; } }
 
         /// <summary>The table and what became of it, for diagnostics.</summary>
         public override string ToString()
         {
             if (!IsReadable) return (Table ?? "?") + ": " + (Note ?? "unreadable");
-            return (Table ?? "?") + ": " + Rows.Value + " row(s)";
+            return (Table ?? "?") + ": " + (IsInUse ? "in use" : "unclaimed");
         }
     }
 }

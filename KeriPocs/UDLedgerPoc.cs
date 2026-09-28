@@ -35,6 +35,17 @@ namespace KeriPocs
         /// </summary>
         private const int Sample = 10;
 
+        private const int TableWidth = 6;
+        private const int StatusWidth = 10;
+        private const int KeysWidth = 30;
+        private const int DateWidth = 12;
+
+        private static readonly string Rule =
+            "  +" + new string('-', TableWidth + 2)
+          + "+" + new string('-', StatusWidth + 2)
+          + "+" + new string('-', KeysWidth + 2)
+          + "+" + new string('-', DateWidth + 2) + "+";
+
         public static async Task RunAsync(EpicorClient client)
         {
             PocBanner.Section("UD table ledger - is a UD table claimed, and by what");
@@ -65,32 +76,78 @@ namespace KeriPocs
                 return;
             }
 
-            foreach (UDTableUsage t in ledger.Value)
-            {
-                Console.WriteLine("    " + Describe(t));
-                if (t.Legend != null)
-                    Console.WriteLine($"    {"",6} {"",12}   {t.Legend}");
-            }
-
+            PrintTable(ledger.Value);
+            PrintLegends(ledger.Value);
+            PrintUnreadable(ledger.Value);
             Report(ledger.Value);
         }
 
         // -----------------------------------------------------------------
 
-        private static string Describe(UDTableUsage t)
+        private static void PrintTable(List<UDTableUsage> ledger)
         {
-            if (!t.IsReadable)
-                return string.Format("{0,-6} {1,12}   {2}", t.Table, "-", t.Note);
+            Console.WriteLine(Rule);
+            Console.WriteLine(Line("Table", "Status", "Keys in use", "Last changed"));
+            Console.WriteLine(Rule);
 
-            if (t.IsUnclaimed)
-                return string.Format("{0,-6} {1,12:N0}   unclaimed", t.Table, 0);
+            foreach (UDTableUsage t in ledger)
+                Console.WriteLine(Line(
+                    t.Table,
+                    Status(t),
+                    string.Join(", ", t.Keys),
+                    t.LastChanged));
 
-            var parts = new List<string>();
-            if (t.Keys.Count > 0) parts.Add(string.Join(", ", t.Keys));
-            if (t.LastChanged != null) parts.Add(t.LastChanged);
+            Console.WriteLine(Rule);
+        }
 
-            return string.Format("{0,-6} {1,12:N0}   {2}",
-                t.Table, t.Rows.Value, string.Join("   ", parts)).TrimEnd();
+        /// <summary>What the table turned out to be, in one word.</summary>
+        private static string Status(UDTableUsage t)
+        {
+            if (!t.IsReadable) return "unreadable";
+            return t.IsInUse ? "in use" : "unclaimed";
+        }
+
+        private static string Line(string table, string status, string keys, string date)
+        {
+            return "  | " + Cell(table, TableWidth)
+                 + " | " + Cell(status, StatusWidth)
+                 + " | " + Cell(keys, KeysWidth)
+                 + " | " + Cell(date, DateWidth) + " |";
+        }
+
+        private static string Cell(string value, int width)
+        {
+            value = value ?? "";
+            if (value.Length > width) value = value.Substring(0, width - 3) + "...";
+            return value.PadRight(width);
+        }
+
+        /// <summary>
+        /// The legends, under the table rather than in it: a legend is as long as
+        /// the table it describes is wide, and does not fit a column.
+        /// </summary>
+        private static void PrintLegends(List<UDTableUsage> ledger)
+        {
+            List<UDTableUsage> withLegend = ledger.Where(t => t.Legend != null).ToList();
+            if (withLegend.Count == 0) return;
+
+            Console.WriteLine();
+            Console.WriteLine("  Column legends - what each table's numbered columns hold:");
+            Console.WriteLine();
+            foreach (UDTableUsage t in withLegend)
+                Console.WriteLine($"    {t.Table,-6} {t.Legend}");
+        }
+
+        private static void PrintUnreadable(List<UDTableUsage> ledger)
+        {
+            List<UDTableUsage> unreadable = ledger.Where(t => !t.IsReadable).ToList();
+            if (unreadable.Count == 0) return;
+
+            Console.WriteLine();
+            Console.WriteLine("  Not readable on this server, and what it said:");
+            Console.WriteLine();
+            foreach (UDTableUsage t in unreadable)
+                Console.WriteLine($"    {t.Table,-6} {t.Note}");
         }
 
         private static void PrintPreamble()
@@ -105,6 +162,18 @@ namespace KeriPocs
             Console.WriteLine();
             Console.WriteLine("  One call: client.UDTable.GetLedgerAsync(). It ships in the package, so");
             Console.WriteLine("  this program is only printing what it returned. Nothing is written.");
+            Console.WriteLine();
+            Console.WriteLine("  THE COLUMNS");
+            Console.WriteLine();
+            Console.WriteLine("    Table          the UD table read");
+            Console.WriteLine("    Status         unclaimed  - read, and holds nothing");
+            Console.WriteLine("                   in use     - read, and something is keeping rows in it");
+            Console.WriteLine("                   unreadable - the read did not happen; the reason is");
+            Console.WriteLine("                                listed under the table");
+            Console.WriteLine("    Keys in use    which of Key1-Key5 the sampled row fills, which is the");
+            Console.WriteLine("                   shape of whatever owns the table");
+            Console.WriteLine("    Last changed   the sampled row's date, when the server will order on");
+            Console.WriteLine("                   Epicor's audit column");
             Console.WriteLine();
             Console.WriteLine($"  This is an example, so it asks for the first {Sample} tables. Calling");
             Console.WriteLine("  GetLedgerAsync() with no arguments reads every one.");
@@ -138,8 +207,8 @@ namespace KeriPocs
             {
                 Console.WriteLine();
                 Console.WriteLine("  No dates: this server would not order on Epicor's audit column, so");
-                Console.WriteLine("  the row each table returned is whichever one came first. Counts,");
-                Console.WriteLine("  keys and legends are unaffected.");
+                Console.WriteLine("  the row each table returned is whichever one came first. Which");
+                Console.WriteLine("  tables are claimed, their keys and their legends are unaffected.");
             }
 
             int noLegend = ledger.Count(t => t.IsInUse && t.Legend == null);
