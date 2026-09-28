@@ -79,9 +79,9 @@ namespace KeriPocs
             Probe configured = await RunProbe(client, configuredLabel).ConfigureAwait(false);
             Report(configuredLabel, configured);
 
-            // Asked here rather than at the end, because the answer matters most
-            // on the session shape that turns out not to be OData — and the paths
-            // below return early on exactly those.
+            // Asked here rather than at the end because RunAsync returns early on
+            // two of the paths below, and this question has an answer on every
+            // session shape.
             await ProbeCountAsync(client).ConfigureAwait(false);
 
             if (!apiKeySet)
