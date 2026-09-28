@@ -431,26 +431,56 @@ namespace KineticRESTIntegrator.Tests
         }
 
         [Fact]
-        public void ACsvFieldHoldingCommasAndQuotesSurvivesARoundTrip()
+        public void AFieldHoldingACommaSurvivesARoundTrip()
         {
+            // Not a contrived case: "key, not modelled" is a signal the report
+            // produces, and an unquoted comma in it would split one row into two
+            // columns for every unmodelled key column on the table.
             var cols = new List<DtoDiscovery.ColumnDoc>
             {
-                Col("Tricky", @"Commas, quotes "" and more, all in one.")
+                Col("PartNum", "The part number.", key: true)
             };
 
-            DtoDiscovery.Annotate(cols, new List<string> { "Tricky" });
+            DtoDiscovery.Annotate(cols, new List<string>());
 
             List<string> lines = Lines(DtoDiscovery.RenderCsv(cols));
             List<string> header = DtoDiscovery.SplitCsvLine(lines[0]);
             List<string> row = DtoDiscovery.SplitCsvLine(lines[1]);
 
             Assert.Equal(header.Count, row.Count);
-            Assert.Equal("Tricky", row[header.IndexOf("Column")]);
-            Assert.Equal(@"Commas, quotes "" and more, all in one.", row[header.IndexOf("Description")]);
+            Assert.Equal("PartNum", row[header.IndexOf("Column")]);
+            Assert.Equal("key, not modelled", row[header.IndexOf("Signal")]);
         }
 
         [Fact]
-        public void ARowForAColumnTheSchemaLacksCarriesNoTypeOrDescription()
+        public void QuotesAndCommasInAnyFieldSurviveARoundTrip()
+        {
+            Assert.Equal(new List<string> { @"a,b", @"c""d", "e" },
+                DtoDiscovery.SplitCsvLine(
+                    string.Join(",", DtoDiscovery.Quote(@"a,b"),
+                                     DtoDiscovery.Quote(@"c""d"),
+                                     DtoDiscovery.Quote("e"))));
+        }
+
+        [Fact]
+        public void EpicorsProseIsNotWrittenToTheFile()
+        {
+            // Described records that there is a description. The text itself is
+            // Epicor's, and these files are committed.
+            var cols = new List<DtoDiscovery.ColumnDoc> { Col("PartNum", "The part number.") };
+
+            DtoDiscovery.Annotate(cols, new List<string> { "PartNum" });
+
+            string csv = DtoDiscovery.RenderCsv(cols);
+            List<string> header = DtoDiscovery.SplitCsvLine(Lines(csv)[0]);
+
+            Assert.DoesNotContain("Description", header);
+            Assert.DoesNotContain("The part number.", csv);
+            Assert.Equal("yes", DtoDiscovery.SplitCsvLine(Lines(csv)[1])[header.IndexOf("Described")]);
+        }
+
+        [Fact]
+        public void ARowForAColumnTheSchemaLacksCarriesNoTypeAndIsNotDescribed()
         {
             var cols = new List<DtoDiscovery.ColumnDoc> { Col("QuoteNum", "The quote number.") };
 
@@ -462,7 +492,7 @@ namespace KineticRESTIntegrator.Tests
 
             Assert.Equal("not in schema", phantom[header.IndexOf("Signal")]);
             Assert.Equal("", phantom[header.IndexOf("Type")]);
-            Assert.Equal("", phantom[header.IndexOf("Description")]);
+            Assert.Equal("no", phantom[header.IndexOf("Described")]);
             Assert.Equal("yes", phantom[header.IndexOf("InDto")]);
         }
     }

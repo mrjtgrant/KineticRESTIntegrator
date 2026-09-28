@@ -359,7 +359,9 @@ namespace KeriPocs
             Console.WriteLine("  One row per column, with what the server said and these added:");
             Console.WriteLine();
             Console.WriteLine("    Key         the schema declares it part of the entity's key");
-            Console.WriteLine("    Described   Epicor supplied prose for it");
+            Console.WriteLine("    Described   Epicor supplied prose for it - yes or no. The prose");
+            Console.WriteLine("                itself is Epicor's and is printed here, not written to");
+            Console.WriteLine("                a file this repository publishes");
             Console.WriteLine("    InDto       the Keri DTO models it today");
             Console.WriteLine("    DtoType     the C# type the DTO declares, against Type from the server");
             Console.WriteLine("    Signal      modelled / not modelled / key, not modelled /");
@@ -454,10 +456,25 @@ namespace KeriPocs
             if (custom > 0)
             {
                 Console.WriteLine();
-                Console.WriteLine($"  {custom} column(s) are this installation's own (_c). No shared DTO");
-                Console.WriteLine( "  models one — reach them through ExtraData, or name them in");
-                Console.WriteLine( "  additionalColumns on an entity-set read. They are listed here and");
-                Console.WriteLine( "  left out of the CSVs, because their names describe your site.");
+                Console.WriteLine("  THIS INSTALLATION'S OWN COLUMNS");
+                Console.WriteLine();
+                Console.WriteLine($"  {custom} column(s) carry Epicor's _c suffix, so they exist on this");
+                Console.WriteLine( "  install and nowhere else. No shared DTO models one. These are the");
+                Console.WriteLine( "  names to put in additionalColumns on an entity-set read, or to pull");
+                Console.WriteLine( "  out of a DTO's ExtraData.");
+                Console.WriteLine();
+                Console.WriteLine( "  Printed here and left out of the CSVs: a committed file is the same");
+                Console.WriteLine( "  on every install, and these names are not.");
+
+                foreach (EntityResult r in parsed.Where(x => x.InstallationSpecific.Count > 0))
+                {
+                    Console.WriteLine();
+                    Console.WriteLine($"    {r.Target.Entity}");
+                    foreach (DtoDiscovery.ColumnDoc c in r.InstallationSpecific)
+                    {
+                        Console.WriteLine($"      {c.Name,-32} {c.EdmType,-20} {c.Description}".TrimEnd());
+                    }
+                }
             }
 
             Console.WriteLine();

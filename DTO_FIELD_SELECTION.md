@@ -52,20 +52,27 @@ schema\<Entity>.csv
 ```
 
 The files are committed, so the diff between two runs is what changed. Columns
-this installation added — Epicor's `_c` suffix — are counted on the console and
-kept out of the file: their names describe one site rather than any
-installation.
+this installation added — Epicor's `_c` suffix — are listed on the console with
+their types and descriptions, and kept out of the file: their names describe
+one site rather than any installation. That console list is what to copy into
+`additionalColumns` on an entity-set read.
 
-Each row is a column the server declared, with what the server said about it
-and five columns added:
+Each row is a column the server declared — its name, type and nullability —
+with five columns added:
 
 | Column | Meaning |
 |---|---|
 | `Key` | the schema declares it part of the entity's key |
-| `Described` | Epicor supplied prose for this column |
+| `Described` | Epicor supplied prose for this column — yes or no |
 | `InDto` | the Keri DTO models it today |
 | `DtoType` | the C# type the DTO declares, against `Type` from the server |
 | `Signal` | `modelled`, `not modelled`, `key, not modelled`, `type differs`, `not in schema`, `installation-specific` |
+
+**Epicor's descriptions are printed, not written.** `Described` records that
+there is one, which is what a drift report needs — a diff still shows a column
+Epicor started or stopped documenting. The prose itself is Epicor's, these
+files are committed to a public repository, and the text is one run away when
+you are actually deciding about a column.
 
 `InDto` is read from the live DTO through `SelectFor<T>()` and `DtoType` by
 reflection, so neither can drift from the code.

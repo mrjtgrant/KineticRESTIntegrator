@@ -396,11 +396,19 @@ namespace KeriPocs
         /// Writes one row per column: what the server said, what the DTO declares,
         /// and one word for the difference.
         /// </summary>
+        /// <remarks>
+        /// <b>Epicor's description is not written.</b> <c>Described</c> records
+        /// whether there is one, which is what a drift report needs: a diff still
+        /// shows a column Epicor started or stopped documenting. The prose itself
+        /// is Epicor's, these files are committed to a public repository, and the
+        /// text is one live run away whenever someone is actually deciding about a
+        /// column. The console prints it; the file records that it exists.
+        /// </remarks>
         /// <param name="cols">The annotated columns.</param>
         internal static string RenderCsv(List<ColumnDoc> cols)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Column,Type,Nullable,Key,Described,InDto,DtoType,Signal,Description");
+            sb.AppendLine("Column,Type,Nullable,Key,Described,InDto,DtoType,Signal");
 
             if (cols == null) return sb.ToString();
 
@@ -415,8 +423,7 @@ namespace KeriPocs
                     Quote(c.Described ? "yes" : "no"),
                     Quote(c.InDto ? "yes" : "no"),
                     Quote(c.DtoType),
-                    Quote(c.Signal),
-                    Quote(c.Description)
+                    Quote(c.Signal)
                 };
 
                 sb.AppendLine(string.Join(",", fields));
