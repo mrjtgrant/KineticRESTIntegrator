@@ -8,11 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 This project follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). Each package versions independently.
 
-- **Before 1.0.0**, a minor version (`0.X.0`) may contain breaking changes. A patch version (`0.x.Y`) contains only backward-compatible fixes.
-- **From 1.0.0**, breaking changes appear only in major versions.
+- **From 1.0.0**, the public API is stable: breaking changes appear only in a major version. A minor version (`1.X.0`) adds; a patch version (`1.x.Y`) fixes.
+- **A release candidate** (`1.0.0-rc.N`) is a prerelease. NuGet does not install it unless a consumer opts in, and its API may still change between candidates in response to what the candidates find.
+- **Before 1.0.0** — the `0.x` entries below — a minor version could break and a patch contained only fixes.
 - **Every breaking change is marked Breaking** in its entry, with a note on how to migrate.
 
-Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epicor-v0.9.0`. The `[0.x.y]` entries and `vX.Y.Z` tags further down are earlier whole-repository releases.
+Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epicor-v1.0.0-rc.1`. The `[0.x.y]` entries and `vX.Y.Z` tags further down are earlier whole-repository releases.
 
 ---
 
@@ -20,16 +21,219 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ### Added
 
+- **An OData probe POC**, answering whether a given session honours the query options every entity-set read depends on. Epicor's v1 endpoints (`/api/v1/`) are not OData; its v2 endpoints are, and setting `ApiKey` is what selects them. On a v1 session the `$filter` and `$top` Keri puts on the URL are believed to be ignored — no error, just the full collection — which is the worst shape a defect can take: the call succeeds, the rows look like rows, and the wrongness surfaces somewhere downstream.
+
+  Two reads of `PayMethod`, one of the smallest reference tables in Epicor, so an ignored `$top` costs a handful of rows rather than a table scan. The first establishes the table is not empty; the second filters on a value that cannot exist. Nothing back means `$filter` worked. Anything back means it was dropped, and the POC says so and names what it affects. Filtering for an impossible value rather than a real one keeps the answer unambiguous and needs nothing configured per install.
+
+  The URLs come from `OnTrace`, so it reports what Keri actually sent rather than what it intended — which separates "Epicor ignored the option" from "Keri never included it." Only the path and query are printed, with the company segment of a v2 URL masked, so the output is safe to paste into an issue. It runs first, because its answer decides how to read the row counts every other read POC prints.
+
+- **A trace hook on the session.** `RestSessionKey.OnTrace` is called as each HTTP attempt completes with a `KeriTraceEvent`: method, URL, status, elapsed milliseconds, attempt number, whether a retry follows, and the error when there was one. Null by default, so nothing is traced unless you ask. Keri takes no logging dependency — wiring it to `ILogger`, Serilog or `Console.WriteLine` is one line of your code. A handler that throws is ignored rather than failing the call.
+- **`OperationResult<T>.Steps`** — what an orchestrator did on the way to a result, in order, and on a failure the step that stopped it. The trail travels with the result, so it survives being returned, logged, or handed to you by someone reporting a problem, including from inside a BPM where there is nowhere to log. Empty for single service calls, which `ResourcePath` and `ErrorMessage` already describe. Every orchestrator records it.
+
+- **A schema read, and a DTO drift report built on it.** A DTO models a subset of its Epicor table — `Part` models 51 of 397 columns, and the rest reach the caller through `ExtraData`. Which columns make that subset is the one part of maintaining a DTO that cannot be derived, and until now it rested on reading column names.
+
+  **`EpicorSvc.GetSchemaAsync(entitySet)`** asks your server. Every service has it, because it is declared once on the base class they all inherit. It reads the business object's OData `$metadata` document through the same transport as any other call — the same credentials, retry policy and trace handler — and returns an `EpicorSchema`: the columns the entity declares, each an `EpicorColumn` carrying its name, declared type, nullability, whether the schema makes it part of the entity key, and Epicor's own description. On a live install 324 of `Part`'s 397 columns arrive with that prose, 203 of `CheckHed`'s 257, and 140 of `SerialNo`'s 203. The business-object path comes from `ServiceName`, so a caller writes `client.Part.GetSchemaAsync("Parts")` without needing to know that eighteen services live under `Erp.BO.` and three under `Ice.BO.`.
+
+  A document that will not parse, or an entity set the document does not declare, is still a success: `Found` is false and `TypesPresent` lists what the document did declare. The call worked and the document arrived, so the honest report is what came back rather than a failure.
+
+  **The useful signal is whether a column is described at all.** An undescribed column is usually not a stored column: the business object adds fields no table holds — values denormalized from a related table (`VendorNumName`, `CurrencyCodeCurrSymbol`) and flags that drive a screen (`EnableVoidLN`, `BankAccountEnabled`). Epicor documents tables, so those arrive with nothing said about them. The standard user-defined columns (`Character01`, `ShortChar02`, …) are the exception: undescribed by design, because Epicor cannot document a column whose meaning each installation sets.
+
+  **`SchemaProbePoc` compares a DTO against that schema, and only reports.** It proposes nothing, writes no DTO, and asks nothing. Each column gets one word: `modelled`, `not modelled`, `key, not modelled`, `type differs`, `not in schema`, or `installation-specific`. `InDto` is read from the live type through `SelectFor<T>()` and the declared C# type by reflection, so neither annotation can drift from the code. `KERI_POC_DISCOVER=true` covers all twenty DTO-backed entity-set reads instead of one.
+
+  **`type differs` is the one difference that fails at runtime rather than quietly.** A property typed `int` where the schema declares `Edm.Decimal` truncates or throws on deserialization, where a wrong name merely reads as null. An Edm type with no settled mapping is left alone rather than guessed at, so an unfamiliar column is never called wrong.
+
+  Output is one CSV per entity in the tracked `schema` folder, so the diff between two runs is what an Epicor upgrade changed — no previous-run file, and no state of its own. Columns this installation added are counted on the console and kept out of the file, because their names describe one site rather than any installation.
+
+  **What it will not do is rank columns.** Nothing Epicor publishes says whether a described column matters. Rows are ordered so an amount's currency variants sit together — `CheckAmt`, `BankCheckAmt`, `DocCheckAmt`, `Rpt1CheckAmt` on consecutive lines — which is a fact about the sort, not a claim that modelling one implies the others.
+
+  `DTO_FIELD_SELECTION.md` is the written procedure, including the ordered tests for an undescribed column and the asymmetry that settles a tie: an unmodelled column still arrives through `ExtraData` and adding the property later is a minor release, while removing one is major. `ADDING_A_SERVICE.md` points at it from the DTO section.
+
+- **The UD table ledger.** Epicor gives every installation the same fixed set of UD tables and no screen that says which of them anyone is using, so choosing one for a new purpose means finding an empty one. `UDTableSvc.GetLedgerAsync()` reads them all and returns a `UDTableUsage` for each: the row count, and for a table in use the key columns its rows populate, the column legend from `Character10`, and the newest row's change date. `IsUnclaimed` is the answer to which are free. `GetUsageAsync(table)` reads one, and `TableNames` is the set, so a caller can narrow the read or add the child tables it leaves out.
+
+  One request per table — `$count=true` with `$top=1` — so the count and the sampled row arrive together and nothing is fetched twice. Whether this server accepts ordering on Epicor's audit column is settled once by trying it rather than by reading the wording of a rejection, because a UD table may not carry that column at all and an error message is a guess a version or a locale could break. A server that refuses still answers everything but the date.
+
+  **A table this server does not have is a success**, with `IsReadable` false and the reason in `Note`. A table nobody has claimed and a table the server will not talk about are different answers, and merging them would turn "not available here" into "free to take".
+
+  **For a table managed through Keri, the legend says what its numbered columns mean**, so the ledger shows the shape of anything set up with `BuildColumnLegend` or `[UDTableColumn]`. A table filled in by hand reports only that it is occupied. It decides nothing else: no table is called stale, because a year of quiet is abandoned in one shop and ordinary in another.
+
+- **A "Worth knowing about" section in the README**, listing the capabilities a caller would otherwise find only by reading source — the schema read, the custom-column list, typed UD tables, the column legend, the ledger, `FailureStage`, `Steps`, `OnTrace`, `ODataFilter` and `SkipDefaultSelect`. Each says what question it answers rather than what it is called.
+
+- **`RestConnect.RestTextCallAsync`** — a `protected` GET for a resource whose body is not JSON, handing it back verbatim under a property name the caller chooses. Everything else about the call is identical to `RestCallAsync`: the same URL construction, credentials, retry policy and trace events, and the same failure shape carrying `ErrorMessage`, `statusCode` and `httpResponseBody`. It exists because `$metadata` is XML while the transport parses every other response as JSON, so a caller reads a failure the same way it reads any other and no second result shape enters the library.
+
+- **A modelled column the server's schema does not declare is reported.** The comparison walks the server's columns, so a property the DTO carries that the schema never mentions was invisible to it. It now gets a row of its own, signalled `not in schema`, in both the CSV and the summary.
+
+  `$select` is built from the DTO's properties, so the column is asked for on every read of that entity and nothing comes back for it. An absence can mean the column was renamed or retired, or that this installation does not license the module that surfaces it, and the schema cannot tell those apart — check it against your own Epicor version. On this repository it found two: `QuoteDtl.UnitPrice` and `QuoteHed.JobComment`.
+
+- **`EngWorkBenchSvc.CheckInAsync` and `ApproveAndCheckInAllAsync` are public.** `AddMtlsAsync` checks the parent part out to the ECO group and leaves it checked out — which is where Epicor's own flow leaves it, since a part stays under revision until someone reviews and approves it. The orchestrators stop at that handover point on purpose. A consumer automating a full cycle needs a way to carry on past it, and until now the SDK had none: `ApproveAndCheckInAllAsync` was `internal`, and there was no check-in at all.
+
+  `CheckInAsync(groupID, partNum, revisionNum)` releases the checkout and nothing else. `ApproveAndCheckInAllAsync(groupID, auditText)` is the sign-off: it approves **every row in the group** and checks the group in, in one call — `ipPartNum` and `ipRevisionNum` are sent blank, so the scope includes any part a different process added. Its doc comment opens with **Use with caution: this is meant for automation purposes in a workflow that is proven to be reliable with extensive testing**, because approving from code removes whatever review your process expects a person to perform.
+
+  **`ipAuditText` is now a parameter.** It was hardcoded to `"ECO Group * * Import"`, which Epicor writes into the audit trail as the permanent reason for the approval — the same eleven characters for every approval by every consumer, describing nothing. It defaults to the visible placeholder `*Audit Message*` so that an unset value reads as unset rather than as a real explanation.
+
+  Both return `OperationResult<JObject>` through `HandleResponse`, like every other public method. **Neither request shape has ever been sent**: `ApproveAndCheckInAll` was wrapped but called by nothing, and `CheckIn`'s payload is inferred from `CheckOut`, its paired operation, because Epicor's metadata names the endpoint without declaring its parameters. `ipValidPassword` is left at the value each method already carried — `false` for approval, `true` for check-in — rather than guessed at.
+
+  `ApproveAndCheckInAllAsync` being `internal` while nothing called it is the case `CONTRIBUTING.md` now rules out: the test for the internal category is whether an orchestrator actually chains the method. A wrapper nothing calls is not an implementation detail, it is unexposed API.
+
+- **`ENGINEERING_WORKBENCH.md`** — every step of the three ECO orchestrators, written from the method bodies. `AddMtlsAsync` in eight steps with the Epicor call behind each, what happens to the threaded dataset, and two things a caller would otherwise get wrong: the ECO context is written as top-level properties beside the `ds` envelope rather than inside it, and the workflow assigns `MtlSeq` itself in steps of ten, ignoring whatever is on `ECOMtlInput.MtlSeq`. `AddOprsAsync`, which had no breakdown anywhere, including the convention that its source part is the text before the first space in `PartNum`, and the copy rule that skips any value parsing as decimal zero — so a source operation's genuine zero does not overwrite the template's default. `GetECOTreeAsync`, the whole flow in order, and the state each call leaves behind.
+
+  It also documents the step that is easy to miss because it lives on another service: a revision must exist before materials can be added to it, and `PartSvc.AddPartRevAsync` is what creates one.
+
+- **`SkipDefaultSelectAttribute`** — a DTO can turn off the default `$select` its entity-set reads send. `$select` exists to reduce a response to the columns a DTO can bind, which pays when the DTO is a narrow core of a wide table and stops paying when it already names nearly every column: naming them explicitly makes Epicor emit fields it otherwise omits. Measured on a live install at 25 rows, projecting `Part` onto its 52 columns returned a payload 83.1% smaller, while three DTOs modelling every column of their tables returned payloads 15.6%, 5.6% and 5.7% *larger* with the projection than without.
+
+  It changes nothing a caller asked for: an explicit `select`, or any `additionalColumns`, projects as it always did. It cannot cost a caller data — an unprojected read returns at least the columns the DTO models and often more, and the surplus lands in `ExtraData`. No DTO in this library carries it; it exists for consumers defining their own DTOs on top of `EpicorSvc`, and `ADDING_A_SERVICE.md` says when to reach for it. Covered by six tests.
+
+### Fixed
+
+- **An inner service no longer creates its own `HttpClient`.** `EngWorkBenchSvc` and `InvTransferSvc` are the only services that build another service — a `BomSearchSvc` for the source BOM in `AddOprsAsync`, a `SelectedSerialNumbersSvc` for the serial-number steps in `MoveInventoryAsync`. Both used the single-argument constructor, so the inner service built a client of its own. A caller supplying a client from `IHttpClientFactory`, or one carrying a proxy, logging or retry handler, did not get it used for those calls, and each service held a second connection pool. `EpicorClient` already passed its client to all 24 top-level services; these two inner ones were missed.
+
+  `RestConnect.HttpClient` is now `protected internal` so a derived service can hand its client across whether the caller supplied it or Keri created it, and both sites pass it unconditionally. A service receiving a client does not own it and will not dispose it — ownership stays with whoever created it. **This widens the public surface**: `protected` members are API for anyone subclassing `RestConnect`.
+
+- **Six dataset reads report a bad shape instead of throwing.** Found by scanning every service file for the defect class `ChangePartUnitPriceAsync` had: 59 envelope dereferences across 44 files, 26 without an obvious guard, six real once each was read in context.
+
+  `AddMscShpDtAsync` threaded `OnChangePartNum` and `OnChangeQuantity` without checking either, then indexed `ds["ds"]["MscShpDt"][0]`. Both return a raw `JObject` and an error-shaped response is a well-formed one, so a declined change threw `NullReferenceException` and lost Epicor's explanation. Each step is now checked before the next call and before the commit; nothing has been written at that point, so the failure is `Uncommitted`.
+
+  `ProcessSelectedSerialNumbersAsync` is **public** and takes the dataset as an argument, then dereferenced it on its first statement — so a caller passing a document without a `SerialNumberSelection` table received an `ArgumentNullException` from a library whose premise is that errors are values. It now returns a failure naming the table it expected. **This is a public behaviour change**: code catching `ArgumentNullException` around it will stop seeing one.
+
+  `AddOprsAsync` (the source BOM's `PartOpr` table and the `ECOOpr` template row), `AddPartRevAsync` (the `PartRev` table) and `GenerateGroupAsync` (the `ECOGroup` row) each dereferenced after a call that reported success, so they could only break on an HTTP 200 whose body was not the expected shape — `HandleResponse` falls through gracefully and the transport never inspects a 2xx body, so nothing upstream catches it. Each now returns a failure naming the step and the shape it wanted.
+
+  `AddMtlsAsync` already converted its populate-loop failure to a value inside a `try`/`catch`; it reported the exception. It now builds the failure with `StepFailure`, which prefers Epicor's own `ErrorMessage`, and keeps the exception attached.
+
+  **What these guards do not do is prevent a bad write.** No Epicor endpoint accepts an error object as its dataset, so a chain fed a broken one fails at the next call regardless. What changes is that the caller receives an `OperationResult` failure carrying the status, step trail and raw response, rather than an exception carrying none of them.
+
+  Covered by `MiscShipGuardTests` and `WriteOrchestratorGuardTests` — twelve tests over a scripted handler, including one pinning that a failed material still unlocks the ECO group and never reaches `Update`.
+
+- **`ChangePartUnitPriceAsync` reports a declined price change instead of throwing.** Its first step unwraps `["parameters"]` from the `ChangePartUnitPrice` response, and a response without that envelope — an unknown part, a permissions refusal, a transport failure — made `JObject.FromObject(null)` throw `ArgumentNullException`, discarding the Epicor message that explained why. It now returns a failure carrying that message, the same treatment the orchestrators received in 0.4.2 and 0.5.0. **Stopping at that point is unchanged and deliberate**: the chain must not continue on a dataset Epicor never produced. Only the way it stops is different.
+
+- **A failure crossing an orchestrator boundary no longer loses `ErrorType` and `CorrelationId`.** An orchestrator whose return type differs from the call underneath it has to re-describe that call's failure, and eleven places rebuilt it from four of its eight fields — dropping the provider error type and the correlation id, which are exactly the two the documentation tells you to branch on and to quote to whoever reads the server log. `CreateProjectAsync`, `CreateQuoteAsync`, `AddOprsAsync`, `GetUDCodeDescriptionAsync`, `TruncateAsync`, `SaveAsync`, `GetByPONumAsync`, `TestConnectionAsync` and the typed UD-table reads were affected. There is now one conversion in the codebase, and it carries message, status code, resource path, raw response, error type, correlation id, exception, commit stage and step trail.
+
+  Three places that look identical were left alone deliberately: the 404 and 409 from `GetByPONumAsync`, and `SaveAsync`'s "returned no row to populate". In each the underlying call *succeeded* and Keri is the one deciding the operation cannot continue, so there is no provider error to carry.
+
+- **Two entity-set reads no longer build a default query string past the server's limit.** IIS's default `maxQueryString` is 2,048 characters. The `$select` generated from `CheckHed` ran to 4,323 URL-encoded characters and the one from `SerialNo` to 3,260, so on a server left at that default those reads did not return a larger payload — they did not return at all. Narrowing both DTOs (below) brings them to 1,178 and 926.
+
+  A caller could always sidestep it by passing a shorter `select`, or an empty list to send no `$select` at all. What failed was the default, which is the path anyone takes first.
+
+### Changed
+
+- **`SysRevID` is `long` on nine more DTOs, and `RcvHeadAttch`'s two row identifiers are `string`.** *Breaking.* Epicor declares `SysRevID` as `Edm.Int64`, and the values it holds exceed `int.MaxValue` in ordinary use, so `JobAsmbl`, `Menu`, `OrderDtl`, `Project`, `SalesRep`, `UDCodeType`, `UDCodes`, `Vendor` and `VendorCnt` could fail to deserialize a row that the eleven DTOs already declaring `long` read without complaint. `RcvHeadAttch.SysRowID` and `ForeignSysRowID` were `Guid` where every other DTO uses `string`, which is deliberate rather than sloppy: Epicor sends an unset row identifier as an empty string, and a `Guid` property cannot bind that.
+
+  *Migration:* a local, field or parameter holding one of these widens to `long`; code that compared a `Guid` compares the string, or parses it. Nothing else about the DTOs changed.
+
+  Found by the schema report's type comparison, which flagged `JobAsmbl` and `Vendor` against a live server. The other seven carry the same Epicor column and were not in the report's target list — which is worth knowing about the report as much as about the DTOs.
+
+- **Warnings are errors on CI.** `TreatWarningsAsErrors` is set in `Directory.Build.props` under a `ContinuousIntegrationBuild` condition, and `ci.yml` passes `-p:ContinuousIntegrationBuild=true` on the build step. Unconditionally the property would turn a warning a newer Roslyn introduces into a build failure for a contributor on code they did not write, on a repository with no `global.json` pinning the SDK; conditioned, CI holds the line and a local build only warns. Add the same switch locally to reproduce a CI failure. The switch is also what SourceLink wants for deterministic path mapping, so the two travel together.
+
+- **The POCs ask before they write, and clean up after themselves where they can.** `KERI_POC_ALLOW_WRITES` was the only thing standing between running the examples and a record in Epicor. It is read once at startup, so someone who set it to watch a sales order get created had also armed every other write POC in the project — including any added later — and it stays set for the rest of their shell session. It answers "this program may write," which is not "write this, now."
+
+  Each write is now confirmed at the moment it happens, after the POC names the records it will create, the company, the endpoint, and what becomes of them afterwards. The environment variable still gates the prompts; it no longer replaces them. Declining leaves the rest of the run intact, and a redirected stdin counts as declining rather than as consent, so a scripted run never writes even when armed.
+
+  **`UDTablePoc` now offers to delete the row it created**, after pausing so you can look at it. Its `Key2` carries a timestamp, so each armed run wrote a *new* row rather than replacing the last one, and they accumulated. This also gives `UDTableSvc.DeleteByIDAsync` — the only delete Keri wraps — its first coverage anywhere. The row is never removed unasked, and never as a side effect of something else failing: on any path where the answer could not be obtained, the keys are printed and the row is left alone.
+
+  `KeriDemo` already worked this way, stating what it would write before writing it and offering to remove its rows afterwards. The POCs held a weaker standard than the demo shipped alongside them.
+
+- **`CreateOrderAsync` guards its commit like the other two creators.** If `MasterUpdate` reports success but the echoed dataset carries no `OrderNum`, the result is now a failure marked `Indeterminate` rather than a success the caller cannot read an order out of. All three `Create*` orchestrators are non-idempotent, so the case that matters is a caller seeing success, finding nothing usable, and retrying — which would create a second order. `CreateQuoteAsync` and `CreateProjectAsync` have guarded this since 0.7.0; `CreateOrderAsync` did not.
+
+  A genuinely rejected commit — a credit hold, a validation failure — is unaffected: it still reports Epicor's message, `ErrorType` and `CorrelationId`, and is classified by `ClassifyCommit` before the guard is reached.
+
+- **`EpicorRestSessionKey` moved from `Keri.Epicor.Dtos` to `Keri.Epicor`.** It is the session a caller constructs first, not a row shape, and filing it with the table DTOs meant a developer with only `using Keri.Epicor;` in scope saw nothing when they typed `new Epicor…` — and reasonably concluded the package was broken. Nothing else changed about the type.
+
+  **Migration:** add `using Keri.Epicor;`. Most code already has it for `EpicorClient` and `OperationResult<T>`, so in practice this is usually a no-op — of the 36 files in this repository that reference the type, 35 needed no change. You still need `using Keri.Epicor.Dtos;` for the row DTOs and `using Keri.RestTransport;` for `RestAuthenticationObject`; this makes the session discoverable, it does not reduce a working program to one `using`.
+
+- **`Local.targets.template` brought up to date.** The opt-in post-build DLL copy it documents still works and is unchanged, but the file had gone stale: it named `EpicorSvcs`, `RESTServices` and `FileHandling`, none of which have existed since the rename, and one of its two source globs pointed at a folder that no longer exists. A glob matching nothing expands to nothing silently, so it copied three DLLs while describing a nineteen-DLL closure. It now names the four current projects, pulls from `Keri.Files` and `Keri.Mail` as well, drops the itemised dependency list that went stale in the first place, and tells you to check the reported count — which is the only signal a broken path gives you.
+
+  `CONTRIBUTING.md` now documents the mechanism under **Testing a change against your own project**. It had been discoverable only by opening a `.template` file inside a source folder, which is not where a contributor looks for "how do I try my change in a real consumer".
+
+- **Every write returns the dataset Epicor returned.** `CreateProjectAsync` returned a `Project`; `CreateQuoteAsync` returned a hand-rolled `{QuoteNum, QuoteObj}` object with the number stringified. Both now return the saved dataset as a `JObject`, like `CreateOrderAsync` and every other write. Epicor hands back a multi-table document; projecting it to one row discards the rest, and picking one field to return means the method guessing which field you wanted. Use `ExtractDto<T>("QuoteHed")` or index the dataset to get what you need from it.
+
+  Both keep their post-commit guard: if `Update` succeeds but the saved dataset has no `QuoteNum` or no `Project` row, the result is a failure marked `Indeterminate` — the record exists, so establish what was created before retrying.
+
+  **Migration:** `CreateProjectAsync` callers reading `result.Value.ProjectID` become `result.Value.ExtractDto<Project>("Project")?.ProjectID`. `CreateQuoteAsync` callers reading `result.Value["QuoteNum"]` become `result.Value["ds"]["QuoteHed"][0]["QuoteNum"]`, now an integer rather than a string.
+
+- **All four assemblies are now strong-named.** A strong-named assembly can only reference other strong-named assemblies without a compiler warning, so an unsigned Keri meant a warning — or, for a consumer building with `TreatWarningsAsErrors`, a build failure — in any application that signs its own output. The key lives in the repository as `Keri.snk` and is applied to every project by `Directory.Build.props`. It is not a secret: strong naming in .NET is an identity mechanism, not a security one, and committing the key is what lets contributors and CI build the solution.
+
+  **Migration:** signing changes assembly identity. Rebuild against the new packages rather than dropping the assemblies in place, and update any binding redirect written against the unsigned identity. Nothing else about the API changes.
+
+- **`CheckHed` and `SerialNo` model a practical core rather than the whole table.** `CheckHed` goes from 257 properties to 84, `SerialNo` from 203 to 71. **Breaking.**
+
+  What each keeps was chosen against the column descriptions the server publishes. `CheckHed` keeps identity and posting status, the clearing and voiding state, the base and document amounts including the invoice-versus-miscellaneous split, the payee address, the payment instruction, and the vendor bank fields an electronic payment needs. `SerialNo` keeps identity and status, warehouse location, the job, vendor-receipt, shipment, order and customer links, the RMA, DMR and non-conformance references, serial formatting, and the asset and field-service links.
+
+  What each drops is reachable unchanged through `ExtraData`: for `CheckHed`, the `Rpt1/2/3*` reporting currencies, the country-specific columns (`NO*`, `SE*`, `MX*`, `TH*`, `US1099K*`, `SEPA*`), petty cash and bank reconciliation, and Epicor's denormalized join columns and screen-state flags; for `SerialNo`, the `OTS*` one-time-ship address fields, GPS and meter readings, the prior-job and labor-sequence columns, and the denormalized join columns.
+
+  **Migration:** a dropped property becomes `dto.ExtraData["ColumnName"]`, which is a `JToken` — convert it yourself, for example `(decimal?)dto.ExtraData["Rpt1CheckAmt"]`. A denormalized column is better read from the service that owns it: `VendorNumName` through `VendorSvc`, `PartNumPartDescription` through `PartSvc`, typed and current. Code referencing a dropped property fails to compile, which is the intended signal.
+
+- **Sixteen DTOs rebuilt from the server's schema.** 888 typed properties become 965: 82 added, 5 removed, 23 retyped. **Breaking** for the removals and the retypes.
+
+  Each DTO keeps its own class documentation and takes Epicor's published text as the doc comment on every property. The column set is the discovery pass's recommendation with nine additions rejected by hand — Customer's four currency-picker fields, `OrderHed.CustomerDocFound`, `POHeader.ApproveMessage`, and `RcvDtl`'s `CostPerFactor`, `ReceivedQty` and `InspectionFlag` — each of which the server's own description gives as screen state rather than record data.
+
+  **The retypes are corrections.** `SysRevID` becomes `long` on eleven DTOs, because the schema declares `Edm.Int64` and an `int` cannot hold it. `QuoteDtl.DisplaySeq` becomes `decimal`, because its own description says the decimal portion sequences kit components under their parent — which an `int` cannot represent. Six percentage and cost-base fields narrow to `int` per the schema. `SysRowID` becomes `string` on `RcvDtl` and `RcvHead`, matching the eleven other DTOs that model it.
+
+  **The removals.** `PayMethod` drops `COPayMethodDesc`, `PITypeDescription` and `TypeDescription`, all undescribed and denormalized from a column it already models. `QuoteDtl.UnitPrice` and `QuoteHed.JobComment` are not columns this server declares — the real ones are `OrderUnitPrice`, `DocUnitPrice` and `ExpUnitPrice`, and `QuoteComment` — so both were going into `$select` on every read of those entities with nothing coming back for them.
+
+  The widest generated `$select` is now `CheckHed` at 1,380 characters, against IIS's 2,048 default.
+
+  **Migration:** a dropped property becomes `dto.ExtraData["ColumnName"]`, a `JToken` you convert yourself. A retyped property fails to compile wherever the old type was assumed, which is the intended signal.
+
+- **No DTO models `BitFlag`.** **Breaking** across seventeen DTOs, and reachable as `dto.ExtraData["BitFlag"]`.
+
+  `BitFlag` packs several indicators the business object computes for its client — whether a row has memos, attachments or CRM calls — into a single integer, which is what drives the icons on a Kinetic screen. Epicor publishes no description for it and no bit layout in the schema, and the layout differs by table and by version. A typed property therefore hands a caller a number nothing in this library can explain, while every fact inside it is available typed and current from the service that owns it. A caller who knows the layout reads it from `ExtraData` with one cast.
+
+  **Migration:** `dto.BitFlag` becomes `(int?)dto.ExtraData["BitFlag"]`.
+
+- **The POCs no longer probe schemas unasked.** `SchemaProbePoc` runs as a demonstration by default — one entity, one schema read, one CSV, nothing judged and nothing scanned. The discovery pass is maintenance, and a program someone runs to see how the SDK works should not walk their disk; `KERI_POC_DISCOVER` arms it, following `KERI_POC_ALLOW_WRITES`'s convention. The gate is about surprise rather than danger: neither mode writes to Epicor, and neither writes into the source tree.
+
+## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.2 — 2026-09-23
+
+The second release candidate. Everything here is additive: rc.1 code compiles unchanged against rc.2.
+
+One `HttpClient` now serves a whole `EpicorClient` rather than one per service, you can supply your own, and transient failures are retried — with writes deliberately held back.
+
+### Added
+
+- **An `HttpClient` can be supplied.** `new EpicorClient(session, httpClient)`, and the same overload on `RestConnect`, `EpicorSvc` and every service. Pass one from `IHttpClientFactory`, or one carrying your own handlers for retry, logging, a proxy or a client certificate. Keri never disposes a client you supply, and sets no headers or timeout on it — so it can be shared with the rest of your application, and a fake handler can stand in for the server in your tests. The existing constructors are unchanged and still create and dispose a client of their own.
+- **Retry on transient failures**, configured by `RestSessionKey.Retry` (a `RetryPolicy`). Defaults: 3 attempts, exponential backoff from 200ms with jitter, capped at 5s, honoring a `Retry-After` header. A read is retried on 408, 429, 500, 502, 503 and 504, and on a network failure or timeout. **A write is retried only on 429**, where the server refused it without processing — never after a timeout, because a timed-out write may already have committed, which is what `FailureStage.Indeterminate` exists to report. `RetryWrites` extends writes to the other transient statuses; nothing extends them to timeouts. `Attempts = 1` disables retrying.
+
+### Changed
+
+- **One `HttpClient` per `EpicorClient`, instead of one per service.** Each service constructed its own, so a facade that touched five services held five connection pools to the same server. The facade now creates one and hands it to every service it builds, and disposes it with itself.
+- **Credentials go on each request** rather than on the client's default headers. Nothing changes on the wire. It is what makes one client safe to share — and to accept from a caller — and it means a refreshed `BearerToken` takes effect on the next call, where before it could not take effect at all.
+- A supplied client's own `Timeout` governs; `RestSessionKey.Timeout` applies to clients Keri creates.
+
+## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.1 — 2026-09-22
+
+The first release candidate, and the first release published to nuget.org. All four packages move to one version together: a stable package cannot depend on a prerelease one, so they are released as a set and will version independently again afterwards.
+
+This candidate settles the public API. Everything reachable from outside the packages is meant to be there; the narrowing and the renames below are the last of that work. **Breaking:** the narrowed surface and the renamed members, both source-level — recompile against the new names. Install with the prerelease flag: `dotnet add package Keri.Epicor --prerelease`.
+
+Epicor Functions are verified against a live Kinetic tenant.
+
+### Added
+
 - **`FunctionSvc`**, reachable as `EpicorClient.Function`, calls Epicor Functions. `InvokeAsync` returns the output parameters as a `JObject`; `InvokeAsync<T>` maps them onto your own type. Input parameters are passed as an object whose properties are named after them. `staged: true` calls a library's unpublished version.
 - **`RestConnect.RestCallWithModifierAsync`**, a protected method that calls a path under a different URL segment than the session's default. `FunctionSvc` uses it to reach `/api/v2/efx/`.
+- **`Emailer.Send(EmailSpecs, SmtpSettings)`** — the relay configuration is supplied per call, so `EmailSpecs` can be sent directly instead of only through `SendReport`.
 
 ### Changed
 
 - **Comments and XML docs refer to Keri as an SDK throughout.**
+- **Breaking — the public surface is narrowed ahead of 1.0.** Everything below was reachable by a consumer and is not meant to be part of the API. No documented call is affected; `EpicorSvc.NewDataset()`, the services, the DTOs and the result types are unchanged.
+  - `OperationResult<T>`'s properties are now read-only outside `Keri.Epicor`. Build results with `OperationResult<T>.Success(...)` and `OperationResult<T>.Failure(...)`, which are unchanged.
+  - `EpicorSvc`'s helpers — `EpicorSession`, `EscapeODataLiteral`, `MarkUncommitted`, `MarkIndeterminate`, `ClassifyCommit`, `StepFailure` — are internal. Services are defined inside the SDK; `EpicorSvc` is not an extension point. Use `ODataFilter.Escape` (public) for literal escaping.
+  - `RestConnect.sesh` is a protected read-only property rather than a public field, `RestConnect.RestInit` is private, and `RestConnect.UrlEncode` is protected. `RestConnect` remains subclassable for non-Epicor APIs.
+  - `Emailer.Send(EmailSpecs)` is internal; the new two-argument overload replaces it.
+- **Breaking — public names follow .NET conventions.** Source-breaking only; recompile against the new names.
+  - `SmtpSettings`: `host`, `from`, `port`, `enableSsl`, `username`, `password`, `developerEmail` are now `Host`, `From`, `Port`, `EnableSsl`, `Username`, `Password`, `DeveloperEmail`.
+  - `RestAuthenticationObject.Userkey` is now `Password`; `DynamicURLModifier_Basic` and `DynamicURLModifier_Keyed` are now `DynamicUrlModifierBasic` and `DynamicUrlModifierKeyed`.
+  - Parameter names, which callers can use as named arguments: `ExcelWriter.CreateExcelFileFromDT(dt, filePath, sheetName, headerMap)`, and `headerMap` on the `TabularRenderer` methods.
+  - `Emailer` and `ExcelWriter` are static classes. Both held only static members; neither can be instantiated now.
+  - `ExcelReader.GetAlphaFromStr`, `TabularRenderer.GetPropertyNames`, `EpicorSvc.FormatJObjectResults` and `Emailer.emailbody` are internal. They are implementation details of the methods that use them.
 
 ### Fixed
 
 - **`ECOMtl`'s doc said the DTO includes installation-specific `_c` columns.** It models standard columns only; custom columns arrive in `ExtraData`, as on every DTO.
+- **`EpicorSvc.GetActiveRowIndex` threw a `NullReferenceException`** when no row was marked `A` or `U`, though it documented a null return. It now returns null for that case, for an empty table, and for a null argument.
+- **`RestConnect.RestInit` was public**, so a second call replaced the `HttpClient` without disposing the one in flight. It is private, and the constructor remains the only caller.
+- **`Emailer.Send(EmailSpecs)` could not be used from outside the package** — the SMTP settings it reads travel in an internal member, so no caller could supply a relay host.
+- **A successful response with an empty body was reported as a failure.** The transport tried to parse the body as JSON and returned the parse error, so an HTTP 204 — or an Epicor Function with no output parameters — looked like a failed call. An empty body on a success status is now an empty object.
+- **`FunctionSvc` sent calls it knew would be refused.** Functions are served by REST v2, which requires an API key; on a Basic-only session the call went out and came back as HTTP 403. It now fails before the request, saying which setting is missing.
 
 ## Keri.RestTransport 0.5.0 / Keri.Epicor 0.9.0 / Keri.Files 0.7.0 / Keri.Mail 0.7.0 — 2026-09-21
 
@@ -770,7 +974,6 @@ Configuration moves out of the libraries into a dedicated composition root. `Epi
 - **`DeleteByIDAsync<T>(T dto, string UDTable, …)` — typed-DTO single-row delete.** Completes the typed-DTO surface for the destructive path, alongside the existing `SaveAsync<T>`, `GetByIDAsync<T>`, and `QueryAsync<T>`. Reads the DTO's mapped `Key1`–`Key5` values through the existing `UDTableMapping<T>` infrastructure and delegates to the raw five-string `DeleteByIDAsync`. Keys the DTO does not map flow through as null and are coalesced to empty strings at the wire. `UDTable` is required with no default, consistent with the destructive-operation rule and with the raw method it wraps. Constrained `where T : class, new()`, matching the other typed wrappers.
 
 ---
-
 
 ### Added
 
