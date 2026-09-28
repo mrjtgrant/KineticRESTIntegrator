@@ -64,6 +64,20 @@ namespace Keri.Epicor
             get { return Columns != null && Columns.Count > 0; }
         }
 
+        /// <summary>
+        /// The columns this installation added, by Epicor's <c>_c</c> convention.
+        /// </summary>
+        /// <remarks>
+        /// No DTO in this library models one — the column exists on the install that
+        /// created it and nowhere else. These are the names to pass in
+        /// <c>additionalColumns</c> on an entity-set read, or to read out of a DTO's
+        /// <c>ExtraData</c>. Nothing else in the package can tell you what they are.
+        /// </remarks>
+        public IEnumerable<EpicorColumn> InstallationSpecific
+        {
+            get { return Columns.Where(c => c.IsInstallationSpecific); }
+        }
+
         /// <summary>Finds one column by name, case-insensitively, or null.</summary>
         /// <param name="name">The column name to look for.</param>
         public EpicorColumn Column(string name)

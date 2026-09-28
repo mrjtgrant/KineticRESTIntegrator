@@ -414,6 +414,35 @@ A few conventions hold across the SDK:
 - **`_c` columns flow through `ExtraData`.** Default DTOs model only standard Epicor columns — per-installation custom columns (Epicor's `_c` suffix convention) aren't typed because they're installation-specific by definition. They are still preserved: every Epicor-table DTO carries an `ExtraData` dictionary that captures any JSON property the typed properties don't consume. On a **list read**, name the custom column in `additionalColumns` (`await part.PartsAsync(additionalColumns: new[] { "WarrantyPeriod_c" })`) and it rides back in `ExtraData`; a **`GetByID`** read pulls the whole row, so every `_c` and UD column is there automatically. To write one: `part.ExtraData["WarrantyPeriod_c"] = 12;` — the value rides along when the DTO is serialized. The standard user-defined columns (`Character01`, `ShortChar01`, `Number01`, `CheckBox01`, etc.) remain typed since they exist on every install. `RawResponse` is still available for data that isn't on a row at all — nested child tables in a multi-table response, or the wide `GetByID` dataset.
 - **Dataset writes start from `NewDataset()`.** A create/modify flow (`GetNew*` → populate → `Update`) begins with `NewDataset()` on `EpicorSvc`, which returns a fresh `{"ds":{}}` envelope on every call — it's a method, not a shared field, so concurrent flows never alias one object. The full lifecycle is in [CONTRIBUTING.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/CONTRIBUTING.md#the-dataset-envelope-ds).
 
+### Finding your installation's custom columns
+
+`ExtraData` and `additionalColumns` both need a column's exact name, and nothing in this package knows what your installation added. Your server does.
+
+`GetSchemaAsync` reads a business object's OData schema and returns what that server declares for one entity set — every column, its type, whether it is part of the key, and Epicor's own description of it.
+
+```csharp
+using (var epicor = new EpicorClient(session))
+{
+    var schema = await epicor.Part.GetSchemaAsync("Parts");
+    if (schema.IsFailure)
+    {
+        Console.WriteLine(schema.ErrorMessage);
+        return;
+    }
+
+    foreach (EpicorColumn c in schema.Value.InstallationSpecific)
+        Console.WriteLine($"{c.Name,-32} {c.EdmType,-20} {c.Description}");
+}
+```
+
+`InstallationSpecific` is the columns whose names end in `_c` — the ones your installation added, which no shared DTO can model. Those names are what you pass to `additionalColumns` on a list read, or read out of `ExtraData`.
+
+Every service has the method; it is declared on the base class they all inherit. The entity set is the one you read, spelled as Epicor spells it: `Parts`, `Customers`, `POes`, `PaymentEntries`.
+
+The same call answers other questions about a server you do not control. `Columns` is everything the entity declares, `Column("PartNum")` finds one by name, and `IsDescribed` says whether Epicor documented it — stored columns generally carry prose, while the fields a business object adds to its dataset arrive with nothing said about them.
+
+A schema document that will not parse, or an entity set this server does not declare, is still a success: `Found` is false and `TypesPresent` lists what the document did declare.
+
 ### Public methods, orchestrators, and extending Keri
 
 Public methods come in two kinds: generic primitives (`GetByIDAsync`, `UpdateAsync`, `GetRowsAsync<T>`, `GetNew*Async`, and table-name reads like `PartsAsync`), and **orchestrators** in `*Svc.Workflows.cs` (`NewOrderAsync`, `AddMtlsAsync`, …) that compose several BO calls into one operation. For any multi-step operation the orchestrator is the entry point — from a caller's perspective, it *is* the operation.
