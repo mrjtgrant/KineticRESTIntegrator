@@ -79,6 +79,11 @@ namespace KeriPocs
             Probe configured = await RunProbe(client, configuredLabel).ConfigureAwait(false);
             Report(configuredLabel, configured);
 
+            // Asked here rather than at the end, because the answer matters most
+            // on the session shape that turns out not to be OData — and the paths
+            // below return early on exactly those.
+            await ProbeCountAsync(client).ConfigureAwait(false);
+
             if (!apiKeySet)
             {
                 // Already the shape the question is about. The other half would
@@ -132,6 +137,77 @@ namespace KeriPocs
             }
 
             await MeasureSelectSavingAsync(client).ConfigureAwait(false);
+        }
+
+        // -----------------------------------------------------------------
+        // Does this session answer $count?
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Asks whether this session reports a row count, and says what came back
+        /// rather than assuming an answer.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// OData v4 answers "how many rows" two ways. <c>$count=true</c> alongside
+        /// the collection puts <c>@odata.count</c> in the JSON; a <c>/$count</c>
+        /// path segment returns a bare integer as plain text. Only the first is
+        /// reachable from a POC — the plain-text form needs a transport call that
+        /// does not parse the body as JSON, and that one is <c>protected</c>.
+        /// </para>
+        /// <para>
+        /// <b>Why it is worth asking.</b> A report of which UD tables are unused
+        /// has to tell an empty table from an occupied one, and a count answers
+        /// that without transferring any rows. If the count is unavailable, the
+        /// question still has an answer — read one row — but the number does not.
+        /// On a session whose endpoints are not OData, neither form works, which
+        /// is the same finding this POC already reports for <c>$filter</c>.
+        /// </para>
+        /// <para>
+        /// <c>PayMethod</c> again, and for the same reason: small enough that a
+        /// disregarded <c>$top=0</c> costs a handful of rows rather than a table.
+        /// </para>
+        /// </remarks>
+        private static async Task ProbeCountAsync(EpicorClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine("  DOES THIS SESSION ANSWER $count?");
+            Console.WriteLine();
+
+            // Spelled out rather than derived: ServiceName is protected, and this
+            // is the one service this POC already reads.
+            const string resource = "Erp.BO.PayMethodSvc/PayMethods?$count=true&$top=0";
+
+            JObject response = await client.PayMethod
+                .RestCallAsync(resource)
+                .ConfigureAwait(false);
+
+            if (response["ErrorMessage"] != null)
+            {
+                Console.WriteLine($"    the read failed: {(string)response["ErrorMessage"]}");
+                Console.WriteLine("    No count from this session. Reading one row is the way to tell an");
+                Console.WriteLine("    empty table from an occupied one.");
+                return;
+            }
+
+            JToken count = response["@odata.count"] ?? response["odata.count"];
+            int rows = (response["value"] as JArray)?.Count ?? -1;
+
+            if (count == null)
+            {
+                Console.WriteLine("    no @odata.count in the response.");
+                Console.WriteLine($"    $top=0 returned {rows} row(s), so that option was "
+                                + (rows == 0 ? "honoured." : "dropped."));
+                Console.WriteLine("    No count from this session. Reading one row still distinguishes an");
+                Console.WriteLine("    empty table from an occupied one; the number is what is unavailable.");
+                return;
+            }
+
+            Console.WriteLine($"    @odata.count = {(string)count}");
+            Console.WriteLine($"    $top=0 returned {rows} row(s).");
+            Console.WriteLine();
+            Console.WriteLine("    A count is available. ?$count=true&$top=0 answers how many rows a");
+            Console.WriteLine("    table holds in one read, without transferring them.");
         }
 
         // -----------------------------------------------------------------
