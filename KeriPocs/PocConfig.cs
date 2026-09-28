@@ -87,6 +87,22 @@ namespace KeriPocs
         /// </remarks>
         public static bool DiscoverDtos { get; } = ReadFlag(DiscoverEnvVar);
 
+        private const string UDLedgerEnvVar = "KERI_POC_UDLEDGER";
+
+        /// <summary>
+        /// True when the UD ledger reads every UD table rather than a sample.
+        /// Read from the <c>KERI_POC_UDLEDGER</c> environment variable at first
+        /// access.
+        /// </summary>
+        /// <remarks>
+        /// Fifty-one read-only round trips rather than ten. The gate is about
+        /// the cost of the run, not about danger: the question the ledger
+        /// answers — which UD tables are unclaimed — needs all of them, so arm it
+        /// when that is the question and leave it off when the point is to see
+        /// how the SDK works.
+        /// </remarks>
+        public static bool UDLedger { get; } = ReadFlag(UDLedgerEnvVar);
+
         private static bool ReadFlag(string variable)
         {
             string raw = Environment.GetEnvironmentVariable(variable);

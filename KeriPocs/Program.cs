@@ -71,6 +71,7 @@ namespace KeriPocs
                     await SafeRun("UserCodes", () => UserCodesPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("Part",      () => PartPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("UDTable",       () => UDTablePoc.RunAsync(client)).ConfigureAwait(false);
+                    await SafeRun("UDLedger",  () => UDLedgerPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("SalesOrder", () => SalesOrderPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("JobEntry",  () => JobEntryPoc.RunAsync(client)).ConfigureAwait(false);
                     await SafeRun("MenuTree",  () => MenuTreePoc.RunAsync(client)).ConfigureAwait(false);
