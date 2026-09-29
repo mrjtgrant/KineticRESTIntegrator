@@ -84,7 +84,13 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 - **The schema parser has a suite.** `SchemaParserTests` drives `ParseCsdl` with CSDL written by hand: resolution through the entity-set container and by type name, keys and their casing, Epicor's descriptions and the elements they fall back to, a foreign OData namespace, and the bodies a server should never send — truncated XML, JSON, nothing at all. A live server serves one version's idea of a well-formed document and will not produce a missing key or a truncated body on request, which is why the fixtures are written rather than captured.
 
+- **`RestConnect.RestTextCallAsync` is public.** It GETs a resource whose body is not JSON — an OData `$metadata` document, a CSV export, a plain-text endpoint — and returns it verbatim under a property of the returned `JObject`, `body` unless the caller names another. Everything else matches `RestCallAsync`: the same URL construction, credentials, retry policy and trace events, and the same failure shape carrying `ErrorMessage`, `statusCode` and `httpResponseBody`, so a failure reads the same way every other failure does and no second result shape enters the library. `GetSchemaAsync` is built on it, and reaching a non-JSON endpoint of your own no longer means subclassing `RestConnect`.
+
 ### Fixed
+
+- **An Epicor Function output parameter named `payload` is no longer deleted.** `FunctionSvc.Outputs` stripped both `resource` and `payload` from every response before mapping it to the caller's type. The transport adds `resource` to every response, but adds `payload` only to a failure that carried a request body — so on a successful call a `payload` property could only be the function's own output, and it was removed anyway. The call reported success with a value silently missing, which is the worst shape a defect can take. It is now removed only when the response carries an `ErrorMessage`.
+
+  A function whose output parameter is named `resource` still collides with the property the transport adds to every response, and is not reachable through this method. That is now stated on `Outputs`.
 
 - **An inner service no longer creates its own `HttpClient`.** `EngWorkBenchSvc` and `InvTransferSvc` are the only services that build another service — a `BomSearchSvc` for the source BOM in `AddOprsAsync`, a `SelectedSerialNumbersSvc` for the serial-number steps in `MoveInventoryAsync`. Both used the single-argument constructor, so the inner service built a client of its own. A caller supplying a client from `IHttpClientFactory`, or one carrying a proxy, logging or retry handler, did not get it used for those calls, and each service held a second connection pool. `EpicorClient` already passed its client to all 24 top-level services; these two inner ones were missed.
 
@@ -121,6 +127,10 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
   Resolving a near-miss instead returns another entity's columns under the name that was asked for, and nothing in the result says which entity they came from. Reporting the miss costs a caller one more call; guessing costs a wrong schema that reads as a right one.
 
   `SchemaParser.ParseCsdl` takes the name alone and `EpicorSvc.Singularize` is gone. Both are internal; `GetSchemaAsync`'s signature is unchanged.
+
+- **Five public names corrected.** *Breaking against 1.0.0-rc.3.* `ExcelWriter.CreateExcelFileFromDT` is `Write`: the class already says Excel and Writer, and the parameter type already says `DataTable`. `TabularRenderer.ConvertJArrayToCSV` and `ConvertJArrayToHTMLTable` are `ToCsv` and `ToHtmlTable` — .NET capitalizes two-letter acronyms and not longer ones, and naming the input type in the method repeats what the signature states. `RestConnect.sesh` is `Session`; it is `protected`, so it is API for anyone subclassing the transport, and abbreviated slang is not what that reader should meet. `GenxDataSvc` and `EpicorClient.GenxData` are `GenXDataSvc` and `GenXData`, matching the `GenXData` DTO and Epicor's own `Ice.BO.GenXDataSvc` — a caller was writing `client.GenxData.GenXDatasAsync(...)`, spelling one word two ways on one line.
+
+  *Migration:* each is a rename with no behaviour change; the compiler names every site.
 
 - **`SysRevID` is `long` on nine more DTOs, and `RcvHeadAttch`'s two row identifiers are `string`.** *Breaking.* Epicor declares `SysRevID` as `Edm.Int64`, and the values it holds exceed `int.MaxValue` in ordinary use, so `JobAsmbl`, `Menu`, `OrderDtl`, `Project`, `SalesRep`, `UDCodeType`, `UDCodes`, `Vendor` and `VendorCnt` could fail to deserialize a row that the eleven DTOs already declaring `long` read without complaint. `RcvHeadAttch.SysRowID` and `ForeignSysRowID` were `Guid` where every other DTO uses `string`, which is deliberate rather than sloppy: Epicor sends an unset row identifier as an empty string, and a `Guid` property cannot bind that.
 

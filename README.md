@@ -344,7 +344,7 @@ using (var epicorClient = new EpicorClient(session))   // the session built abov
 }
 ```
 
-Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenxData`, `UDTable`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Receipt`, `Quote`, `SalesOrder`.
+Services available on the facade: `BAQ`, `Menu`, `UserCodes`, `GenXData`, `UDTable`, `Project`, `Customer`, `Vendor`, `Part`, `SalesRep`, `PayMethod`, `PaymentEntry`, `SerialNo`, `MiscShip`, `SelectedSerialNumbers`, `InvTransfer`, `BomSearch`, `EngWorkBench`, `JobEntry`, `PO`, `Receipt`, `Quote`, `SalesOrder`.
 
 Direct service construction (`new BAQSvc(...)`, etc.) is the underlying pattern — `EpicorClient` is a convenience wrapper over it, not a replacement. Each service is its own complete, disposable unit: open a `using` block and call as many methods on it as the workflow needs, or stack `using` blocks across several services when you want explicit control over scope. Reach for `EpicorClient` when an orchestrator touches several services together and the stack-of-`using`-blocks shape is getting repetitive; reach for direct construction otherwise. See [EXAMPLES_EPICOR.md — Using a single service directly](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#2-using-a-single-service-directly) for the patterns.
 
@@ -669,7 +669,7 @@ KineticRESTIntegrator/
 │   ├── Purchasing/                  POSvc, ReceiptSvc
 │   ├── Inventory/                   InvTransferSvc, MiscShipSvc, SerialNoSvc, SelectedSerialNumbersSvc
 │   ├── MasterData/                  CustomerSvc, PartSvc, SalesRepSvc, VendorSvc
-│   ├── Platform/                    BAQSvc, FunctionSvc, GenxDataSvc, MenuSvc, ProjectSvc, UDTableSvc, UserCodesSvc
+│   ├── Platform/                    BAQSvc, FunctionSvc, GenXDataSvc, MenuSvc, ProjectSvc, UDTableSvc, UserCodesSvc
 │   ├── AR/                          PayMethodSvc, PaymentEntrySvc
 │   └── Keri.Epicor.csproj
 │       Services with multi-step operations have a companion

@@ -569,19 +569,34 @@ namespace Keri.RestTransport
         /// <paramref name="rawBodyProperty"/>.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Everything else about the call is identical to
         /// <see cref="RestCallAsync"/>: the same URL construction, credentials,
         /// retry policy and trace events, and the same failure shape carrying
         /// <c>ErrorMessage</c>, <c>statusCode</c> and <c>httpResponseBody</c>. A
         /// caller therefore reads a failure the same way it reads any other, and
         /// no second result shape enters the library.
+        /// </para>
+        /// <para>
+        /// On success the document is the result's only content, beside the
+        /// <c>resource</c> the call reached. The transport cannot know what the
+        /// document is, so the caller names the property it arrives under.
+        /// </para>
+        /// <example>
+        /// <code>
+        /// JObject result = await RestTextCallAsync("Erp.BO.PartSvc/$metadata");
+        /// string xml = (string)result["body"];
+        /// </code>
+        /// </example>
         /// </remarks>
         /// <param name="svc">Service path appended after the session's URL modifier.</param>
-        /// <param name="rawBodyProperty">The property name to carry the body under.</param>
+        /// <param name="rawBodyProperty">
+        /// The property name to carry the body under. Defaults to <c>body</c>.
+        /// </param>
         /// <param name="ct">Cancellation token.</param>
-        protected async Task<JObject> RestTextCallAsync(
+        public async Task<JObject> RestTextCallAsync(
             string svc,
-            string rawBodyProperty,
+            string rawBodyProperty = "body",
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(rawBodyProperty))

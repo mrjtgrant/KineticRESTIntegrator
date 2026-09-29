@@ -192,11 +192,24 @@ namespace Keri.Epicor
         }
 
         /// <summary>The response without the transport's own properties.</summary>
+        /// <remarks>
+        /// <para>
+        /// The transport adds <c>resource</c> to every response, and <c>payload</c>
+        /// only to a failure that carried a request body. So a <c>payload</c>
+        /// property on a successful response is a function's own output parameter,
+        /// and removing it would delete the caller's data.
+        /// </para>
+        /// <para>
+        /// A function whose output parameter is named <c>resource</c> collides with
+        /// the transport's property and is not reachable through this method.
+        /// </para>
+        /// </remarks>
+        /// <param name="response">The transport's response.</param>
         internal static JObject Outputs(JObject response)
         {
             var outputs = (JObject)response.DeepClone();
             outputs.Remove("resource");
-            outputs.Remove("payload");
+            if (response["ErrorMessage"] != null) outputs.Remove("payload");
             return outputs;
         }
     }
