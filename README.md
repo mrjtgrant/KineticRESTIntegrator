@@ -400,6 +400,7 @@ The `OperationResult` also carries:
 - `ErrorType` — Epicor's fully-qualified exception class (e.g. `Ice.Common.RecordNotFoundException`). Branch on this rather than matching `ErrorMessage` text
 - `CorrelationId` — Epicor's per-call id, for matching a failure to a server-side log entry
 - `FailureStage` — on a failure from a multi-step orchestrator, which side of the commit it landed on: `Uncommitted` means nothing was written and the call can be retried as-is; `Indeterminate` means a commit was attempted and a record may exist, so establish what exists before retrying. Null on success, and null on any method without a commit boundary. See [EXAMPLES_EPICOR.md](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#deciding-whether-a-failed-orchestrator-is-safe-to-retry)
+- `Steps` — on an orchestrator, what it did before it returned, in order. It travels with the result, including into a BPM where there is nowhere to log. Like `ResourcePath`, it carries your data: step text names part numbers, customer IDs, bin numbers and quantities, so decide deliberately what your logs keep.
 
 ### Datasets and DTOs — which one you get, and why
 

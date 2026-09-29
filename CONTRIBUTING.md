@@ -185,6 +185,8 @@ Typed DTOs live in `Keri.Epicor/Dtos/` (Epicor business-object models), `Keri.Fi
 - **Property names match Epicor column names exactly**, including case. `Sequence` not `Seq`, `CustID` not `CustomerID`. A mismatch produces silent zero/null binding — there is no compiler check.
 - **XML doc comments on every public property.** The full XML doc convention is enforced project-wide; see existing DTOs for the expected level of detail.
 
+**A schema run describes the server it ran against.** `KeriPocs` writes one CSV per entity into `schema/` from whichever Epicor it connected to — that installation's version, its licensed modules, the columns it happens to have. A column the report marks `not in schema` may be one Epicor retired, or one that install does not license, and nothing in the output separates those. So a run against your server is the start of a discussion about a DTO. A change to a shipped DTO needs a reason that holds on any install, and the committed `schema/` baseline is what a maintainer compares against.
+
 ### XML doc comments
 
 Every public method, property, class, and DTO carries `/// <summary>` documentation. Include `<remarks>`, `<example>`, `<param>`, `<returns>` where they add real information. Skip them where they'd just restate the obvious — but err on the side of documenting.
