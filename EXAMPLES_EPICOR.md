@@ -609,6 +609,9 @@ using Newtonsoft.Json;
 
 using (var epicorClient = KeriConfig.BuildEpicorClient())
 {
+    // Choose the target UD table for this service instance.
+    epicorClient.UDTable.UDTableDefault = "UD22";
+
     var count = new CycleCount
     {
         Category      = "KERI_EXAMPLE",
@@ -623,7 +626,7 @@ using (var epicorClient = KeriConfig.BuildEpicorClient())
     Console.WriteLine(JsonConvert.SerializeObject(count, Formatting.Indented));
 
     // Upsert. Automatic mode updates the row if it exists, otherwise adds it.
-    var result = await epicorClient.UDTable.SaveAsync("UD22", count);
+    var result = await epicorClient.UDTable.SaveAsync(count);
 
     if (result.IsFailure)
     {
@@ -909,7 +912,7 @@ listing every error in one message — fix all of them in one pass.
 
 | Method | Returns | Purpose |
 |---|---|---|
-| `SaveAsync<T>(udTable, row, mode)` | `OperationResult<JObject>` | Map `row` to a `UDRow` and save it (default `RowMod.Automatic` upsert; pass a `mode` to force add/update/delete). Same `OperationResult<JObject>` contract as the rest of the library. |
+| `SaveAsync<T>(row, mode, udTable)` | `OperationResult<JObject>` | Map `row` to a `UDRow` and save it (default `RowMod.Automatic` upsert; pass a `mode` to force add/update/delete). Same `OperationResult<JObject>` contract as the rest of the library. |
 | `GetByIDAsync<T>(keys, udTable)` | `OperationResult<T>` | Pass a `T` with key properties populated; receive a `T` reconstructed from the row. |
 | `QueryAsync<T>(filter, udTable, top)` | `OperationResult<List<T>>` | Pass a `T` with key properties populated (or `null`); receive matching rows projected to `T`. |
 | `DeleteByIDAsync<T>(keys, udTable)` | `OperationResult<JObject>` | Pass a `T` with key properties populated; delete the matching row. `udTable` is required — there is no `UDTableDefault` fallback for a destructive call. |

@@ -280,7 +280,7 @@ namespace KeriDemo
                     Console.WriteLine($"Writing {snapshots.Count} rows to {demoTable}...");
                     foreach (var snap in snapshots)
                     {
-                        var save = await epicor.UDTable.SaveAsync(demoTable, snap).ConfigureAwait(false);
+                        var save = await epicor.UDTable.SaveAsync(snap, UDTable: demoTable).ConfigureAwait(false);
                         if (save.IsFailure)
                         {
                             Console.WriteLine($"  write failed for part {snap.PartNum}: {save.ErrorMessage}");

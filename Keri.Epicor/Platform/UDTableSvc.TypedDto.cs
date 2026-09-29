@@ -68,14 +68,14 @@ namespace Keri.Epicor
         /// The user's DTO type. Must have a public parameterless
         /// constructor.
         /// </typeparam>
-        /// <param name="UDTable">
-        /// The target UD table. When null, <see cref="UDTableDefault"/>
-        /// is used.
-        /// </param>
         /// <param name="row">The DTO to save.</param>
         /// <param name="mode">
         /// The row operation. <see cref="Dtos.RowMod.Automatic"/> (the default)
         /// updates the row if it exists and adds it otherwise.
+        /// </param>
+        /// <param name="UDTable">
+        /// The target UD table. When null, <see cref="UDTableDefault"/>
+        /// is used.
         /// </param>
         /// <param name="ct">Cancellation token.</param>
         /// <returns>The raw Epicor response wrapped in an
@@ -94,9 +94,9 @@ namespace Keri.Epicor
         /// 50 for <c>Key*</c>).
         /// </exception>
         public async Task<OperationResult<JObject>> SaveAsync<T>(
-            string UDTable,
             T row,
             Dtos.RowMod mode = Dtos.RowMod.Automatic,
+            string UDTable = null,
             CancellationToken ct = default) where T : class, new()
         {
             if (row == null) throw new ArgumentNullException(nameof(row));
