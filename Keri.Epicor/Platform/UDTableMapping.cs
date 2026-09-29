@@ -108,6 +108,10 @@ namespace Keri.Epicor
         private readonly List<MappedColumn> _columns;
         private readonly bool _character10Mapped;
 
+        // The legend written into Character10 when the DTO does not own the
+        // column. Fixed by the mapping, so it is built and length-checked once.
+        private readonly string _legend;
+
         // ExtraData support — populated only when the DTO declares a property
         // with [JsonExtensionData] and the right shape. Null otherwise.
         private readonly PropertyInfo _extraDataProperty;
@@ -238,6 +242,28 @@ namespace Keri.Epicor
                 extraDataProp = prop;
             }
 
+            // The legend is decided by the mapping, not by any row's data, so
+            // its length is knowable here. Character10 holds 1000 characters and
+            // a wide DTO can exceed that — the caller finds out on first use,
+            // with the way out named, rather than on a save.
+            bool character10Mapped = columnsSeen.Contains("Character10");
+            string legend = string.Empty;
+            if (!character10Mapped && mappedColumns.Count > 0)
+            {
+                var legendMap = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var col in mappedColumns)
+                    legendMap[col.ColumnName] = col.ModelProperty.Name;
+
+                legend = UDTableSvc.BuildShorthandLegend(legendMap);
+
+                if (legend.Length > CharacterCapacity)
+                    errors.Add(string.Format(
+                        "The column legend for this DTO is {0} characters and Character10 holds {1}. " +
+                        "Map a property to Character10 with [UDTableColumn(\"Character10\")] and write " +
+                        "the legend you want.",
+                        legend.Length, CharacterCapacity));
+            }
+
             if (errors.Count > 0)
             {
                 string typeName = typeof(TModel).FullName ?? typeof(TModel).Name;
@@ -247,7 +273,8 @@ namespace Keri.Epicor
             }
 
             _columns = mappedColumns;
-            _character10Mapped = mappedColumns.Any(m => m.ColumnName == "Character10");
+            _character10Mapped = character10Mapped;
+            _legend = legend;
             _extraDataProperty = extraDataProp;
             _udRowColumnNames = new HashSet<string>(udRowProps.Keys, StringComparer.Ordinal);
         }
@@ -301,19 +328,9 @@ namespace Keri.Epicor
                 col.UDRowProperty.SetValue(row, value);
             }
 
-            // Auto-emit Character10 legend when the DTO doesn't own it.
+            // Built and length-checked when the mapping was made.
             if (!_character10Mapped)
-            {
-                var legend = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var col in _columns)
-                {
-                    // Skip Character10 itself in the legend (it IS the legend).
-                    if (col.ColumnName == "Character10")
-                        continue;
-                    legend[col.ColumnName] = col.ModelProperty.Name;
-                }
-                row.Character10 = UDTableSvc.BuildColumnLegend(legend);
-            }
+                row.Character10 = _legend;
 
             // Flow user-DTO ExtraData entries through to UDRow.ExtraData so
             // install-specific custom columns (e.g. _c suffix) are emitted on

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -29,6 +30,14 @@ namespace Keri.Epicor
         /// convention. Fixed by design.
         /// </summary>
         private const char LegendKeyValueSeparator = ':';
+
+        /// <summary>
+        /// Marks a legend written in the short column form — <c>S1</c> for
+        /// <c>ShortChar01</c>, <c>N3</c> for <c>Number03</c>, and so on. A legend
+        /// without it is read exactly as written, so a legend a caller put in
+        /// <c>Character10</c> by hand is never reinterpreted.
+        /// </summary>
+        private const char LegendShorthandMarker = '~';
 
         // ---------------------------------------------------------------
         // Public utility helpers — column-legend convenience methods
@@ -76,7 +85,13 @@ namespace Keri.Epicor
             if (string.IsNullOrWhiteSpace(character10))
                 return map;
 
-            foreach (string pair in character10.Split(LegendPairSeparator))
+            // A leading marker says the columns are in short form. Without it
+            // the string is read exactly as written.
+            string body = character10.Trim();
+            bool shorthand = body[0] == LegendShorthandMarker;
+            if (shorthand) body = body.Substring(1);
+
+            foreach (string pair in body.Split(LegendPairSeparator))
             {
                 int sep = pair.IndexOf(LegendKeyValueSeparator);
                 if (sep < 0)
@@ -86,6 +101,10 @@ namespace Keri.Epicor
                 string meaning = pair.Substring(sep + 1).Trim();
                 if (column.Length == 0)
                     continue; // empty column name — malformed, skip
+
+                // An unrecognized short key is left as the caller wrote it
+                // rather than guessed at.
+                if (shorthand) column = LongColumnName(column) ?? column;
 
                 map[column] = meaning; // last write wins on duplicates
             }
@@ -123,5 +142,110 @@ namespace Keri.Epicor
 
             return string.Join(LegendPairSeparator.ToString(), pairs);
         }
+        // ---------------------------------------------------------------
+        // Short column form
+        //
+        // A legend spends most of its length naming columns: ShortChar01 is
+        // eleven characters to say what two can. Character10 holds 1000, and a
+        // DTO that maps enough columns can exceed it, so the typed-DTO path
+        // writes the short form and marks it.
+        // ---------------------------------------------------------------
+
+        private static readonly Dictionary<char, string> LegendFamilies =
+            new Dictionary<char, string>
+            {
+                { 'K', "Key" },
+                { 'C', "Character" },
+                { 'S', "ShortChar" },
+                { 'N', "Number" },
+                { 'D', "Date" },
+                { 'B', "CheckBox" },
+            };
+
+        /// <summary>How many columns Epicor provides in a family.</summary>
+        private static int LegendFamilySize(string family)
+        {
+            if (family == "Key") return 5;
+            if (family == "Character") return 10;
+            return 20;
+        }
+
+        /// <summary>
+        /// The short form of a UD column name — <c>ShortChar01</c> to <c>S1</c>
+        /// — or null when the name is not one of Epicor's UD columns.
+        /// </summary>
+        /// <param name="column">The full column name.</param>
+        internal static string ShortColumnName(string column)
+        {
+            if (string.IsNullOrEmpty(column)) return null;
+
+            foreach (KeyValuePair<char, string> family in LegendFamilies)
+            {
+                if (column.Length <= family.Value.Length) continue;
+                if (!column.StartsWith(family.Value, StringComparison.Ordinal)) continue;
+
+                int index;
+                if (!int.TryParse(column.Substring(family.Value.Length), NumberStyles.None,
+                                  CultureInfo.InvariantCulture, out index))
+                    continue;
+
+                if (index < 1 || index > LegendFamilySize(family.Value)) continue;
+
+                return family.Key.ToString() + index.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The full UD column name behind a short one — <c>S1</c> to
+        /// <c>ShortChar01</c> — or null when the key is not short form.
+        /// </summary>
+        /// <param name="shortKey">The short key.</param>
+        internal static string LongColumnName(string shortKey)
+        {
+            if (string.IsNullOrEmpty(shortKey) || shortKey.Length < 2) return null;
+
+            string family;
+            if (!LegendFamilies.TryGetValue(shortKey[0], out family)) return null;
+
+            int index;
+            if (!int.TryParse(shortKey.Substring(1), NumberStyles.None,
+                              CultureInfo.InvariantCulture, out index))
+                return null;
+
+            if (index < 1 || index > LegendFamilySize(family)) return null;
+
+            // Key1–Key5 are single-digit; every other family is zero-padded.
+            return family + (family == "Key"
+                ? index.ToString(CultureInfo.InvariantCulture)
+                : index.ToString("00", CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>
+        /// Builds a legend in the short column form, marked so
+        /// <see cref="ParseColumnLegend"/> expands it back.
+        /// </summary>
+        /// <remarks>
+        /// A column name this does not recognize is written as given, so a map
+        /// carrying a caller's own key still round-trips.
+        /// </remarks>
+        /// <param name="legend">A map of column name to meaning.</param>
+        internal static string BuildShorthandLegend(IDictionary<string, string> legend)
+        {
+            if (legend == null || legend.Count == 0) return string.Empty;
+
+            var shortened = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, string> entry in legend)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Key)) continue;
+                string key = entry.Key.Trim();
+                shortened[ShortColumnName(key) ?? key] = entry.Value;
+            }
+
+            string body = BuildColumnLegend(shortened);
+            return body.Length == 0 ? string.Empty : LegendShorthandMarker + body;
+        }
+
     }
 }

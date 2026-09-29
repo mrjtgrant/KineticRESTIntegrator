@@ -914,10 +914,21 @@ is hard to organize or query later.
 
 When your typed DTO does *not* map a property to `Character10`, the
 mapper writes a column-legend string into `Character10` on save —
-**every mapped column, the keys included** — something like
-`"Key1:Category|Key2:OrderNum|ShortChar01:CustomerName"`. This lets
-someone opening the row in Epicor's UI see what each generic column
-means in this row's shape.
+**every mapped column, the keys included** — in a short column form
+marked with a leading `~`, something like
+`"~K1:Category|K2:OrderNum|S1:CustomerName"`. `ParseColumnLegend`
+expands it back to full column names. The short form is there because
+`Character10` holds 1000 characters and the full names spend most of
+them: `ShortChar01` is eleven characters to say what two can.
+
+A legend without the `~` is read exactly as written, so one you put in
+`Character10` by hand is never reinterpreted.
+
+The legend is fixed by the mapping rather than by any row's data, so its
+length is checked when the mapping is first built. A DTO whose legend
+would still exceed 1000 characters is rejected then, with a message
+naming the way out — map a property to `Character10` and own the column
+yourself.
 
 If you *do* map a property to `Character10`, the mapper backs off
 and uses your value unchanged — you've taken ownership.

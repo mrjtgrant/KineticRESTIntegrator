@@ -238,5 +238,152 @@ namespace KineticRESTIntegrator.Tests
             Assert.True(mapped.ContainsKey("Notes"));
             Assert.Equal(string.Empty, mapped["Notes"]);
         }
+        // -- Short column form -----------------------------------------------
+
+        [Fact]
+        public void ShortForm_IsMarkedAndExpandsBackToFullColumnNames()
+        {
+            var legend = new Dictionary<string, string>
+            {
+                { "ShortChar01", "PartNum" },
+                { "Number05", "AvailableQty" },
+                { "CheckBox01", "IsActive" },
+            };
+
+            string built = UDTableSvc.BuildShorthandLegend(legend);
+
+            Assert.StartsWith("~", built);
+            Assert.Contains("S1:PartNum", built);
+            Assert.Contains("N5:AvailableQty", built);
+            Assert.Contains("B1:IsActive", built);
+
+            Dictionary<string, string> parsed = UDTableSvc.ParseColumnLegend(built);
+
+            Assert.Equal(legend, parsed);
+        }
+
+        [Fact]
+        public void ShortForm_IsMateriallyShorterThanTheFullNames()
+        {
+            // The column name is most of a legend's length: ShortChar01 spends
+            // eleven characters saying what two can.
+            var legend = new Dictionary<string, string>
+            {
+                { "ShortChar01", "PartNum" },
+                { "ShortChar02", "WarehouseCode" },
+                { "Number01", "QtyOnHand" },
+                { "CheckBox01", "WasCounted" },
+            };
+
+            int full = UDTableSvc.BuildColumnLegend(legend).Length;
+            int shortened = UDTableSvc.BuildShorthandLegend(legend).Length;
+
+            Assert.True(shortened < full * 0.7,
+                "expected the short form to be well under three quarters of the full form, got "
+                + shortened + " against " + full);
+        }
+
+        [Fact]
+        public void AnUnmarkedLegendIsReadExactlyAsWritten()
+        {
+            // Character10 belongs to the caller. A legend somebody wrote by hand
+            // using their own keys is never reinterpreted as the short form.
+            Dictionary<string, string> map = UDTableSvc.ParseColumnLegend("N1:my own meaning");
+
+            Assert.True(map.ContainsKey("N1"));
+            Assert.False(map.ContainsKey("Number01"));
+        }
+
+        [Fact]
+        public void AKeyTheShortFormDoesNotRecognizeIsLeftAlone()
+        {
+            Dictionary<string, string> map = UDTableSvc.ParseColumnLegend("~S1:PartNum|Zebra:Something");
+
+            Assert.Equal("PartNum", map["ShortChar01"]);
+            Assert.Equal("Something", map["Zebra"]);
+        }
+
+        [Theory]
+        [InlineData("Key1", "K1")]
+        [InlineData("Key5", "K5")]
+        [InlineData("Character10", "C10")]
+        [InlineData("ShortChar20", "S20")]
+        [InlineData("Number01", "N1")]
+        [InlineData("Date07", "D7")]
+        [InlineData("CheckBox20", "B20")]
+        public void EveryColumnFamilyRoundTripsThroughItsShortForm(string column, string expected)
+        {
+            Assert.Equal(expected, UDTableSvc.ShortColumnName(column));
+            Assert.Equal(column, UDTableSvc.LongColumnName(expected));
+        }
+
+        [Theory]
+        // Past the end of a family, so not a column Epicor provides.
+        [InlineData("Key6")]
+        [InlineData("Character11")]
+        [InlineData("ShortChar21")]
+        // Not a UD column at all.
+        [InlineData("Company")]
+        [InlineData("ShortChar")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void ANameOutsideEpicorsColumnsHasNoShortForm(string column)
+        {
+            Assert.Null(UDTableSvc.ShortColumnName(column));
+        }
+
+        [Theory]
+        [InlineData("K6")]
+        [InlineData("S21")]
+        [InlineData("X1")]
+        [InlineData("S")]
+        [InlineData("SS1")]
+        [InlineData(null)]
+        public void AKeyThatIsNotShortFormExpandsToNothing(string shortKey)
+        {
+            Assert.Null(UDTableSvc.LongColumnName(shortKey));
+        }
+
+        // -- The legend has to fit the column it is written to ---------------
+
+        /// <summary>
+        /// A DTO whose property names are long enough that the legend Keri
+        /// would write exceeds Character10's 1000 characters, even shortened.
+        /// </summary>
+        private class LegendTooLongForItsColumn
+        {
+            [UDTableColumn("Key1")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend01 { get; set; }
+            [UDTableColumn("Key2")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend02 { get; set; }
+            [UDTableColumn("ShortChar01")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend03 { get; set; }
+            [UDTableColumn("ShortChar02")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend04 { get; set; }
+            [UDTableColumn("ShortChar03")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend05 { get; set; }
+            [UDTableColumn("ShortChar04")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend06 { get; set; }
+            [UDTableColumn("ShortChar05")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend07 { get; set; }
+            [UDTableColumn("ShortChar06")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend08 { get; set; }
+            [UDTableColumn("ShortChar07")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend09 { get; set; }
+            [UDTableColumn("ShortChar08")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend10 { get; set; }
+            [UDTableColumn("ShortChar09")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend11 { get; set; }
+            [UDTableColumn("ShortChar10")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend12 { get; set; }
+            [UDTableColumn("ShortChar11")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend13 { get; set; }
+            [UDTableColumn("ShortChar12")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend14 { get; set; }
+            [UDTableColumn("ShortChar13")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend15 { get; set; }
+            [UDTableColumn("ShortChar14")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend16 { get; set; }
+            [UDTableColumn("ShortChar15")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend17 { get; set; }
+            [UDTableColumn("ShortChar16")] public string AVeryLongPropertyNameKeptOnlyToLengthenTheGeneratedLegend18 { get; set; }
+        }
+
+        [Fact]
+        public void ADtoWhoseLegendWouldOverflowCharacter10IsRejectedWhenTheMappingIsBuilt()
+        {
+            // The legend is fixed by the mapping, so the length is knowable
+            // before any row exists. Finding out here beats finding out on a
+            // save, where Epicor silently takes the first 1000 characters.
+            var error = Assert.Throws<System.InvalidOperationException>(
+                () => UDTableMapping<LegendTooLongForItsColumn>.Get());
+
+            Assert.Contains("column legend", error.Message);
+            Assert.Contains("Character10", error.Message);
+        }
+
     }
 }
