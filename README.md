@@ -568,6 +568,26 @@ For copy-oriented examples that go deeper than the quick start, see [EXAMPLES_EP
 
 ---
 
+## Using Keri from an agent
+
+The properties that make Keri predictable for a person are the ones an LLM-driven integration needs, because both are working from what the library states rather than what it implies.
+
+**It says whether a retry is safe.** On a failed orchestrator, `FailureStage` is `Uncommitted` — nothing was written — or `Indeterminate` — a commit was attempted and a record may exist. That is the most expensive judgement an autonomous caller makes against an ERP, because a retried order becomes two orders, and it is reported in a field rather than left to be inferred from a message. A null stage means the method does not classify; treat it as `Indeterminate` before retrying a write.
+
+**A failure is structured.** `StatusCode`, `ErrorType` — Epicor's fully-qualified exception class — `CorrelationId`, `ResourcePath` and `RawResponse` all arrive on the result. Branch on `ErrorType` rather than matching English that changes between Epicor versions.
+
+**An Epicor failure is not an exception.** Errors are values, so control flow doesn't depend on catching the right type.
+
+**It can ask the server what exists.** `GetSchemaAsync` returns the columns an entity declares on the installation being talked to, with Epicor's own description of each — including the `_c` columns that exist only on that site. A caller that would otherwise guess a column name can read it.
+
+**Nothing is out of reach.** A typed DTO carries the columns it models; every other column arrives in `ExtraData`.
+
+**It reports what it did.** `Steps` carries an orchestrator's trail with the result, so a partial sequence can be explained or unwound.
+
+One caution: `Steps` and `ResourcePath` carry your data — part numbers, customer IDs, the company code — so anything that logs a result wholesale is logging that too.
+
+---
+
 ## Integrating Keri into a consumer project
 
 **Normally, reference the NuGet packages** — see [Install](#install). NuGet resolves the right build for your target framework and restores the dependency tree for you.
