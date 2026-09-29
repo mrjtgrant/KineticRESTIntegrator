@@ -575,6 +575,12 @@ namespace Keri.Epicor.Dtos
                 string column = entry.Key;
                 string meaning = entry.Value;
 
+                // Company and ExtraData live on this class but are not UD
+                // columns. A legend naming one would otherwise resolve and put
+                // the property's ToString() into the result.
+                if (column == "Company" || column == "ExtraData")
+                    continue;
+
                 var prop = typeof(UDRow).GetProperty(column);
                 if (prop == null)
                     continue; // legend names a column this class doesn't have

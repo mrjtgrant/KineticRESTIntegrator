@@ -581,10 +581,68 @@ Most examples in the README read data. This one writes it — pushing a row into
 an Epicor user-defined (UD) table through `UDTableSvc`.
 
 The pattern, and the safety habit worth keeping: **build the row, inspect the
-payload, then send.** The `EpicorSvcPOCs` UDTable example does exactly this — it
+payload, then send.** The UDTable example in `KeriPocs` does exactly this — it
 serializes and prints the row it is about to write, and only sends when writes
 are explicitly armed. Mirror that in your own code: a write you can see before
 it leaves is a write you can catch a mistake in.
+
+Declare the row's shape once. The attribute says which generic column holds
+each property, and nothing else in your code mentions `ShortChar01` again:
+
+```csharp
+public class CycleCount
+{
+    [UDTableColumn("Key1")]        public string Category { get; set; }
+    [UDTableColumn("Key2")]        public string CountId { get; set; }
+    [UDTableColumn("ShortChar01")] public string PartNum { get; set; }
+    [UDTableColumn("ShortChar02")] public string WarehouseCode { get; set; }
+    [UDTableColumn("Number01")]    public double QtyOnHand { get; set; }
+    [UDTableColumn("CheckBox01")]  public bool WasCounted { get; set; }
+}
+```
+
+```csharp
+using Keri.Epicor;
+using Keri.Epicor.Dtos;
+using KeriConfigurator;
+using Newtonsoft.Json;
+
+using (var epicorClient = KeriConfig.BuildEpicorClient())
+{
+    var count = new CycleCount
+    {
+        Category      = "KERI_EXAMPLE",
+        CountId       = "DEMO-" + DateTime.Now.ToString("yyyyMMddHHmmss"),
+        PartNum       = "EXAMPLE-PART",
+        WarehouseCode = "EXAMPLE-WHSE",
+        QtyOnHand     = 1d,
+        WasCounted    = true
+    };
+
+    // Inspect the payload before sending it.
+    Console.WriteLine(JsonConvert.SerializeObject(count, Formatting.Indented));
+
+    // Upsert. Automatic mode updates the row if it exists, otherwise adds it.
+    var result = await epicorClient.UDTable.SaveAsync("UD22", count);
+
+    if (result.IsFailure)
+    {
+        Console.WriteLine($"Upsert failed: {result.ErrorMessage}");
+        return;
+    }
+
+    Console.WriteLine("Row upserted.");
+}
+```
+
+The mapper validates `CycleCount` the first time it is used — column names,
+types, duplicates, and that `Key1` and `Key2` are mapped — and writes a legend
+into `Character10`, so the row explains itself to anyone who opens it in
+Epicor's UI. [Section 5](#5-typed-ud-table-access) covers the attribute, the
+key rules and the capacity checks in full.
+
+The raw `UDRow` form is still there for a row whose shape is not known at
+compile time:
 
 ```csharp
 using Keri.Epicor;
@@ -835,6 +893,13 @@ The property's type must be compatible with the column's family:
 | `Number01`–`Number20` | `int`, `long`, `float`, `double`, or `decimal` |
 | `Date01`–`Date20` | `DateTime` or `DateTime?` |
 | `CheckBox01`–`CheckBox20` | `bool` |
+
+Two things the table does not say. `Number*` columns are `double` on the wire,
+so a `decimal` property round-trips through `double` — exact for ordinary
+quantities and amounts, lossy past about fifteen significant digits. And a
+`Date*` column is nullable in Epicor: map `DateTime?` when you need to tell an
+unset date from a stored one, because a non-nullable `DateTime` reads an unset
+column as `DateTime.MinValue`.
 
 Map type mismatches, duplicate columns, and unknown column names all
 fail at the first use of the DTO type with `InvalidOperationException`
