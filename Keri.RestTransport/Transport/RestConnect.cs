@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -475,6 +476,36 @@ namespace Keri.RestTransport
         }
 
         /// <summary>
+        /// A reader that resolves every date to UTC rather than to the machine's own
+        /// time zone.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Epicor's OData layer returns a date as an instant carrying a numeric
+        /// offset — midnight in the server's zone. Newtonsoft's default
+        /// <see cref="DateTimeZoneHandling.RoundtripKind"/> converts such a value
+        /// into the reading machine's zone, because a <see cref="DateTime"/> cannot
+        /// hold an arbitrary offset and that is the only way to keep the instant.
+        /// West of the server that conversion crosses midnight and the calendar date
+        /// moves back a day, so one column read from two machines named two days.
+        /// </para>
+        /// <para>
+        /// Resolving to UTC keeps the instant and makes the result depend on the
+        /// server rather than on the caller. A business-object dataset carries no
+        /// zone and is unaffected, so both read paths now agree. A server east of
+        /// UTC would report midnight as the previous UTC day; no installation has
+        /// been measured there.
+        /// </para>
+        /// </remarks>
+        private static JsonTextReader DateSafeReader(string body)
+        {
+            return new JsonTextReader(new StringReader(body))
+            {
+                DateTimeZoneHandling = DateTimeZoneHandling.Utc
+            };
+        }
+
+        /// <summary>
         /// Turns a successful response's body into a <see cref="JObject"/>.
         /// </summary>
         /// <remarks>
@@ -493,14 +524,17 @@ namespace Keri.RestTransport
             try
             {
                 // Typical case: response is a JSON object.
-                return JObject.Parse(body);
+                using (JsonTextReader reader = DateSafeReader(body))
+                    return JObject.Load(reader);
             }
             catch (Exception ex1)
             {
                 try
                 {
                     // Some endpoints return a bare JSON array — wrap as {"value": [...]}.
-                    return new JObject(new JProperty("value", JArray.Parse(body)));
+                    // A fresh reader: the one above is consumed by its failed attempt.
+                    using (JsonTextReader reader = DateSafeReader(body))
+                        return new JObject(new JProperty("value", JArray.Load(reader)));
                 }
                 catch
                 {
