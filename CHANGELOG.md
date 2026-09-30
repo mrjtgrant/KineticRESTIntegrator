@@ -17,6 +17,18 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- **`EXAMPLES_EPICOR.md` pointed at a project that no longer exists.** Its second paragraph sent a reader to `EpicorSvcPOCs` for the runnable versions of its scenarios. That project was renamed `KeriPocs` several releases ago, alongside `EpicorSvcDemo` to `KeriDemo`, and the old name survived in the one place a new reader meets first.
+
+### Changed
+
+- **The README's `ODataFilter` entry links to the worked examples.** "Worth knowing about" named the class and left a reader to find the section themselves, while the README's own two filter examples pass raw OData strings — safe as written, both filtering on constants, but the only form a reader who stops at the README ever sees.
+
+---
+
 ## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.4 — 2026-09-29
 
 ### Added

@@ -124,7 +124,7 @@ Capabilities a caller would otherwise have to find by reading source.
 
 **Trace every request without taking a logging dependency.** [`OnTrace`](#connections-and-transient-failures) fires as each attempt completes with the method, URL, status, elapsed milliseconds and whether a retry follows. One line wires it to `ILogger`, Serilog or `Console.WriteLine`.
 
-**Build filters that cannot be malformed.** `ODataFilter` composes them, instead of interpolating strings into a query.
+**Build filters that cannot be malformed.** `ODataFilter` composes them, instead of interpolating strings into a query. See [EXAMPLES_EPICOR.md — Building filters with `ODataFilter`](https://github.com/mrjtgrant/KineticRESTIntegrator/blob/main/EXAMPLES_EPICOR.md#building-filters-with-odatafilter).
 
 **Turn off the projection when it costs you.** `SkipDefaultSelect` — on a DTO that models its whole table, naming every column explicitly makes Epicor emit *more*, not less.
 

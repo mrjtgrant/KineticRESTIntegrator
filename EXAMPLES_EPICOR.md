@@ -4,7 +4,7 @@ Practical, copy-oriented examples that go beyond the README quick start. Each
 example below is built against the real API surface — method signatures here
 match the shipped code.
 
-For runnable versions of the read/write scenarios, see the `EpicorSvcPOCs`
+For runnable versions of the read/write scenarios, see the `KeriPocs`
 project; this document explains the patterns behind them.
 
 For calling **non-Epicor** REST APIs through the same transport, or for
