@@ -38,14 +38,14 @@ That snippet is the whole shape: construct a client from a session, await an asy
 
 ## Status
 
-**Release candidate — `1.0.0-rc.1`.** The public API is settled; it may still change between candidates in response to what they turn up. All four packages carry this version together, and version independently again from 1.0.0:
+**Release candidate.** The public API is settled; it may still change between candidates in response to what they turn up. All four packages carry the same version, and version independently again from 1.0.0:
 
 | Project | Version |
 |---|---|
-| `Keri.Epicor` | <!--VER:Keri.Epicor-->1.0.0-rc.4<!--/VER--> |
-| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.4<!--/VER--> |
-| `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.4<!--/VER--> |
-| `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.4<!--/VER--> |
+| `Keri.Epicor` | <!--VER:Keri.Epicor-->1.0.0-rc.5<!--/VER--> |
+| `Keri.RestTransport` | <!--VER:Keri.RestTransport-->1.0.0-rc.5<!--/VER--> |
+| `Keri.Files` | <!--VER:Keri.Files-->1.0.0-rc.5<!--/VER--> |
+| `Keri.Mail` | <!--VER:Keri.Mail-->1.0.0-rc.5<!--/VER--> |
 
 The repo's own tooling is versioned separately and is not published:
 

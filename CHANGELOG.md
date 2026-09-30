@@ -17,7 +17,7 @@ Releases are tagged per package as `<Package>-vX.Y.Z` — for example, `Keri.Epi
 
 ---
 
-## Unreleased
+## Keri.RestTransport / Keri.Epicor / Keri.Files / Keri.Mail 1.0.0-rc.5 — 2026-09-30
 
 ### Fixed
 
