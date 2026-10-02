@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose new coverage or a change to the SDK's surface.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The task you're solving, not the API you think you need. Both are useful, but this one first.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Business object coverage
+        - BAQ support
+        - Epicor Functions
+        - UD table access
+        - Authentication
+        - Error handling / transaction semantics
+        - Transport / REST layer
+        - Excel, CSV or SMTP companion packages
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: How you're handling it today, if at all. Helps gauge urgency and shape the API.
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: Optional. What the call would look like if it existed.
+      render: csharp

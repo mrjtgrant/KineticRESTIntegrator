@@ -1,0 +1,101 @@
+name: Bug report
+description: Something in the SDK behaves differently than documented or expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file this. Most Epicor REST issues turn out to be
+        version- or deployment-specific, so the environment fields below matter more than
+        they usually would.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: What you expected, and what occurred instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: epicor-version
+    attributes:
+      label: Epicor version
+      options:
+        - Kinetic 2026.x
+        - Kinetic 2025.x
+        - Kinetic 2024.x
+        - Kinetic 2023.x
+        - Kinetic 2022.x
+        - Kinetic 2021.x
+        - Epicor 10.2.x
+        - Epicor 10.1.x or earlier
+        - Other / unsure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - SaaS multi-tenant
+        - SaaS dedicated
+        - On-premises
+        - Other / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: sdk-version
+    attributes:
+      label: SDK version
+      placeholder: "e.g. 1.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: target-framework
+    attributes:
+      label: Target framework
+      options:
+        - .NET 8.0
+        - .NET Standard 2.0
+        - .NET Framework 4.6.1+
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: surface
+    attributes:
+      label: Which Epicor surface
+      description: The business object, BAQ, UD table or Function involved.
+      placeholder: "e.g. Erp.BO.SalesOrderSvc / UpdateExt, or BAQ zCustomer01"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest piece of code that shows the problem.
+      render: csharp
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error output
+      description: >
+        Full exception text if you have it. If the SDK reported which side of the commit
+        boundary the failure occurred on, please include that — it usually determines
+        whether this is a transport problem or a server-side rejection.
+      render: text
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Customizations, BPMs or Functions in the call path, proxy or auth specifics.
