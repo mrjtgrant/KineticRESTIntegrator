@@ -989,6 +989,21 @@ expands it back to full column names. The short form is there because
 `Character10` holds 1000 characters and the full names spend most of
 them: `ShortChar01` is eleven characters to say what two can.
 
+The leading letter names the column family and the number is its index,
+unpadded:
+
+| Short | Column |
+|---|---|
+| `K1`–`K5` | `Key1`–`Key5` |
+| `C1`–`C10` | `Character01`–`Character10` |
+| `S1`–`S20` | `ShortChar01`–`ShortChar20` |
+| `N1`–`N20` | `Number01`–`Number20` |
+| `D1`–`D20` | `Date01`–`Date20` |
+| `B1`–`B20` | `CheckBox01`–`CheckBox20` |
+
+A name outside those families is written as given, so a legend carrying
+a caller's own key still round-trips.
+
 A legend without the `~` is read exactly as written, so one you put in
 `Character10` by hand is never reinterpreted.
 
@@ -1045,7 +1060,11 @@ await epicorClient.UDTable.SaveAsync("UD22", new MinimalNote
 
 `MinimalNote` shows the floor: required keys, one data column, nothing
 more. The mapper auto-emits a `Character10` legend, so anyone opening
-the row in Epicor's UI sees `"Key1:Category|Key2:NoteID|ShortChar01:NoteText"`.
+the row in Epicor's UI sees `"~K1:Category|K2:NoteID|S1:NoteText"`.
+That is the short column form above — `K1` is `Key1`, `S1` is
+`ShortChar01` — written short because `Character10` holds 1000
+characters and full names spend most of them. `ParseColumnLegend`
+expands it back to full names for reading code.
 
 #### `OrderTracking` — the canonical worked example
 
